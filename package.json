@@ -1,0 +1,64 @@
+{
+  "name": "easysession",
+  "version": "0.1.1",
+  "description": "EasySession: 原生终端，统一管理",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "build:win": "electron-vite build && electron-builder --win",
+    "build:dir": "electron-vite build && electron-builder --win --dir",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npx playwright test --config=playwright.config.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "CC-BY-NC-SA-4.0",
+  "dependencies": {
+    "@electron-toolkit/utils": "^3.0.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "node-pty": "^1.1.0",
+    "pinia": "^2.3.1",
+    "vue": "^3.5.28",
+    "vue-i18n": "^9.14.4",
+    "vue-router": "^4.6.4"
+  },
+  "build": {
+    "appId": "com.easysession.app",
+    "productName": "EasySession",
+    "npmRebuild": false,
+    "directories": {
+      "output": "release/"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "resources/logo-easy-session.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "EasySession"
+    }
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^22.19.11",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "electron": "^33.4.11",
+    "electron-builder": "^26.7.0",
+    "electron-playwright-helpers": "^2.1.0",
+    "electron-vite": "^2.3.0",
+    "sass": "^1.97.3",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vitest": "^4.0.18",
+    "vue-tsc": "^2.2.12"
+  }
+}

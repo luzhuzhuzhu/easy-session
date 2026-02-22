@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+out/
+release/
+coverage/
+*.tsbuildinfo
+
+# Test artifacts
+test-results/
+playwright-report/
+blob-report/
+e2e/debug-screenshot.png
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Editor and IDE
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# AI CLI local configs
+.claude/
+.codex/
+CLAUDE.md
+AGENTS.md
+.playwright-mcp/
+.trellis/
+
+# Temp / debug artifacts
+.tmp-tests/
+nul
+err.txt

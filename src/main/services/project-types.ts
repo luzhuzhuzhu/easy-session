@@ -1,0 +1,8 @@
+export interface Project {
+  id: string
+  name: string
+  path: string
+  createdAt: number
+  lastOpenedAt: number
+  pathExists?: boolean
+}
