@@ -221,7 +221,8 @@ export default {
     pauseScroll: 'Pause Auto-scroll',
     resumeScroll: 'Resume Auto-scroll',
     copyAll: 'Copy All',
-    clearOutput: 'Clear Output'
+    clearOutput: 'Clear Output',
+    copySuccess: 'Copied to clipboard'
   },
   error: {
     componentCrash: 'A component error occurred',

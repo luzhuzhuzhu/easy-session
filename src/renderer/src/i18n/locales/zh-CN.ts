@@ -221,7 +221,8 @@
     pauseScroll: '暂停自动滚动',
     resumeScroll: '恢复自动滚动',
     copyAll: '复制全部',
-    clearOutput: '清空输出'
+    clearOutput: '清空输出',
+    copySuccess: '已复制到剪贴板'
   },
   error: {
     componentCrash: '页面组件发生错误',

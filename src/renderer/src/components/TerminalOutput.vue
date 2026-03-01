@@ -18,15 +18,19 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { getOutputHistory, resizeTerminal, writeToSession } from '@/api/session'
 import type { OutputEvent, OutputLine } from '@/api/session'
 import { subscribeSessionOutput } from '@/services/session-output-stream'
+import { useToast } from '@/composables/useToast'
 
 const props = defineProps<{ sessionId?: string | null; processKey?: string | null }>()
 const emit = defineEmits<{ clear: [] }>()
+const { t } = useI18n()
+const toast = useToast()
 
 const containerRef = ref<HTMLElement | null>(null)
 let term: Terminal | null = null
@@ -46,8 +50,23 @@ const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.toLowe
 const HISTORY_LOAD_LINES = 20000
 
 // 安全剪贴板写入，窗口失焦时不抛异常
-function safeWriteClipboard(text: string): void {
-  navigator.clipboard.writeText(text).catch(() => {})
+async function safeWriteClipboard(text: string): Promise<boolean> {
+  if (!text) return false
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function copySelectedText(showToastTip = false): Promise<boolean> {
+  if (!term || !term.hasSelection()) return false
+  const copied = await safeWriteClipboard(term.getSelection())
+  if (copied && showToastTip) {
+    toast.success(t('terminal.copySuccess'))
+  }
+  return copied
 }
 
 function resolveSeq(line: OutputLine, fallback: number): number {
@@ -170,14 +189,32 @@ function initTerminal(): void {
   term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
     if (ev.type !== 'keydown') return true
 
-    if (ev.ctrlKey && ev.shiftKey && ev.code === 'KeyC') {
-      const sel = term!.getSelection()
-      if (sel) safeWriteClipboard(sel)
+    const isCtrlShiftC = ev.ctrlKey && ev.shiftKey && !ev.altKey && ev.code === 'KeyC'
+    const isCtrlC = ev.ctrlKey && !ev.shiftKey && !ev.altKey && ev.code === 'KeyC'
+    if (isCtrlShiftC) {
+      if (!ev.repeat) {
+        void copySelectedText(true)
+      }
       return false
     }
+    if (isCtrlC) {
+      if (term?.hasSelection()) {
+        if (!ev.repeat) {
+          void copySelectedText(true)
+        }
+        return false
+      }
+      return true
+    }
 
-    if ((ev.ctrlKey && ev.shiftKey && ev.code === 'KeyV') || (ev.ctrlKey && !ev.shiftKey && ev.code === 'KeyV')) {
-      void pasteFromClipboard()
+    const isCtrlV = ev.ctrlKey && !ev.shiftKey && !ev.altKey && ev.code === 'KeyV'
+    const isCtrlShiftV = ev.ctrlKey && ev.shiftKey && !ev.altKey && ev.code === 'KeyV'
+    if (isCtrlV || isCtrlShiftV) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      if (!ev.repeat) {
+        void pasteFromClipboard()
+      }
       return false
     }
 
@@ -322,7 +359,7 @@ async function pasteFromClipboard(): Promise<void> {
 function handleContextMenu(e: MouseEvent): void {
   e.preventDefault()
   if (term && term.hasSelection()) {
-    safeWriteClipboard(term.getSelection())
+    void copySelectedText(true)
   } else {
     void pasteFromClipboard()
   }
@@ -337,7 +374,9 @@ async function copyAll(): Promise<void> {
     term.selectAll()
     const text = term.getSelection()
     term.clearSelection()
-    safeWriteClipboard(text)
+    if (await safeWriteClipboard(text)) {
+      toast.success(t('terminal.copySuccess'))
+    }
     return
   }
 
@@ -345,7 +384,9 @@ async function copyAll(): Promise<void> {
 
   try {
     const history = await getOutputHistory(props.sessionId, HISTORY_LOAD_LINES)
-    safeWriteClipboard(history.map((line) => line.text).join(''))
+    if (await safeWriteClipboard(history.map((line) => line.text).join(''))) {
+      toast.success(t('terminal.copySuccess'))
+    }
   } catch {
     // Ignore fallback copy failure.
   }
