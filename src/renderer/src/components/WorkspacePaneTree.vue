@@ -118,12 +118,12 @@
       class="context-menu"
       :style="{ left: paneMenu.x + 'px', top: paneMenu.y + 'px' }"
     >
-      <button class="context-item" @click="handlePaneMenuSplit('horizontal')">New Right Pane</button>
-      <button class="context-item" @click="handlePaneMenuSplit('vertical')">New Bottom Pane</button>
-      <button class="context-item" @click="handlePaneMenuEvenSplit">Even Split</button>
+      <button class="context-item" @click="handlePaneMenuSplit('horizontal')">{{ $t('session.newRightPane') }}</button>
+      <button class="context-item" @click="handlePaneMenuSplit('vertical')">{{ $t('session.newBottomPane') }}</button>
+      <button class="context-item" @click="handlePaneMenuEvenSplit">{{ $t('session.evenSplit') }}</button>
       <button class="context-item" @click="handlePaneMenuUndoLayout">{{ $t('session.undoLayout') }}</button>
       <button class="context-item" @click="handlePaneMenuResetLayout">{{ $t('session.resetLayout') }}</button>
-      <button v-if="canClosePanes" class="context-item danger" @click="handlePaneMenuClose">Close Pane</button>
+      <button v-if="canClosePanes" class="context-item danger" @click="handlePaneMenuClose">{{ $t('session.closePane') }}</button>
     </div>
   </div>
 </template>

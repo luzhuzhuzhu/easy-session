@@ -431,7 +431,13 @@ export class SkillManager {
     const skill = await this.getSkill(skillId)
     if (!skill) return { success: false, prompt: '' }
 
-    const prompt = this.renderPrompt(skill, inputs)
+    // 清理输入：强制转字符串并限制长度
+    const sanitized: Record<string, string> = {}
+    for (const [k, v] of Object.entries(inputs)) {
+      sanitized[k] = String(v ?? '').slice(0, 10_000)
+    }
+
+    const prompt = this.renderPrompt(skill, sanitized)
     const sent = this.sessionManager.sendInput(sessionId, prompt)
     return { success: sent, prompt }
   }

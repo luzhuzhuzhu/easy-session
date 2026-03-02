@@ -85,6 +85,10 @@
     undoLayout: '撤销布局变更',
     resetLayout: '重置布局',
     confirmResetLayout: '确认重置当前工作区布局？',
+    newRightPane: '右侧新建分窗',
+    newBottomPane: '下方新建分窗',
+    evenSplit: '均分窗格',
+    closePane: '关闭分窗',
     dialog: {
       name: '会话名称',
       projectPath: '项目路径',

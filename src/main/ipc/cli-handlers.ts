@@ -12,6 +12,12 @@ export function registerCliHandlers(
   ipcMain.handle(
     'cli:spawn',
     (_event, type: CliType, projectPath: string, options?: object) => {
+      if (type !== 'claude' && type !== 'codex') {
+        throw new Error('参数 type 必须为 claude 或 codex')
+      }
+      if (typeof projectPath !== 'string') {
+        throw new Error('参数 projectPath 必须为字符串')
+      }
       if (type === 'claude') {
         return claudeAdapter.startSession(projectPath, options)
       }
@@ -20,10 +26,13 @@ export function registerCliHandlers(
   )
 
   ipcMain.handle('cli:kill', (_event, id: string) => {
+    if (typeof id !== 'string' || !id) throw new Error('参数 id 必须为非空字符串')
     return cliManager.kill(id)
   })
 
   ipcMain.handle('cli:write', (_event, id: string, input: string) => {
+    if (typeof id !== 'string' || !id) throw new Error('参数 id 必须为非空字符串')
+    if (typeof input !== 'string') throw new Error('参数 input 必须为字符串')
     return cliManager.write(id, input)
   })
 

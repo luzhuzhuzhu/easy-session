@@ -825,7 +825,7 @@ function handleSessionDragOver(e: DragEvent, projectKey: string) {
 function handleSessionDrop(e: DragEvent, projectKey: string, targetSessionId: string) {
   e.preventDefault()
   e.stopPropagation()
-  
+  if (!e.dataTransfer) return
   const sessionReorderRaw = e.dataTransfer.getData('application/x-easysession-session-reorder')
   if (!sessionReorderRaw) return
   
@@ -961,7 +961,7 @@ function handleProjectDragOver(e: DragEvent) {
 function handleProjectDrop(e: DragEvent, targetProjectKey: string) {
   e.preventDefault()
   e.stopPropagation()
-  
+  if (!e.dataTransfer) return
   const projectReorderRaw = e.dataTransfer.getData('application/x-easysession-project-reorder')
   if (!projectReorderRaw) return
   
@@ -1013,7 +1013,7 @@ function handleTopProjectDragOver(e: DragEvent) {
 function handleTopProjectDrop(e: DragEvent, targetProjectKey: string) {
   e.preventDefault()
   e.stopPropagation()
-  
+  if (!e.dataTransfer) return
   const projectReorderRaw = e.dataTransfer.getData('application/x-easysession-project-reorder')
   if (!projectReorderRaw) return
   

@@ -178,10 +178,8 @@ export class WorkspaceLayoutManager {
   async init(): Promise<void> {
     const result = await this.store.load()
     if (!result.data) {
-      if (result.restoredFromBackup) {
-        this.layout = createDefaultLayout()
-        await this.store.save(this.layout)
-      }
+      // 首次启动或数据丢失，保存默认布局到磁盘
+      await this.store.save(this.layout)
       return
     }
 

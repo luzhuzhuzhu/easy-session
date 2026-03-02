@@ -203,12 +203,10 @@ export class DataStore<T> {
   }
 
   async flush(): Promise<void> {
-    while (true) {
+    const deadline = Date.now() + 10_000
+    while (Date.now() < deadline) {
       const tail = DataStore.saveTails.get(this.queueKey)
-      if (!tail) {
-        return
-      }
-
+      if (!tail) return
       await tail
     }
   }

@@ -56,14 +56,14 @@ export class CodexSessionLifecycle implements ISessionLifecycle {
     }
   }
 
-  startProcess(session: Session, startAt: number): void {
+  async startProcess(session: Session, startAt: number): Promise<void> {
     if (session.type !== 'codex') throw new Error(`CodexSessionLifecycle 收到非 codex 会话: ${session.type}`)
     const s = session
 
     const resolvedId =
       s.codexSessionId ??
       this.findCodexSessionIdInHistory(s.id) ??
-      this.codexAdapter.findSessionIdByProjectPath(
+      await this.codexAdapter.findSessionIdByProjectPath(
         s.projectPath,
         s.lastStartAt || s.createdAt,
         CODEX_DISCOVERY_MAX_SKEW_MS
@@ -106,14 +106,14 @@ export class CodexSessionLifecycle implements ISessionLifecycle {
     return this.migrateLegacyCodexOptions(session)
   }
 
-  hydrateSessionId(session: Session): boolean {
+  async hydrateSessionId(session: Session): Promise<boolean> {
     if (session.type !== 'codex') return false
     const s = session
     if (s.codexSessionId) return false
 
     const discovered =
       this.findCodexSessionIdInHistory(s.id) ??
-      this.codexAdapter.findSessionIdByProjectPath(
+      await this.codexAdapter.findSessionIdByProjectPath(
         s.projectPath,
         s.lastStartAt || s.createdAt,
         CODEX_DISCOVERY_MAX_SKEW_MS
@@ -133,7 +133,7 @@ export class CodexSessionLifecycle implements ISessionLifecycle {
   ): void {
     let attempts = 0
 
-    const tryHydrate = (): void => {
+    const tryHydrate = async (): Promise<void> => {
       this.pendingTimers.delete(sessionId)
 
       const session = getSession()
@@ -147,7 +147,7 @@ export class CodexSessionLifecycle implements ISessionLifecycle {
       )
       const discovered =
         this.findCodexSessionIdInHistory(sessionId) ??
-        this.codexAdapter.findSessionIdByProjectPath(
+        await this.codexAdapter.findSessionIdByProjectPath(
           projectPath,
           targetStartMs,
           skewMs

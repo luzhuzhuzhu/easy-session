@@ -19,7 +19,7 @@ interface SessionBufferState {
 
 function createBufferState(): SessionBufferState {
   return {
-    lines: new Array<OutputLine>(MAX_BUFFER_LINES),
+    lines: [],
     start: 0,
     size: 0,
     nextSeq: 0
@@ -40,8 +40,7 @@ export class SessionOutputManager {
 
   private appendLine(state: SessionBufferState, line: OutputLine): void {
     if (state.size < MAX_BUFFER_LINES) {
-      const index = (state.start + state.size) % MAX_BUFFER_LINES
-      state.lines[index] = line
+      state.lines.push(line)
       state.size += 1
       return
     }

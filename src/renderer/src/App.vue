@@ -18,13 +18,16 @@ import MainLayout from '@/layouts/MainLayout.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useSettingsStore } from '@/stores/settings'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 const { locale } = useI18n()
 const settingsStore = useSettingsStore()
+const workspaceStore = useWorkspaceStore()
 
 const SHUTDOWN_START_CHANNEL = 'app:shutdown-start'
 const isShuttingDown = ref(false)
 const shutdownListener = (_event: IpcRendererEvent) => {
+  workspaceStore.flushPersist()
   isShuttingDown.value = true
 }
 

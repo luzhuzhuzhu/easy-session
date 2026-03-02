@@ -602,6 +602,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     layout.value = next
   }
 
+  function flushPersist(): void {
+    if (persistTimer) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+      void updateWorkspaceLayout(cloneLayout(layout.value))
+    }
+  }
+
   return {
     layout,
     loaded,
@@ -628,6 +636,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     updateSplitRatio,
     reconcileSessions,
     undoLayoutChange,
-    hardReset
+    hardReset,
+    flushPersist
   }
 })

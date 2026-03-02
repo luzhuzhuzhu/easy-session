@@ -9,6 +9,7 @@ import {
   type Project
 } from '@/api/project'
 import { useSessionsStore } from './sessions'
+import { useWorkspaceStore } from './workspace'
 
 export type { Project }
 
@@ -52,6 +53,11 @@ export const useProjectsStore = defineStore('projects', () => {
 
     const sessionsStore = useSessionsStore()
     await sessionsStore.fetchSessions()
+
+    // 同步 workspace layout，清除已销毁会话的幽灵 tab
+    const workspaceStore = useWorkspaceStore()
+    const validIds = sessionsStore.sessions.map((s) => s.id)
+    workspaceStore.reconcileSessions(validIds)
   }
 
   function setActiveProject(id: string | null) {

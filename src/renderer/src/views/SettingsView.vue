@@ -134,7 +134,7 @@ async function handleSave() {
 
 function toggleSessionsListPosition() {
   settingsStore.settings.sessionsListPosition = settingsStore.settings.sessionsListPosition === 'left' ? 'top' : 'left'
-  handleSave()
+  void handleSave()
 }
 
 async function loadSystemInfo() {

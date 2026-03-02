@@ -85,6 +85,10 @@ export default {
     undoLayout: 'Undo layout change',
     resetLayout: 'Reset layout',
     confirmResetLayout: 'Reset the current workspace layout?',
+    newRightPane: 'New Right Pane',
+    newBottomPane: 'New Bottom Pane',
+    evenSplit: 'Even Split',
+    closePane: 'Close Pane',
     dialog: {
       name: 'Session Name',
       projectPath: 'Project Path',

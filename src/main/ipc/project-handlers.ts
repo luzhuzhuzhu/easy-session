@@ -9,10 +9,12 @@ export function registerProjectHandlers(
   sessionManager: SessionManager
 ): void {
   ipcMain.handle('project:add', (_event, path: string, name?: string) => {
+    if (typeof path !== 'string' || !path) throw new Error('参数 path 必须为非空字符串')
     return projectManager.addProject(path, name)
   })
 
   ipcMain.handle('project:remove', async (_event, id: string) => {
+    if (typeof id !== 'string' || !id) throw new Error('参数 id 必须为非空字符串')
     const project = projectManager.getProject(id)
     if (!project) return false
 

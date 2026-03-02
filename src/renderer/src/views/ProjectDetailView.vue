@@ -239,6 +239,7 @@ const promptEditText = ref('')
 const promptMessage = ref('')
 const promptMessageType = ref<'success' | 'error'>('success')
 const promptModified = computed(() => promptEditText.value !== promptSourceText.value)
+let promptLoadToken = 0
 
 const now = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
@@ -358,10 +359,12 @@ function openSession(sessionId: string) {
 
 async function loadPromptContent() {
   if (!project.value) return
+  const token = ++promptLoadToken
   promptLoading.value = true
   promptMessage.value = ''
   try {
     const promptFile = await readProjectPrompt(project.value.id, promptTab.value)
+    if (token !== promptLoadToken) return
     if (!promptFile) {
       promptMessage.value = t('config.saveError') + ': Project not found'
       promptMessageType.value = 'error'
@@ -372,10 +375,11 @@ async function loadPromptContent() {
     promptSourceText.value = promptFile.content
     promptEditText.value = promptFile.content
   } catch (e: unknown) {
+    if (token !== promptLoadToken) return
     promptMessage.value = t('config.saveError') + ': ' + (e instanceof Error ? e.message : String(e))
     promptMessageType.value = 'error'
   } finally {
-    promptLoading.value = false
+    if (token === promptLoadToken) promptLoading.value = false
   }
 }
 

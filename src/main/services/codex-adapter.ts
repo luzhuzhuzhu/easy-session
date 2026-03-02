@@ -1,5 +1,6 @@
 import { exec } from 'child_process'
-import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
+import { existsSync } from 'fs'
+import { readdir, stat, readFile } from 'fs/promises'
 import { homedir } from 'os'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
@@ -73,7 +74,7 @@ export class CodexAdapter {
     }
   }
 
-  findSessionIdByProjectPath(projectPath: string, targetStartMs?: number, maxSkewMs = 120_000): string | null {
+  async findSessionIdByProjectPath(projectPath: string, targetStartMs?: number, maxSkewMs = 120_000): Promise<string | null> {
     const root = join(homedir(), '.codex', 'sessions')
     if (!existsSync(root)) return null
 
@@ -83,11 +84,11 @@ export class CodexAdapter {
     }
 
     const normalizedProjectPath = this.normalizePath(projectPath)
-    const recentFiles = this.collectRecentSessionFiles(root)
+    const recentFiles = await this.collectRecentSessionFiles(root)
     const candidates: Array<{ id: string; distMs: number; mtimeMs: number }> = []
 
     for (const file of recentFiles) {
-      const meta = this.readSessionMeta(file.path)
+      const meta = await this.readSessionMeta(file.path)
       if (!meta) continue
       if (this.normalizePath(meta.cwd) !== normalizedProjectPath) continue
       const startedAt = meta.startedAt ?? file.mtimeMs
@@ -126,7 +127,7 @@ export class CodexAdapter {
     return process.platform === 'win32' ? resolved.toLowerCase() : resolved
   }
 
-  private collectRecentSessionFiles(root: string): Array<{ path: string; mtimeMs: number }> {
+  private async collectRecentSessionFiles(root: string): Promise<Array<{ path: string; mtimeMs: number }>> {
     const stack: string[] = [root]
     const files: Array<{ path: string; mtimeMs: number }> = []
 
@@ -134,7 +135,7 @@ export class CodexAdapter {
       const dir = stack.pop()!
       let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>
       try {
-        entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' })
+        entries = await readdir(dir, { withFileTypes: true, encoding: 'utf8' })
       } catch {
         continue
       }
@@ -149,7 +150,7 @@ export class CodexAdapter {
 
         let mtimeMs = 0
         try {
-          mtimeMs = statSync(fullPath).mtimeMs
+          mtimeMs = (await stat(fullPath)).mtimeMs
         } catch {
           continue
         }
@@ -161,9 +162,10 @@ export class CodexAdapter {
     return files.slice(0, 600)
   }
 
-  private readSessionMeta(filePath: string): { id: string; cwd: string; startedAt?: number } | null {
+  private async readSessionMeta(filePath: string): Promise<{ id: string; cwd: string; startedAt?: number } | null> {
     try {
-      const firstLine = readFileSync(filePath, 'utf8').split(/\r?\n/, 1)[0]
+      const content = await readFile(filePath, 'utf8')
+      const firstLine = content.split(/\r?\n/, 1)[0]
       if (!firstLine) return null
 
       const parsed = JSON.parse(firstLine) as {

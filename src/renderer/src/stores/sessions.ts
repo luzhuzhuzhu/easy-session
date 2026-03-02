@@ -103,7 +103,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     ensureListeners()
     const updated = await apiRestartSession(id)
     const idx = sessions.value.findIndex((s) => s.id === id)
-    if (idx !== -1) sessions.value[idx] = updated
+    if (idx !== -1 && updated) sessions.value[idx] = updated
     return updated
   }
 
@@ -111,7 +111,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     ensureListeners()
     const updated = await apiStartSession(id)
     const idx = sessions.value.findIndex((s) => s.id === id)
-    if (idx !== -1) sessions.value[idx] = updated
+    if (idx !== -1 && updated) sessions.value[idx] = updated
     return updated
   }
 
@@ -119,7 +119,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     ensureListeners()
     const updated = await apiPauseSession(id)
     const idx = sessions.value.findIndex((s) => s.id === id)
-    if (idx !== -1) sessions.value[idx] = updated
+    if (idx !== -1 && updated) sessions.value[idx] = updated
     return updated
   }
 

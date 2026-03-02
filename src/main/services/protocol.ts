@@ -33,6 +33,7 @@ export class Protocol {
   }
 
   static parseMessage(raw: string): ProtocolMessage | null {
+    if (raw.length > 65536) return null
     const match = PROTOCOL_REGEX.exec(raw)
     if (!match) return null
     return {

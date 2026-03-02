@@ -182,6 +182,10 @@ export class CliManager {
     const child = this.processes.get(id)
     if (!child) return false
     child.kill()
+    // 防御性清理：Windows ConPTY 下 onExit 可能不触发
+    this.processes.delete(id)
+    this.processInfo.delete(id)
+    this.outputBuffers.delete(id)
     return true
   }
 

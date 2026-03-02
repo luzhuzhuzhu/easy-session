@@ -116,7 +116,7 @@ export class SessionManager {
       }
 
       if (lifecycle.migrateOnLoad(session)) migrated = true
-      if (lifecycle.hydrateSessionId(session)) migrated = true
+      if (await lifecycle.hydrateSessionId(session)) migrated = true
 
       this.sessions.set(session.id, session)
     }
@@ -176,7 +176,7 @@ export class SessionManager {
     return session
   }
 
-  startSession(id: string): Session | null {
+  async startSession(id: string): Promise<Session | null> {
     const session = this.sessions.get(id)
     if (!session) return null
     if (session.status === 'running' && session.processId) return session
@@ -188,7 +188,7 @@ export class SessionManager {
     if (oldProcessId) this.cliManager.kill(oldProcessId)
 
     try {
-      this.lifecycles[session.type].startProcess(session, startAt)
+      await this.lifecycles[session.type].startProcess(session, startAt)
       this.indexProcess(session)
       this.scheduleCodexIdDiscovery(session, startAt)
     } catch (err) {
@@ -222,7 +222,7 @@ export class SessionManager {
     return session
   }
 
-  restartSession(id: string): Session | null {
+  async restartSession(id: string): Promise<Session | null> {
     const session = this.sessions.get(id)
     if (!session) return null
 
@@ -239,7 +239,7 @@ export class SessionManager {
     this.lifecycles[session.type].cleanup(session)
 
     try {
-      this.lifecycles[session.type].startProcess(session, restartAt)
+      await this.lifecycles[session.type].startProcess(session, restartAt)
       this.indexProcess(session)
       this.scheduleCodexIdDiscovery(session, restartAt)
     } catch (err) {
@@ -381,7 +381,10 @@ export class SessionManager {
     const sessionId = this.processIndex.get(processId)
     if (!sessionId) return
     const session = this.sessions.get(sessionId)
-    if (!session || session.processId !== processId) return
+    if (!session || session.processId !== processId) {
+      this.processIndex.delete(processId)
+      return
+    }
 
     this.closeCurrentRun(session)
     session.lastActiveAt = Date.now()

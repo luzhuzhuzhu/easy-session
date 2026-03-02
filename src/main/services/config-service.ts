@@ -50,7 +50,16 @@ export class ConfigService {
     return this.writeJsonFile(CODEX_CONFIG, config)
   }
 
+  private retryTimers = new Map<string, NodeJS.Timeout>()
+  private static readonly RETRY_INTERVAL_MS = 3000
+  private static readonly MAX_RETRIES = 10
+
   watchConfig(filePath: string, callback: (path: string) => void): void {
+    if (this.watchers.has(filePath)) return
+    this.tryWatch(filePath, callback, 0)
+  }
+
+  private tryWatch(filePath: string, callback: (path: string) => void, attempt: number): void {
     if (this.watchers.has(filePath)) return
     try {
       const watcher = watch(filePath, (eventType) => {
@@ -70,13 +79,25 @@ export class ConfigService {
       })
       this.watchers.set(filePath, watcher)
     } catch {
-      // file may not exist yet, ignore
+      // 文件不存在时定时重试，直到文件创建或达到最大重试次数
+      if (attempt < ConfigService.MAX_RETRIES) {
+        const retryTimer = setTimeout(() => {
+          this.retryTimers.delete(filePath)
+          this.tryWatch(filePath, callback, attempt + 1)
+        }, ConfigService.RETRY_INTERVAL_MS)
+        this.retryTimers.set(filePath, retryTimer)
+      }
     }
   }
 
   unwatchConfig(filePath: string): void {
     const watcher = this.watchers.get(filePath)
     const timer = this.watchTimers.get(filePath)
+    const retryTimer = this.retryTimers.get(filePath)
+    if (retryTimer) {
+      clearTimeout(retryTimer)
+      this.retryTimers.delete(filePath)
+    }
     if (timer) {
       clearTimeout(timer)
       this.watchTimers.delete(filePath)
@@ -88,6 +109,10 @@ export class ConfigService {
   }
 
   unwatchAll(): void {
+    for (const [, retryTimer] of this.retryTimers) {
+      clearTimeout(retryTimer)
+    }
+    this.retryTimers.clear()
     for (const [path] of this.watchers) {
       this.unwatchConfig(path)
     }
