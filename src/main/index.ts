@@ -13,6 +13,7 @@ import { ProjectManager } from './services/project-manager'
 import { SkillManager } from './services/skill-manager'
 import { DataStore } from './services/data-store'
 import { registerAllHandlers } from './ipc'
+import { WorkspaceLayoutManager } from './services/workspace-layout-manager'
 
 import { SessionOutputManager } from './services/session-output'
 
@@ -26,6 +27,7 @@ const codexLifecycle = new CodexSessionLifecycle(codexAdapter, outputManager)
 const sessionManager = new SessionManager(cliManager, claudeLifecycle, codexLifecycle, outputManager)
 const projectManager = new ProjectManager()
 const skillManager = new SkillManager(sessionManager)
+const workspaceLayoutManager = new WorkspaceLayoutManager()
 
 const SHUTDOWN_FLUSH_WARN_MS = 12_000
 const SHUTDOWN_START_CHANNEL = 'app:shutdown-start'
@@ -38,7 +40,8 @@ registerAllHandlers({
   configService,
   sessionManager,
   projectManager,
-  skillManager
+  skillManager,
+  workspaceLayoutManager
 })
 
 async function flushAllStoresOnShutdown(): Promise<void> {
@@ -53,7 +56,8 @@ async function flushAllStoresOnShutdown(): Promise<void> {
 
   const values = await Promise.allSettled([
     sessionManager.flush(),
-    projectManager.flush()
+    projectManager.flush(),
+    workspaceLayoutManager.flush()
   ]).finally(() => {
     clearTimeout(warnTimer)
   })
@@ -213,9 +217,10 @@ app.whenReady().then(async () => {
     const userData = app.getPath('userData')
     sessionManager.setStore(new DataStore(join(userData, 'sessions.json')))
 
-    const [projectResult, sessionResult] = await Promise.allSettled([
+    const [projectResult, sessionResult, workspaceResult] = await Promise.allSettled([
       projectManager.init(),
-      sessionManager.loadSessions()
+      sessionManager.loadSessions(),
+      workspaceLayoutManager.init()
     ])
 
     if (projectResult.status === 'rejected') {
@@ -223,6 +228,9 @@ app.whenReady().then(async () => {
     }
     if (sessionResult.status === 'rejected') {
       console.error('[init] session load failed:', sessionResult.reason)
+    }
+    if (workspaceResult.status === 'rejected') {
+      console.error('[init] workspace layout init failed:', workspaceResult.reason)
     }
 
     electronApp.setAppUserModelId('com.easysession')

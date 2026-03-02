@@ -79,6 +79,12 @@
     expandList: '展开会话列表',
     filter: '筛选',
     unmanagedProject: '未归档项目',
+    openInFocusedPane: '在当前分窗打开',
+    splitRightOpen: '右侧分窗并打开',
+    splitDownOpen: '下方分窗并打开',
+    undoLayout: '撤销布局变更',
+    resetLayout: '重置布局',
+    confirmResetLayout: '确认重置当前工作区布局？',
     dialog: {
       name: '会话名称',
       projectPath: '项目路径',
@@ -215,7 +221,8 @@
     skillDeleted: '技能已删除',
     skillSaved: '技能保存成功',
     settingsSaved: '设置已保存',
-    settingsSaveFail: '设置保存失败'
+    settingsSaveFail: '设置保存失败',
+    layoutReset: '工作区布局已重置'
   },
   terminal: {
     pauseScroll: '暂停自动滚动',
@@ -246,6 +253,14 @@
     sessionsListLeft: '左侧列表',
     sessionsListTop: '顶部导航栏',
     sessionsPanelCollapsed: '会话管理默认收起',
+    smartPriorityEnabled: '启用智能优先级排序',
+    smartPriorityScope: '智能排序作用范围',
+    smartPriorityScopeBoth: '项目和会话',
+    smartPriorityScopeSessions: '仅会话',
+    smartPriorityScopeProjects: '仅项目',
+    smartPriorityMode: '智能排序模式',
+    smartPriorityModeBalanced: '平衡模式',
+    smartPriorityModeRecent: '最近活跃优先',
     bufferSize: '输出缓冲区大小（行）',
     terminalFont: '终端字体',
     version: '应用版本',

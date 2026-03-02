@@ -11,10 +11,12 @@ import type { Session, CodexSession, CreateSessionParams, SessionFilter } from '
 
 export class SessionManager {
   private static readonly PERSIST_DEBOUNCE_MS = 200
+  private static readonly ACTIVITY_PERSIST_THROTTLE_MS = 5_000
 
   private sessions = new Map<string, Session>()
   private sessionCounter = new Map<string, number>()
   private processIndex = new Map<string, string>()
+  private activityPersistAt = new Map<string, number>()
   readonly outputManager: SessionOutputManager
   private store: DataStore<Session[]> | null = null
   private persistTail: Promise<void> = Promise.resolve()
@@ -39,6 +41,7 @@ export class SessionManager {
       const session = this.sessions.get(sessionId)
       if (!session || session.processId !== processId) return
 
+      this.markSessionActivity(session, Date.now(), false)
       this.outputManager.appendOutput(session.id, data, stream)
       this.lifecycles[session.type].handleOutput(session, data)
     })
@@ -88,6 +91,10 @@ export class SessionManager {
       }
       if (!Number.isFinite(session.lastRunMs)) {
         session.lastRunMs = 0
+        migrated = true
+      }
+      if (!Number.isFinite(session.lastActiveAt) || session.lastActiveAt <= 0) {
+        session.lastActiveAt = session.lastStartAt || session.createdAt
         migrated = true
       }
 
@@ -262,6 +269,7 @@ export class SessionManager {
     this.lifecycles[session.type].cleanup(session)
     this.outputManager.removeSession(id)
     this.sessions.delete(id)
+    this.activityPersistAt.delete(id)
     this.persist()
     return true
   }
@@ -282,13 +290,14 @@ export class SessionManager {
   sendInput(id: string, input: string): boolean {
     const session = this.sessions.get(id)
     if (!session?.processId) return false
-    session.lastActiveAt = Date.now()
+    this.markSessionActivity(session, Date.now(), true)
     return this.cliManager.write(session.processId, `${input}\n`)
   }
 
   writeRaw(id: string, data: string): boolean {
     const session = this.sessions.get(id)
     if (!session?.processId) return false
+    this.markSessionActivity(session, Date.now(), true)
     return this.cliManager.write(session.processId, data)
   }
 
@@ -331,6 +340,7 @@ export class SessionManager {
       this.lifecycles[session.type].cleanup(session)
       this.outputManager.removeSession(id)
       this.sessions.delete(id)
+      this.activityPersistAt.delete(id)
     }
 
     if (ids.length > 0) {
@@ -374,6 +384,7 @@ export class SessionManager {
     if (!session || session.processId !== processId) return
 
     this.closeCurrentRun(session)
+    session.lastActiveAt = Date.now()
     this.processIndex.delete(processId)
     session.processId = null
 
@@ -484,5 +495,19 @@ export class SessionManager {
     BrowserWindow.getAllWindows().forEach((win) => {
       win.webContents.send('session:status', { sessionId, status })
     })
+  }
+
+  private markSessionActivity(session: Session, now: number, forcePersist: boolean): void {
+    session.lastActiveAt = now
+    if (forcePersist) {
+      this.activityPersistAt.set(session.id, now)
+      this.persist()
+      return
+    }
+
+    const prev = this.activityPersistAt.get(session.id) ?? 0
+    if (now - prev < SessionManager.ACTIVITY_PERSIST_THROTTLE_MS) return
+    this.activityPersistAt.set(session.id, now)
+    this.persist()
   }
 }

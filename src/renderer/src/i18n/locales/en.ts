@@ -79,6 +79,12 @@ export default {
     expandList: 'Expand Session List',
     filter: 'Filter',
     unmanagedProject: 'Unmanaged Project',
+    openInFocusedPane: 'Open in focused pane',
+    splitRightOpen: 'Split right and open',
+    splitDownOpen: 'Split down and open',
+    undoLayout: 'Undo layout change',
+    resetLayout: 'Reset layout',
+    confirmResetLayout: 'Reset the current workspace layout?',
     dialog: {
       name: 'Session Name',
       projectPath: 'Project Path',
@@ -215,7 +221,8 @@ export default {
     skillDeleted: 'Skill deleted',
     skillSaved: 'Skill saved',
     settingsSaved: 'Settings saved',
-    settingsSaveFail: 'Settings save failed'
+    settingsSaveFail: 'Settings save failed',
+    layoutReset: 'Workspace layout reset'
   },
   terminal: {
     pauseScroll: 'Pause Auto-scroll',
@@ -246,6 +253,14 @@ export default {
     sessionsListLeft: 'Left Panel',
     sessionsListTop: 'Top Bar',
     sessionsPanelCollapsed: 'Collapse session panel by default',
+    smartPriorityEnabled: 'Enable smart priority sorting',
+    smartPriorityScope: 'Smart sort scope',
+    smartPriorityScopeBoth: 'Projects and sessions',
+    smartPriorityScopeSessions: 'Sessions only',
+    smartPriorityScopeProjects: 'Projects only',
+    smartPriorityMode: 'Smart sort mode',
+    smartPriorityModeBalanced: 'Balanced mode',
+    smartPriorityModeRecent: 'Recent activity first',
     bufferSize: 'Output Buffer Size (lines)',
     terminalFont: 'Terminal Font',
     version: 'App Version',

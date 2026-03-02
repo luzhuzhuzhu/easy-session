@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSessionsStore } from '@/stores/sessions'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 const NAV_SHORTCUTS: Record<string, string> = {
   '1': '/dashboard',
@@ -22,31 +23,43 @@ export const SHORTCUT_LABELS: Record<string, string> = {
 export function useShortcuts() {
   const router = useRouter()
   const sessionsStore = useSessionsStore()
+  const workspaceStore = useWorkspaceStore()
 
   function handler(e: KeyboardEvent) {
     const tag = (e.target as HTMLElement)?.tagName
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
 
-    if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+    const isPrimary = e.ctrlKey || e.metaKey
+    const key = e.key.toLowerCase()
+
+    if (isPrimary && !e.shiftKey && !e.altKey) {
       if (NAV_SHORTCUTS[e.key]) {
         e.preventDefault()
         router.push(NAV_SHORTCUTS[e.key])
         return
       }
-      if (e.key === 'n') {
+      if (key === 'n') {
         e.preventDefault()
         router.push({ path: '/sessions', query: { action: 'create' } })
         return
       }
-      if (e.key === ',') {
+      if (key === ',') {
         e.preventDefault()
         router.push('/settings')
         return
       }
-      if (e.key === 'w') {
+      if (key === 'w') {
         e.preventDefault()
         if (router.currentRoute.value.path === '/sessions' && sessionsStore.activeSessionId) {
           void sessionsStore.destroySession(sessionsStore.activeSessionId).catch(() => {})
+        }
+        return
+      }
+      if (key === 'z') {
+        if (router.currentRoute.value.path !== '/sessions') return
+        const undone = workspaceStore.undoLayoutChange()
+        if (undone) {
+          e.preventDefault()
         }
         return
       }

@@ -65,12 +65,17 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useProjectsStore, type Project } from '@/stores/projects'
+import { useSessionsStore, type Session } from '@/stores/sessions'
+import { useSettingsStore } from '@/stores/settings'
 import { useToast } from '@/composables/useToast'
 import { selectFolder } from '@/api/project'
+import { projectPriorityScore } from '@/utils/smart-priority'
 
 const { t } = useI18n()
 const router = useRouter()
 const projectsStore = useProjectsStore()
+const sessionsStore = useSessionsStore()
+const settingsStore = useSettingsStore()
 const toast = useToast()
 
 const searchQuery = ref('')
@@ -87,6 +92,40 @@ const filteredProjects = computed(() => {
 
 const sortedProjects = computed(() => {
   const list = [...filteredProjects.value]
+  const smartEnabled =
+    settingsStore.settings.smartPriorityEnabled &&
+    (settingsStore.settings.smartPriorityScope === 'projects' || settingsStore.settings.smartPriorityScope === 'both')
+
+  if (smartEnabled) {
+    const mode = settingsStore.settings.smartPriorityMode
+    const now = Date.now()
+    const normalizePath = (path: string) =>
+      window.electronAPI?.platform === 'win32' ? path.toLowerCase() : path
+    const sessionsByProjectKey = new Map<string, Session[]>()
+
+    for (const session of sessionsStore.sessions) {
+      const key = normalizePath(session.projectPath || '')
+      const current = sessionsByProjectKey.get(key)
+      if (current) {
+        current.push(session)
+      } else {
+        sessionsByProjectKey.set(key, [session])
+      }
+    }
+
+    const projectScores = new Map<string, number>()
+    for (const project of list) {
+      const key = normalizePath(project.path)
+      const sessions = sessionsByProjectKey.get(key) ?? []
+      projectScores.set(
+        project.id,
+        projectPriorityScore({ lastOpenedAt: project.lastOpenedAt }, sessions, mode, now)
+      )
+    }
+
+    return list.sort((a, b) => (projectScores.get(b.id) ?? 0) - (projectScores.get(a.id) ?? 0))
+  }
+
   switch (sortBy.value) {
     case 'name':
       return list.sort((a, b) => a.name.localeCompare(b.name))
@@ -154,7 +193,11 @@ async function handleContextRemove() {
 }
 
 onMounted(() => {
+  if (!settingsStore.loaded) {
+    void settingsStore.load()
+  }
   projectsStore.fetchProjects()
+  sessionsStore.fetchSessions()
 })
 </script>
 

@@ -12,19 +12,29 @@
         <div class="top-list-area">
           <div v-if="projectSessionTree.length === 0" class="top-empty-inline">{{ $t('session.noSessions') }}</div>
           <div v-else class="top-flow-row">
-            <div
-              v-for="group in projectSessionTree"
-              :key="group.key"
-              class="top-group-card"
-              v-show="group.sessions.length > 0"
-            >
+          <div
+            v-for="group in projectSessionTree"
+            :key="group.key"
+            class="top-group-card"
+            v-show="group.sessions.length > 0"
+            draggable="true"
+            @dragstart="handleTopProjectDragStart($event, group)"
+            @dragover.prevent="handleTopProjectDragOver($event)"
+            @drop="handleTopProjectDrop($event, group.key)"
+            @dragend="handleTopProjectDragEnd"
+          >
               <span class="top-group-label" :title="group.projectPath">{{ group.projectName }}</span>
               <button
                 v-for="s in group.sessions"
                 :key="s.id"
                 class="session-top-item"
                 :class="{ active: sessionsStore.activeSessionId === s.id }"
+                draggable="true"
                 @click="handleSessionClick(s)"
+                @dragstart="handleSessionDragStart($event, s)"
+                @dragover.prevent="handleSessionDragOver($event, group.key)"
+                @drop="handleSessionDrop($event, group.key, s.id)"
+                @dragend="handleSessionDragEnd"
                 @contextmenu.prevent="openContextMenu($event, s)"
               >
                 <span v-if="s.icon" class="session-icon">{{ s.icon }}</span>
@@ -70,7 +80,7 @@
           {{ $t('session.noSessions') }}
         </div>
         <div v-else class="session-tree">
-          <div v-for="group in projectSessionTree" :key="group.key" class="tree-group">
+          <div v-for="group in projectSessionTree" :key="group.key" class="tree-group" draggable="true" @dragstart="handleProjectDragStart($event, group)" @dragover.prevent="handleProjectDragOver($event)" @drop="handleProjectDrop($event, group.key)" @dragend="handleProjectDragEnd">
             <div class="project-node" @click="toggleProjectExpand(group.key)">
               <span class="project-caret">{{ isProjectExpanded(group.key) ? 'v' : '>' }}</span>
               <span class="project-name">{{ group.projectName }}</span>
@@ -100,7 +110,12 @@
                 :key="s.id"
                 class="session-item tree-child"
                 :class="{ active: sessionsStore.activeSessionId === s.id }"
+                draggable="true"
                 @click="handleSessionClick(s)"
+                @dragstart="handleSessionDragStart($event, s)"
+                @dragover.prevent="handleSessionDragOver($event, group.key)"
+                @drop="handleSessionDrop($event, group.key, s.id)"
+                @dragend="handleSessionDragEnd"
                 @contextmenu.prevent="openContextMenu($event, s)"
               >
                 <span v-if="s.icon" class="session-icon">{{ s.icon }}</span>
@@ -125,7 +140,12 @@
             :key="s.id"
             class="session-item compact"
             :class="{ active: sessionsStore.activeSessionId === s.id }"
+            draggable="true"
             @click="handleSessionClick(s)"
+            @dragstart="handleSessionDragStart($event, s)"
+            @dragover.prevent="handleSessionDragOver($event, group.key)"
+            @drop="handleSessionDrop($event, group.key, s.id)"
+            @dragend="handleSessionDragEnd"
             @contextmenu.prevent="openContextMenu($event, s)"
           >
             <span v-if="s.icon" class="session-icon">{{ s.icon }}</span>
@@ -146,46 +166,42 @@
     </aside>
 
     <main class="session-detail-panel">
-      <template v-if="activeSession">
-        <div class="detail-header">
-          <div class="header-info">
-            <span v-if="activeSession.icon" class="session-icon lg">{{ activeSession.icon }}</span>
-            <span v-else class="type-badge lg" :class="activeSession.type">{{ activeSession.type === 'claude' ? 'C' : 'X' }}</span>
-            <div>
-              <h2>{{ activeSession.name }}</h2>
-              <div class="header-meta">
-                <span>{{ $t('session.id') }}: {{ activeSession.id }}</span>
-                <span>{{ $t('session.project') }}: {{ activeSession.projectPath || '-' }}</span>
-                <span v-if="activeSession.type === 'codex'">
-                  {{ $t('session.permissionMode') }}: {{ codexPermissionModeLabel(activeSession) }}
-                </span>
-                <span class="status-tag" :class="activeSession.status">{{ $t(`session.status.${activeSession.status}`) }}</span>
-                <SessionRuntimeInfo :session="activeSession" />
-              </div>
-            </div>
-          </div>
-          <div class="header-actions">
-            <button v-if="activeSession.status !== 'running'" class="btn btn-primary btn-sm" @click="handleStart(activeSession.id)">
-              {{ $t('session.start') }}
-            </button>
-            <button v-else class="btn btn-sm" @click="handlePause(activeSession.id)">
-              {{ $t('session.pause') }}
-            </button>
-            <button class="btn btn-sm" @click="handleRestart(activeSession.id)">{{ $t('session.restart') }}</button>
-            <button class="btn btn-danger btn-sm" @click="handleDestroy(activeSession.id)">{{ $t('session.destroy') }}</button>
-          </div>
-        </div>
-
-        <TerminalOutput
-          :session-id="activeSession.id"
-          :process-key="activeSession.processId"
-          @clear="sessionsStore.clearSessionOutput(activeSession.id)"
-        />
-      </template>
-      <div v-else class="no-active">{{ $t('session.noActive') }}</div>
+      <WorkspacePaneTree
+        class="workspace-root"
+        node-path="root"
+        :node="workspaceLayout.root"
+        :tabs-index="workspaceLayout.tabs"
+        :sessions-by-id="sessionsById"
+        :active-pane-id="workspaceLayout.activePaneId"
+        :can-close-panes="workspaceStore.paneCount > 1"
+        :pane-ids="workspaceStore.paneIds"
+        @focus-pane="handleFocusPane"
+        @set-active-tab="handleSetPaneTab"
+        @split-pane="handleSplitPane"
+        @close-pane="handleClosePane"
+        @close-tab="handleClosePaneTab"
+        @move-tab="handleMoveTab"
+        @split-and-move-tab="handleSplitAndMoveTab"
+        @close-other-tabs="handleCloseOtherTabs"
+        @close-tabs-right="handleCloseTabsRight"
+        @toggle-tab-pin="handleToggleTabPin"
+        @resize-split="handleResizeSplit"
+        @even-split-pane="handleEvenSplitPane"
+        @open-session-drop="handleOpenSessionDrop"
+        @undo-layout="handleUndoLayout"
+        @reset-layout="handleResetWorkspace"
+        @start-session="handleStart"
+        @pause-session="handlePause"
+        @restart-session="handleRestart"
+        @destroy-session="handleDestroy"
+        @clear-output="sessionsStore.clearSessionOutput($event)"
+      />
     </main>
 
     <div v-if="contextMenu.visible" class="context-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
+      <button class="context-item" @click="handleOpenInPaneContext">{{ $t('session.openInFocusedPane') }}</button>
+      <button class="context-item" @click="handleSplitOpenContext('horizontal')">{{ $t('session.splitRightOpen') }}</button>
+      <button class="context-item" @click="handleSplitOpenContext('vertical')">{{ $t('session.splitDownOpen') }}</button>
       <button
         v-if="contextMenu.session?.status !== 'running'"
         class="context-item"
@@ -273,10 +289,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSessionsStore, type Session } from '@/stores/sessions'
 import { useProjectsStore } from '@/stores/projects'
 import { useSettingsStore, type AppSettings } from '@/stores/settings'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { useToast } from '@/composables/useToast'
-import TerminalOutput from '@/components/TerminalOutput.vue'
 import CreateSessionDialog from '@/components/CreateSessionDialog.vue'
-import SessionRuntimeInfo from '@/components/SessionRuntimeInfo.vue'
+import WorkspacePaneTree from '@/components/WorkspacePaneTree.vue'
+import type { WorkspaceSplitDirection } from '@/api/workspace'
+import { projectPriorityScore, sessionPriorityScore } from '@/utils/smart-priority'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -284,6 +302,7 @@ const router = useRouter()
 const sessionsStore = useSessionsStore()
 const projectsStore = useProjectsStore()
 const settingsStore = useSettingsStore()
+const workspaceStore = useWorkspaceStore()
 const toast = useToast()
 
 const showCreateDialog = ref(false)
@@ -317,12 +336,24 @@ function applyRouteSessionSelection() {
     const exists = sessionsStore.sessions.some((session) => session.id === querySessionId)
     if (exists) {
       sessionsStore.setActiveSession(querySessionId)
+      workspaceStore.openSessionInActivePane(querySessionId)
       return
     }
   }
 
-  if (!sessionsStore.activeSessionId && sessionsStore.sessions.length > 0) {
-    sessionsStore.setActiveSession(sessionsStore.sessions[0].id)
+  if (sessionsStore.sessions.length === 0) return
+
+  const fallbackSessionId = workspaceStore.activeSessionId || sessionsStore.activeSessionId || sessionsStore.sessions[0].id
+  sessionsStore.setActiveSession(fallbackSessionId)
+  workspaceStore.openSessionInActivePane(fallbackSessionId)
+}
+
+function reconcileWorkspaceSessions() {
+  const validIds = sessionsStore.sessions.map((session) => session.id)
+  const fallback = sessionsStore.activeSessionId || validIds[0]
+  workspaceStore.reconcileSessions(validIds, fallback)
+  if (workspaceStore.activeSessionId) {
+    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
   }
 }
 
@@ -341,6 +372,10 @@ const filterType = ref('')
 const contextMenu = ref({ visible: false, x: 0, y: 0, session: null as Session | null })
 const expandedProjectMap = ref<Record<string, boolean>>({})
 
+const sessionDragState = ref<{ sessionId: string; projectKey: string } | null>(null)
+const projectDragState = ref<{ group: ProjectSessionGroup } | null>(null)
+const topProjectDragState = ref<{ group: ProjectSessionGroup } | null>(null)
+
 interface ProjectSessionGroup {
   key: string
   projectId: string | null
@@ -353,6 +388,7 @@ interface ProjectMeta {
   id: string
   name: string
   path: string
+  lastOpenedAt: number
 }
 
 function normalizePathKey(path: string): string {
@@ -378,7 +414,8 @@ const projectMetaIndex = computed(() => {
     .map((project) => ({
       id: project.id,
       name: project.name,
-      path: project.path
+      path: project.path,
+      lastOpenedAt: project.lastOpenedAt
     }))
 
   const byKey = new Map<string, ProjectMeta>()
@@ -393,6 +430,14 @@ const projectSessionTree = computed<ProjectSessionGroup[]>(() => {
   const groupMap = new Map<string, ProjectSessionGroup>()
   const includeEmptyProjects = !filterType.value
   const { sorted: sortedProjects, byKey: projectByKey } = projectMetaIndex.value
+  const smartSessionsEnabled =
+    settingsStore.settings.smartPriorityEnabled &&
+    (settingsStore.settings.smartPriorityScope === 'sessions' || settingsStore.settings.smartPriorityScope === 'both')
+  const smartProjectsEnabled =
+    settingsStore.settings.smartPriorityEnabled &&
+    (settingsStore.settings.smartPriorityScope === 'projects' || settingsStore.settings.smartPriorityScope === 'both')
+  const mode = settingsStore.settings.smartPriorityMode
+  const now = Date.now()
 
   if (includeEmptyProjects) {
     for (const project of sortedProjects) {
@@ -428,19 +473,85 @@ const projectSessionTree = computed<ProjectSessionGroup[]>(() => {
   const groups = Array.from(groupMap.values())
     .filter((group) => group.sessions.length > 0 || includeEmptyProjects)
 
+  const manualSessionOrder = settingsStore.settings.manualSessionOrder || {}
+
   for (const group of groups) {
-    group.sessions.sort((a, b) => {
-      if (a.status === 'running' && b.status !== 'running') return -1
-      if (b.status === 'running' && a.status !== 'running') return 1
-      return b.createdAt - a.createdAt
-    })
+    if (smartSessionsEnabled) {
+      const sessionScores = new Map<string, number>()
+      for (const session of group.sessions) {
+        sessionScores.set(session.id, sessionPriorityScore(session, mode, now))
+      }
+      group.sessions.sort((a, b) => (sessionScores.get(b.id) ?? 0) - (sessionScores.get(a.id) ?? 0))
+      continue
+    }
+
+    const manualOrder = manualSessionOrder[group.key]
+    if (manualOrder && manualOrder.length > 0) {
+      const orderMap = new Map<string, number>()
+      manualOrder.forEach((id, index) => orderMap.set(id, index))
+      group.sessions.sort((a, b) => {
+        const aIndex = orderMap.get(a.id) ?? 999999
+        const bIndex = orderMap.get(b.id) ?? 999999
+        if (aIndex !== bIndex) return aIndex - bIndex
+        if (a.status === 'running' && b.status !== 'running') return -1
+        if (b.status === 'running' && a.status !== 'running') return 1
+        return b.createdAt - a.createdAt
+      })
+    } else {
+      group.sessions.sort((a, b) => {
+        if (a.status === 'running' && b.status !== 'running') return -1
+        if (b.status === 'running' && a.status !== 'running') return 1
+        return b.createdAt - a.createdAt
+      })
+    }
   }
 
-  groups.sort((a, b) => a.projectName.localeCompare(b.projectName))
+  const manualProjectOrder = settingsStore.settings.manualProjectOrder || []
+  if (smartProjectsEnabled) {
+    const groupScores = new Map<string, number>()
+    for (const group of groups) {
+      const meta = projectByKey.get(group.key)
+      groupScores.set(
+        group.key,
+        projectPriorityScore(
+          { lastOpenedAt: meta?.lastOpenedAt ?? 0 },
+          group.sessions,
+          mode,
+          now
+        )
+      )
+    }
+    groups.sort((a, b) => {
+      return (groupScores.get(b.key) ?? 0) - (groupScores.get(a.key) ?? 0)
+    })
+  } else if (manualProjectOrder && manualProjectOrder.length > 0) {
+    const orderMap = new Map<string, number>()
+    manualProjectOrder.forEach((key, index) => orderMap.set(key, index))
+    groups.sort((a, b) => {
+      const aIndex = orderMap.get(a.key) ?? 999999
+      const bIndex = orderMap.get(b.key) ?? 999999
+      return aIndex - bIndex
+    })
+  } else {
+    groups.sort((a, b) => a.projectName.localeCompare(b.projectName))
+  }
   return groups
 })
 
-const activeSession = computed(() => sessionsStore.sessions.find((s) => s.id === sessionsStore.activeSessionId) || null)
+const workspaceLayout = computed(() => workspaceStore.layout)
+const sessionsById = computed(() => {
+  const index: Record<string, Session> = {}
+  for (const session of sessionsStore.sessions) {
+    index[session.id] = session
+  }
+  return index
+})
+
+const activeSessionForDialog = computed(() => {
+  const activeId = workspaceStore.activeSessionId || sessionsStore.activeSessionId
+  if (!activeId) return null
+  return sessionsStore.sessions.find((session) => session.id === activeId) || null
+})
 
 const isTopLayout = computed(() => settingsStore.settings.sessionsListPosition === 'top')
 const isListCollapsed = computed(() => settingsStore.settings.sessionsPanelCollapsed)
@@ -476,7 +587,7 @@ function openProject(group: ProjectSessionGroup) {
   void router.push(`/projects/${group.projectId}`)
 }
 
-function openCreateDialog(projectPath = activeSession.value?.projectPath || '', lockProjectPath = false) {
+function openCreateDialog(projectPath = activeSessionForDialog.value?.projectPath || '', lockProjectPath = false) {
   createDialogProjectPath.value = projectPath
   createDialogLockProjectPath.value = lockProjectPath
   showCreateDialog.value = true
@@ -492,30 +603,16 @@ async function handleCreateDialogCreated(sessionId?: string) {
   closeCreateDialog()
   await nextTick()
   if (sessionId) {
+    workspaceStore.openSessionInActivePane(sessionId)
     sessionsStore.setActiveSession(sessionId)
   }
   await sessionsStore.fetchSessions()
+  reconcileWorkspaceSessions()
   if (sessionId && sessionsStore.sessions.some((session) => session.id === sessionId)) {
+    workspaceStore.openSessionInActivePane(sessionId)
     sessionsStore.setActiveSession(sessionId)
   }
   applyRouteSessionSelection()
-}
-
-function codexPermissionModeLabel(session: Session): string {
-  if (session.type !== 'codex') return '-'
-  const options = session.options || {}
-  const mode = typeof options.permissionsMode === 'string' ? options.permissionsMode : ''
-  if (mode === 'read-only') return 'Read Only'
-  if (mode === 'full-access') return 'Full Access'
-  if (mode === 'default') return 'Default'
-
-  const sandbox = typeof options.sandboxMode === 'string' ? options.sandboxMode : ''
-  const approval = typeof options.approvalMode === 'string' ? options.approvalMode : ''
-  if (sandbox === 'read-only') return 'Read Only'
-  if (sandbox === 'danger-full-access' || approval === 'never' || approval === 'full-auto') {
-    return 'Full Access'
-  }
-  return 'Default'
 }
 
 function formatTime(ts: number) {
@@ -541,6 +638,121 @@ async function toggleListPosition() {
 
 async function toggleListCollapsed() {
   await updateSessionUiSettings({ sessionsPanelCollapsed: !settingsStore.settings.sessionsPanelCollapsed })
+}
+
+function handleFocusPane(paneId: string) {
+  workspaceStore.focusPane(paneId)
+  if (workspaceStore.activeSessionId) {
+    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  }
+}
+
+function handleSetPaneTab(payload: { paneId: string; tabId: string }) {
+  workspaceStore.setActiveTab(payload.paneId, payload.tabId)
+  const sessionId = workspaceLayout.value.tabs[payload.tabId]?.sessionId
+  if (sessionId) {
+    sessionsStore.setActiveSession(sessionId)
+  }
+}
+
+function handleSplitPane(payload: { paneId: string; direction: WorkspaceSplitDirection }) {
+  workspaceStore.splitPane(payload.paneId, payload.direction)
+}
+
+function handleClosePane(paneId: string) {
+  workspaceStore.closePane(paneId)
+  if (workspaceStore.activeSessionId) {
+    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  }
+}
+
+function handleClosePaneTab(payload: { paneId: string; tabId: string }) {
+  workspaceStore.closeTab(payload.paneId, payload.tabId)
+  if (workspaceStore.activeSessionId) {
+    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  }
+}
+
+function handleMoveTab(payload: { fromPaneId: string; toPaneId: string; tabId: string; toIndex?: number }) {
+  workspaceStore.moveTabToPane(payload)
+  if (workspaceStore.activeSessionId) {
+    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  }
+}
+
+function handleSplitAndMoveTab(payload: {
+  sourcePaneId: string
+  targetPaneId: string
+  tabId: string
+  direction: WorkspaceSplitDirection
+}) {
+  workspaceStore.splitPaneAndMoveTab(payload)
+  if (workspaceStore.activeSessionId) {
+    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  }
+}
+
+function handleCloseOtherTabs(payload: { paneId: string; tabId: string }) {
+  workspaceStore.closeOtherTabs(payload.paneId, payload.tabId)
+  if (workspaceStore.activeSessionId) {
+    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  }
+}
+
+function handleCloseTabsRight(payload: { paneId: string; tabId: string }) {
+  workspaceStore.closeTabsToRight(payload.paneId, payload.tabId)
+  if (workspaceStore.activeSessionId) {
+    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  }
+}
+
+function handleToggleTabPin(tabId: string) {
+  workspaceStore.toggleTabPinned(tabId)
+}
+
+function handleResizeSplit(payload: { path: string; ratio: number }) {
+  workspaceStore.updateSplitRatio(payload.path, payload.ratio)
+}
+
+function handleEvenSplitPane(paneId: string) {
+  workspaceStore.evenSplitForPane(paneId)
+}
+
+function handleOpenSessionDrop(payload: {
+  sessionId: string
+  targetPaneId: string
+  direction?: WorkspaceSplitDirection
+}) {
+  const exists = sessionsStore.sessions.some((session) => session.id === payload.sessionId)
+  if (!exists) return
+
+  if (payload.direction) {
+    workspaceStore.splitPane(payload.targetPaneId, payload.direction)
+    const targetPaneId = workspaceStore.layout.activePaneId
+    workspaceStore.openSessionInPane(payload.sessionId, targetPaneId)
+  } else {
+    workspaceStore.openSessionInPane(payload.sessionId, payload.targetPaneId)
+  }
+
+  if (workspaceStore.activeSessionId) {
+    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  } else {
+    sessionsStore.setActiveSession(payload.sessionId)
+  }
+}
+
+function handleUndoLayout() {
+  const undone = workspaceStore.undoLayoutChange()
+  if (undone && workspaceStore.activeSessionId) {
+    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  }
+}
+
+async function handleResetWorkspace() {
+  if (!confirm(t('session.confirmResetLayout'))) return
+  await workspaceStore.hardReset()
+  reconcileWorkspaceSessions()
+  toast.success(t('toast.layoutReset'))
 }
 
 async function restartSessionById(id: string, showSuccess = true) {
@@ -570,7 +782,90 @@ async function pauseSessionById(id: string, showSuccess = true) {
   }
 }
 
+function handleSessionDragStart(e: DragEvent, session: Session) {
+  if (!e.dataTransfer) return
+  const sessionData = { sessionId: session.id }
+  e.dataTransfer.setData(
+    'application/x-easysession-session',
+    JSON.stringify(sessionData)
+  )
+  e.dataTransfer.setData(
+    'application/x-easysession-session-reorder',
+    JSON.stringify(sessionData)
+  )
+  e.dataTransfer.effectAllowed = 'move'
+  
+  const path = session.projectPath || ''
+  const key = normalizePathKey(path)
+  sessionDragState.value = { sessionId: session.id, projectKey: key }
+}
+
+function handleSessionDragOver(e: DragEvent, projectKey: string) {
+  if (!e.dataTransfer) return
+  const sessionReorderRaw = e.dataTransfer.getData('application/x-easysession-session-reorder')
+  if (!sessionReorderRaw) return
+  
+  try {
+    const sessionData = JSON.parse(sessionReorderRaw) as { sessionId: string }
+    const session = sessionsStore.sessions.find(s => s.id === sessionData.sessionId)
+    if (!session) return
+    
+    const sessionPath = normalizePathKey(session.projectPath || '')
+    if (sessionPath !== projectKey) {
+      e.dataTransfer.dropEffect = 'none'
+      return
+    }
+    
+    e.dataTransfer.dropEffect = 'move'
+  } catch {
+    e.dataTransfer.dropEffect = 'none'
+  }
+}
+
+function handleSessionDrop(e: DragEvent, projectKey: string, targetSessionId: string) {
+  e.preventDefault()
+  e.stopPropagation()
+  
+  const sessionReorderRaw = e.dataTransfer.getData('application/x-easysession-session-reorder')
+  if (!sessionReorderRaw) return
+  
+  try {
+    const sessionData = JSON.parse(sessionReorderRaw) as { sessionId: string }
+    const draggedSessionId = sessionData.sessionId
+    
+    if (draggedSessionId === targetSessionId) return
+    
+    const session = sessionsStore.sessions.find(s => s.id === draggedSessionId)
+    if (!session) return
+    
+    const sessionPath = normalizePathKey(session.projectPath || '')
+    if (sessionPath !== projectKey) return
+    
+    const currentOrder = settingsStore.settings.manualSessionOrder[projectKey] || []
+    const filteredOrder = currentOrder.filter(id => id !== draggedSessionId)
+    const targetIndex = filteredOrder.indexOf(targetSessionId)
+    
+    if (targetIndex === -1) {
+      filteredOrder.push(draggedSessionId)
+    } else {
+      filteredOrder.splice(targetIndex, 0, draggedSessionId)
+    }
+    
+    const newOrder = { ...settingsStore.settings.manualSessionOrder, [projectKey]: filteredOrder }
+    void settingsStore.update({ manualSessionOrder: newOrder })
+  } catch {
+    // ignore
+  } finally {
+    sessionDragState.value = null
+  }
+}
+
+function handleSessionDragEnd() {
+  sessionDragState.value = null
+}
+
 async function handleSessionClick(session: Session) {
+  workspaceStore.openSessionInActivePane(session.id)
   sessionsStore.setActiveSession(session.id)
 
   if (!isDormantSession(session)) return
@@ -583,6 +878,25 @@ async function handleSessionClick(session: Session) {
   }
 
   await startSessionById(session.id)
+}
+
+function handleOpenInPaneContext() {
+  const session = contextMenu.value.session
+  contextMenu.value.visible = false
+  if (!session) return
+  workspaceStore.openSessionInActivePane(session.id)
+  sessionsStore.setActiveSession(session.id)
+}
+
+function handleSplitOpenContext(direction: WorkspaceSplitDirection) {
+  const session = contextMenu.value.session
+  contextMenu.value.visible = false
+  if (!session) return
+  const activePaneId = workspaceStore.layout.activePaneId
+  workspaceStore.splitPane(activePaneId, direction)
+  const targetPaneId = workspaceStore.layout.activePaneId
+  workspaceStore.openSessionInPane(session.id, targetPaneId)
+  sessionsStore.setActiveSession(session.id)
 }
 
 function closeWakeDialog() {
@@ -625,6 +939,110 @@ async function handleDestroy(id: string) {
       toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
     }
   }
+}
+
+function handleProjectDragStart(e: DragEvent, group: ProjectSessionGroup) {
+  if (!e.dataTransfer) return
+  e.dataTransfer.setData(
+    'application/x-easysession-project-reorder',
+    JSON.stringify({ projectKey: group.key })
+  )
+  e.dataTransfer.effectAllowed = 'move'
+  projectDragState.value = { group }
+}
+
+function handleProjectDragOver(e: DragEvent) {
+  if (!e.dataTransfer) return
+  const projectReorderRaw = e.dataTransfer.getData('application/x-easysession-project-reorder')
+  if (!projectReorderRaw) return
+  e.dataTransfer.dropEffect = 'move'
+}
+
+function handleProjectDrop(e: DragEvent, targetProjectKey: string) {
+  e.preventDefault()
+  e.stopPropagation()
+  
+  const projectReorderRaw = e.dataTransfer.getData('application/x-easysession-project-reorder')
+  if (!projectReorderRaw) return
+  
+  try {
+    const projectData = JSON.parse(projectReorderRaw) as { projectKey: string }
+    const draggedProjectKey = projectData.projectKey
+    
+    if (draggedProjectKey === targetProjectKey) return
+    
+    const currentOrder = settingsStore.settings.manualProjectOrder || []
+    const filteredOrder = currentOrder.filter(key => key !== draggedProjectKey)
+    const targetIndex = filteredOrder.indexOf(targetProjectKey)
+    
+    if (targetIndex === -1) {
+      filteredOrder.push(draggedProjectKey)
+    } else {
+      filteredOrder.splice(targetIndex, 0, draggedProjectKey)
+    }
+    
+    void settingsStore.update({ manualProjectOrder: filteredOrder })
+  } catch {
+    // ignore
+  } finally {
+    projectDragState.value = null
+  }
+}
+
+function handleProjectDragEnd() {
+  projectDragState.value = null
+}
+
+function handleTopProjectDragStart(e: DragEvent, group: ProjectSessionGroup) {
+  if (!e.dataTransfer) return
+  e.dataTransfer.setData(
+    'application/x-easysession-project-reorder',
+    JSON.stringify({ projectKey: group.key })
+  )
+  e.dataTransfer.effectAllowed = 'move'
+  topProjectDragState.value = { group }
+}
+
+function handleTopProjectDragOver(e: DragEvent) {
+  if (!e.dataTransfer) return
+  const projectReorderRaw = e.dataTransfer.getData('application/x-easysession-project-reorder')
+  if (!projectReorderRaw) return
+  e.dataTransfer.dropEffect = 'move'
+}
+
+function handleTopProjectDrop(e: DragEvent, targetProjectKey: string) {
+  e.preventDefault()
+  e.stopPropagation()
+  
+  const projectReorderRaw = e.dataTransfer.getData('application/x-easysession-project-reorder')
+  if (!projectReorderRaw) return
+  
+  try {
+    const projectData = JSON.parse(projectReorderRaw) as { projectKey: string }
+    const draggedProjectKey = projectData.projectKey
+    
+    if (draggedProjectKey === targetProjectKey) return
+    
+    const currentOrder = settingsStore.settings.manualProjectOrder || []
+    const filteredOrder = currentOrder.filter(key => key !== draggedProjectKey)
+    const targetIndex = filteredOrder.indexOf(targetProjectKey)
+    
+    if (targetIndex === -1) {
+      filteredOrder.push(draggedProjectKey)
+    } else {
+      filteredOrder.splice(targetIndex, 0, draggedProjectKey)
+    }
+    
+    void settingsStore.update({ manualProjectOrder: filteredOrder })
+  } catch {
+    // ignore
+  } finally {
+    topProjectDragState.value = null
+  }
+}
+
+function handleTopProjectDragEnd() {
+  topProjectDragState.value = null
 }
 
 function openContextMenu(e: MouseEvent, session: Session) {
@@ -712,13 +1130,30 @@ async function handleRestartContext() {
 
 onMounted(async () => {
   if (!settingsStore.loaded) await settingsStore.load()
-  await Promise.all([sessionsStore.fetchSessions(), projectsStore.fetchProjects()])
+  await Promise.all([sessionsStore.fetchSessions(), projectsStore.fetchProjects(), workspaceStore.load()])
+  reconcileWorkspaceSessions()
   applyRouteSessionSelection()
 })
 
 watch(() => route.query.sessionId, () => {
   applyRouteSessionSelection()
 })
+
+watch(
+  () => sessionsStore.sessions.map((session) => session.id).join('|'),
+  () => {
+    reconcileWorkspaceSessions()
+  }
+)
+
+watch(
+  () => workspaceStore.activeSessionId,
+  (sessionId) => {
+    if (sessionId) {
+      sessionsStore.setActiveSession(sessionId)
+    }
+  }
+)
 </script>
 
 <style scoped lang="scss">
@@ -742,7 +1177,7 @@ watch(() => route.query.sessionId, () => {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 8px;
   padding: 6px var(--spacing-sm);
   overflow: hidden;
 }
@@ -776,8 +1211,9 @@ watch(() => route.query.sessionId, () => {
 .top-list-area {
   flex: 1;
   min-width: 0;
-  max-height: 140px;
-  overflow-y: auto;
+  max-height: 120px;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .top-empty-inline {
@@ -801,9 +1237,29 @@ watch(() => route.query.sessionId, () => {
 
 .top-flow-row {
   display: flex;
-  align-items: stretch;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
   overflow-x: auto;
+  overflow-y: hidden;
+  height: 100%;
+  padding-bottom: 4px;
+}
+
+.top-flow-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.top-flow-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.top-flow-row::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.top-flow-row::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .top-group-card {
@@ -812,8 +1268,20 @@ watch(() => route.query.sessionId, () => {
   gap: 4px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
-  padding: 3px 6px;
+  padding: 4px 6px;
   flex-shrink: 0;
+  border: 1px solid var(--border-color);
+  transition: all var(--transition-fast);
+  cursor: grab;
+
+  &:hover {
+    border-color: var(--accent-primary);
+    background: rgba(108, 158, 255, 0.06);
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
 }
 
 .top-group-label {
@@ -831,31 +1299,36 @@ watch(() => route.query.sessionId, () => {
   align-items: center;
   gap: 4px;
   min-width: 0;
-  max-width: 200px;
-  border: 1px solid var(--border-color);
+  max-width: 160px;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--bg-tertiary);
+  background: transparent;
   color: var(--text-primary);
-  padding: 4px 8px;
+  padding: 3px 6px;
   cursor: pointer;
   transition: all var(--transition-fast);
+  font-size: var(--font-size-xs);
 
-  &:hover { background: var(--bg-hover); }
+  &:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-color);
+  }
 
   &.active {
     border-color: var(--accent-primary);
-    background: rgba(108, 158, 255, 0.08);
+    background: rgba(108, 158, 255, 0.12);
   }
 }
 
 .top-item-name {
   min-width: 0;
-  max-width: 100px;
+  max-width: 80px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: left;
   font-size: var(--font-size-xs);
+  line-height: 1.4;
 }
 
 .session-list-panel {
@@ -923,41 +1396,71 @@ watch(() => route.query.sessionId, () => {
 .session-tree {
   flex: 1;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 6px;
+  overflow-x: hidden;
+  display: block;
+  padding: 8px;
+  min-height: 0;
+  height: 100%;
+}
+
+.session-tree::-webkit-scrollbar {
+  width: 8px;
+}
+
+.session-tree::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.session-tree::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.session-tree::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .tree-group {
   border-radius: var(--radius-sm);
   background: var(--bg-tertiary);
   overflow: hidden;
+  margin-bottom: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.tree-group:last-child {
+  margin-bottom: 0;
 }
 
 .project-node {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  background: rgba(108, 158, 255, 0.04);
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(108, 158, 255, 0.08);
   cursor: pointer;
   user-select: none;
-  border-bottom: 1px solid rgba(45, 53, 72, 0.5);
+  border-bottom: 1px solid var(--border-color);
+  transition: all var(--transition-fast);
+
+  &:hover {
+    background: rgba(108, 158, 255, 0.15);
+  }
 }
 
 .project-caret {
-  width: 14px;
+  width: 16px;
   text-align: center;
   font-family: var(--font-mono);
-  color: var(--text-muted);
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  transition: transform var(--transition-fast);
 }
 
 .project-name {
   flex: 1;
   min-width: 0;
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   color: var(--text-primary);
   font-weight: 600;
   white-space: nowrap;
@@ -966,31 +1469,42 @@ watch(() => route.query.sessionId, () => {
 }
 
 .project-count {
-  min-width: 20px;
-  text-align: right;
+  min-width: 22px;
+  text-align: center;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
+  background: rgba(108, 158, 255, 0.15);
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-weight: 600;
 }
 
 .project-actions {
   display: flex;
   align-items: center;
   gap: 2px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.project-node:hover .project-actions {
+  opacity: 1;
 }
 
 .project-action-btn {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: all var(--transition-fast);
 
   &:hover {
     background: var(--bg-hover);
@@ -1001,56 +1515,89 @@ watch(() => route.query.sessionId, () => {
 .project-children {
   display: flex;
   flex-direction: column;
+  background: transparent;
 }
 
 .project-empty {
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 8px 12px;
   font-size: var(--font-size-xs);
   color: var(--text-muted);
+  font-style: italic;
 }
 
 .session-items {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  display: block;
+  min-height: 0;
+}
+
+.session-items::-webkit-scrollbar {
+  width: 8px;
+}
+
+.session-items::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.session-items::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.session-items::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .session-item {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: 8px;
+  padding: 6px 10px;
   cursor: pointer;
-  border: 0;
-  border-bottom: 1px solid var(--border-color);
+  border: none;
+  border-bottom: 1px solid var(--border-light);
   background: transparent;
   color: var(--text-primary);
   text-align: left;
-  transition: background var(--transition-fast);
+  transition: all var(--transition-fast);
+  font-size: var(--font-size-sm);
 
-  &:hover { background: var(--bg-hover); }
+  &:hover {
+    background: rgba(108, 158, 255, 0.06);
+  }
 
   &.active {
-    background: var(--bg-tertiary);
-    box-shadow: inset 3px 0 0 var(--accent-primary);
+    background: rgba(108, 158, 255, 0.08);
+    box-shadow: inset 3px 0 0 #6b7280;
+  }
+
+  &:last-child {
+    border-bottom: none;
   }
 }
 
 .session-items.compact .session-item {
   justify-content: center;
-  padding: 6px 4px;
+  padding: 6px 3px;
   gap: 4px;
+  border-bottom: none;
+  display: flex;
 }
 
 .compact-group-label {
   width: 100%;
   text-align: center;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-muted);
-  padding: 4px 0 1px;
-  border-top: 1px solid var(--border-color);
+  padding: 6px 0 4px;
   line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-bottom: 1px solid var(--border-light);
 
   &:first-child {
     border-top: none;
@@ -1058,12 +1605,16 @@ watch(() => route.query.sessionId, () => {
 }
 
 .session-item.tree-child {
-  padding-left: 22px;
+  padding-left: 20px;
+  font-size: var(--font-size-xs);
 }
 
 .item-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .item-name {
@@ -1073,11 +1624,34 @@ watch(() => route.query.sessionId, () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.4;
 }
 
 .item-time {
-  font-size: var(--font-size-xs);
+  font-size: 10px;
   color: var(--text-muted);
+  line-height: 1;
+}
+
+.session-item.tree-child {
+  padding-left: 24px;
+  font-size: var(--font-size-sm);
+}
+
+.item-name {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.item-time {
+  font-size: 9px;
+  color: var(--text-muted);
+  line-height: 1;
 }
 
 .panel-footer {
@@ -1154,56 +1728,14 @@ watch(() => route.query.sessionId, () => {
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+  padding: 4px;
 }
 
-.detail-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 10px var(--spacing-md);
-  border-bottom: 1px solid var(--border-color);
-  gap: var(--spacing-md);
-}
-
-.header-info {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-  min-width: 0;
+.workspace-root {
   flex: 1;
-
-  h2 {
-    font-size: var(--font-size-lg);
-    margin: 0;
-    line-height: 1.3;
-  }
-}
-
-.header-meta {
+  min-height: 0;
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: var(--font-size-xs);
-  color: var(--text-secondary);
-  margin-top: 2px;
-  line-height: 1.6;
-}
-
-// status-tag 已在 global.scss 中定义
-
-.header-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.no-active {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-muted);
-  font-size: var(--font-size-lg);
 }
 
 // btn, btn-sm, btn-primary, btn-danger 已在 global.scss 中定义

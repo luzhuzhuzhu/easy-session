@@ -12,6 +12,11 @@ export interface AppSettings {
   sessionWakeConfirm: boolean
   sessionsPanelCollapsed: boolean
   sessionsListPosition: 'left' | 'top'
+  smartPriorityEnabled: boolean
+  smartPriorityScope: 'projects' | 'sessions' | 'both'
+  smartPriorityMode: 'recent' | 'balanced'
+  manualProjectOrder: string[]
+  manualSessionOrder: Record<string, string[]>
 }
 
 const defaults: AppSettings = {
@@ -24,7 +29,12 @@ const defaults: AppSettings = {
   sidebarCollapsed: false,
   sessionWakeConfirm: true,
   sessionsPanelCollapsed: false,
-  sessionsListPosition: 'left'
+  sessionsListPosition: 'left',
+  smartPriorityEnabled: false,
+  smartPriorityScope: 'both',
+  smartPriorityMode: 'balanced',
+  manualProjectOrder: [],
+  manualSessionOrder: {}
 }
 
 export const useSettingsStore = defineStore('settings', () => {

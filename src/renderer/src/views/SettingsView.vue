@@ -40,6 +40,25 @@
         <label>{{ $t('settings.sessionsPanelCollapsed') }}</label>
         <input v-model="settingsStore.settings.sessionsPanelCollapsed" type="checkbox" @change="handleSave" />
       </div>
+      <div class="setting-row">
+        <label>{{ $t('settings.smartPriorityEnabled') }}</label>
+        <input v-model="settingsStore.settings.smartPriorityEnabled" type="checkbox" @change="handleSave" />
+      </div>
+      <div class="setting-row">
+        <label>{{ $t('settings.smartPriorityScope') }}</label>
+        <select v-model="settingsStore.settings.smartPriorityScope" @change="handleSave">
+          <option value="both">{{ $t('settings.smartPriorityScopeBoth') }}</option>
+          <option value="sessions">{{ $t('settings.smartPriorityScopeSessions') }}</option>
+          <option value="projects">{{ $t('settings.smartPriorityScopeProjects') }}</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label>{{ $t('settings.smartPriorityMode') }}</label>
+        <select v-model="settingsStore.settings.smartPriorityMode" @change="handleSave">
+          <option value="balanced">{{ $t('settings.smartPriorityModeBalanced') }}</option>
+          <option value="recent">{{ $t('settings.smartPriorityModeRecent') }}</option>
+        </select>
+      </div>
     </section>
 
     <section class="settings-section">
