@@ -12,11 +12,12 @@ export default {
     projects: 'Projects',
     skills: 'Skills'
   },
-  dashboard: {
+dashboard: {
     welcome: 'Welcome to EasySession',
     description: 'Native Terminal, Unified Management',
     claudeStatus: 'Claude CLI Status',
     codexStatus: 'Codex CLI Status',
+    opencodeStatus: 'OpenCode CLI Status',
     activeProjects: 'Projects',
     activeSessions: 'Active Sessions',
     quickActions: 'Quick Actions',
@@ -34,7 +35,7 @@ export default {
     available: 'Available',
     unavailable: 'Unavailable'
   },
-  session: {
+session: {
     title: 'Sessions',
     create: 'New Session',
     start: 'Start',
@@ -45,6 +46,7 @@ export default {
     selectType: 'Select Type',
     claude: 'Claude',
     codex: 'Codex',
+    opencode: 'OpenCode',
     noSessions: 'No sessions yet, click the button above to create one',
     noSessionsInProject: 'No sessions in this project',
     noActive: 'Please select a session',
@@ -95,6 +97,22 @@ export default {
       browse: 'Browse',
       model: 'Model',
       approvalMode: 'Permission Mode',
+      opencodeModel: 'OpenCode Model',
+      opencodeModelPlaceholder: 'e.g. anthropic/claude-sonnet-4',
+      opencodeAgent: 'OpenCode Agent',
+      opencodeAgentPlaceholder: 'Optional agent name',
+      opencodePrompt: 'Startup Prompt',
+      opencodePromptPlaceholder: 'Optional startup prompt',
+      opencodeSessionId: 'Resume Session ID',
+      opencodeSessionIdPlaceholder: 'Use an existing OpenCode session ID',
+      opencodeServerMode: 'Server Mode',
+      opencodeServerModeOff: 'Off (local CLI)',
+      opencodeServerModeAttach: 'Attach to server',
+      opencodeAttachUrl: 'Attach URL',
+      opencodeAttachUrlPlaceholder: 'e.g. http://127.0.0.1:4096',
+      opencodeContinueLast: 'Continue last session',
+      opencodeFork: 'Fork when resuming',
+      opencodeConflictHint: 'sessionId and continueLast are both set. sessionId will be used first.',
       confirm: 'Confirm',
       cancel: 'Cancel',
       pathRequired: 'Project path is required'
@@ -239,7 +257,7 @@ export default {
     componentCrash: 'A component error occurred',
     retry: 'Retry'
   },
-  settings: {
+settings: {
     title: 'Settings',
     appearance: 'Appearance',
     language: 'Language',
@@ -252,6 +270,7 @@ export default {
     themeLight: 'Light',
     claudePath: 'Claude CLI Path',
     codexPath: 'Codex CLI Path',
+    opencodePath: 'OpenCode CLI Path',
     sessionWakeConfirm: 'Confirm before starting sleeping sessions',
     sessionsListPosition: 'Session List Position',
     sessionsListLeft: 'Left Panel',

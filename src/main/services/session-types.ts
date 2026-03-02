@@ -1,4 +1,4 @@
-import type { CliType, ClaudeSessionOptions, CodexSessionOptions } from './types'
+import type { CliType, ClaudeSessionOptions, CodexSessionOptions, OpenCodeSessionOptions } from './types'
 
 export type SessionStatus = 'idle' | 'running' | 'stopped' | 'error'
 
@@ -33,15 +33,20 @@ export interface CodexSession extends SessionBase {
   codexSessionId: string | null
 }
 
-// 判别联合 - 通过 session.type 自动收窄类型
-export type Session = ClaudeSession | CodexSession
+export interface OpenCodeSession extends SessionBase {
+  type: 'opencode'
+  options: OpenCodeSessionOptions
+  opencodeSessionId: string | null
+}
+
+export type Session = ClaudeSession | CodexSession | OpenCodeSession
 
 export interface CreateSessionParams {
   name?: string
   icon?: string
   type: CliType
   projectPath: string
-  options?: ClaudeSessionOptions | CodexSessionOptions
+  options?: ClaudeSessionOptions | CodexSessionOptions | OpenCodeSessionOptions
   parentId?: string
   startPaused?: boolean
 }

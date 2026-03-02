@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '../src/main/services/session-types'
 
-const sendSpy = vi.fn()
-const getAllWindowsSpy = vi.fn(() => [{ webContents: { send: sendSpy } }])
+const { sendSpy, getAllWindowsSpy } = vi.hoisted(() => {
+  const send = vi.fn()
+  const getAllWindows = vi.fn(() => [{ webContents: { send } }])
+  return { sendSpy: send, getAllWindowsSpy: getAllWindows }
+})
 
 vi.mock('electron', () => ({
   BrowserWindow: {

@@ -2,18 +2,20 @@ import { ipcMain } from 'electron'
 import { CliManager } from '../services/cli-manager'
 import { ClaudeAdapter } from '../services/claude-adapter'
 import { CodexAdapter } from '../services/codex-adapter'
+import { OpenCodeAdapter } from '../services/opencode-adapter'
 import type { CliType } from '../services/types'
 
 export function registerCliHandlers(
   cliManager: CliManager,
   claudeAdapter: ClaudeAdapter,
-  codexAdapter: CodexAdapter
+  codexAdapter: CodexAdapter,
+  openCodeAdapter: OpenCodeAdapter
 ): void {
   ipcMain.handle(
     'cli:spawn',
     (_event, type: CliType, projectPath: string, options?: object) => {
-      if (type !== 'claude' && type !== 'codex') {
-        throw new Error('参数 type 必须为 claude 或 codex')
+      if (type !== 'claude' && type !== 'codex' && type !== 'opencode') {
+        throw new Error('参数 type 必须为 claude、codex 或 opencode')
       }
       if (typeof projectPath !== 'string') {
         throw new Error('参数 projectPath 必须为字符串')
@@ -21,7 +23,10 @@ export function registerCliHandlers(
       if (type === 'claude') {
         return claudeAdapter.startSession(projectPath, options)
       }
-      return codexAdapter.startSession(projectPath, options)
+      if (type === 'codex') {
+        return codexAdapter.startSession(projectPath, options)
+      }
+      return openCodeAdapter.startSession(projectPath, options)
     }
   )
 
@@ -46,5 +51,13 @@ export function registerCliHandlers(
 
   ipcMain.handle('cli:codex:version', () => {
     return codexAdapter.getVersion()
+  })
+
+  ipcMain.handle('cli:opencode:version', (_event, preferredPath?: string) => {
+    const normalizedPath =
+      typeof preferredPath === 'string' && preferredPath.trim().length > 0
+        ? preferredPath.trim()
+        : undefined
+    return openCodeAdapter.getVersionWithPath(normalizedPath)
   })
 }

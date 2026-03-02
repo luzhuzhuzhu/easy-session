@@ -61,7 +61,7 @@
       </div>
     </section>
 
-    <section class="settings-section">
+<section class="settings-section">
       <h2>{{ $t('settings.cliPaths') }}</h2>
       <div class="setting-row">
         <label>{{ $t('settings.claudePath') }}</label>
@@ -70,6 +70,10 @@
       <div class="setting-row">
         <label>{{ $t('settings.codexPath') }}</label>
         <input v-model="settingsStore.settings.codexPath" type="text" :placeholder="$t('settings.autoDetect')" @change="handleSave" />
+      </div>
+      <div class="setting-row">
+        <label>{{ $t('settings.opencodePath') }}</label>
+        <input v-model="settingsStore.settings.opencodePath" type="text" :placeholder="$t('settings.autoDetect')" @change="handleSave" />
       </div>
     </section>
 

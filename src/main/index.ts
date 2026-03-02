@@ -5,10 +5,12 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { CliManager } from './services/cli-manager'
 import { ClaudeAdapter } from './services/claude-adapter'
 import { CodexAdapter } from './services/codex-adapter'
+import { OpenCodeAdapter } from './services/opencode-adapter'
 import { ConfigService } from './services/config-service'
 import { SessionManager } from './services/session-manager'
 import { ClaudeSessionLifecycle } from './services/claude-session-lifecycle'
 import { CodexSessionLifecycle } from './services/codex-session-lifecycle'
+import { OpenCodeSessionLifecycle } from './services/opencode-session-lifecycle'
 import { ProjectManager } from './services/project-manager'
 import { SkillManager } from './services/skill-manager'
 import { DataStore } from './services/data-store'
@@ -20,11 +22,19 @@ import { SessionOutputManager } from './services/session-output'
 const cliManager = new CliManager()
 const claudeAdapter = new ClaudeAdapter(cliManager)
 const codexAdapter = new CodexAdapter(cliManager)
+const openCodeAdapter = new OpenCodeAdapter(cliManager)
 const configService = new ConfigService()
 const outputManager = new SessionOutputManager()
 const claudeLifecycle = new ClaudeSessionLifecycle(claudeAdapter, outputManager)
 const codexLifecycle = new CodexSessionLifecycle(codexAdapter, outputManager)
-const sessionManager = new SessionManager(cliManager, claudeLifecycle, codexLifecycle, outputManager)
+const opencodeLifecycle = new OpenCodeSessionLifecycle(openCodeAdapter, outputManager)
+const sessionManager = new SessionManager(
+  cliManager,
+  claudeLifecycle,
+  codexLifecycle,
+  outputManager,
+  opencodeLifecycle
+)
 const projectManager = new ProjectManager()
 const skillManager = new SkillManager(sessionManager)
 const workspaceLayoutManager = new WorkspaceLayoutManager()
@@ -37,6 +47,7 @@ registerAllHandlers({
   cliManager,
   claudeAdapter,
   codexAdapter,
+  openCodeAdapter,
   configService,
   sessionManager,
   projectManager,
@@ -184,10 +195,32 @@ ipcMain.handle('shell:openPath', async (_event, targetPath: string) => {
   return shell.openPath(targetPath)
 })
 
-ipcMain.handle('cli:check', (_event, cliName: string) => {
+ipcMain.handle('cli:check', (_event, cliName: string, preferredPath?: string) => {
   if (process.env.NODE_ENV === 'test') return Promise.resolve({ available: false })
-  const allowedClis = ['claude', 'codex']
+  const allowedClis = ['claude', 'codex', 'opencode']
   if (!allowedClis.includes(cliName)) return Promise.resolve({ available: false })
+
+  const normalizedPreferredPath =
+    typeof preferredPath === 'string' && preferredPath.trim().length > 0
+      ? preferredPath.trim()
+      : null
+
+  if (normalizedPreferredPath) {
+    return new Promise((resolve) => {
+      exec(`"${normalizedPreferredPath}" --version`, (error, stdout) => {
+        if (error) {
+          resolve({ available: false, path: normalizedPreferredPath })
+          return
+        }
+        resolve({
+          available: true,
+          path: normalizedPreferredPath,
+          version: stdout.trim() || undefined
+        })
+      })
+    })
+  }
+
   const cmd = process.platform === 'win32' ? `where ${cliName}` : `which ${cliName}`
   return new Promise((resolve) => {
     exec(cmd, (error, stdout) => {

@@ -36,7 +36,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   // settings
   'settings:read', 'settings:write',
   // cli
-  'cli:kill', 'cli:write', 'cli:list', 'cli:claude:version', 'cli:codex:version'
+  'cli:kill', 'cli:write', 'cli:list',
+  'cli:claude:version', 'cli:codex:version', 'cli:opencode:version'
 ]
 
 const ALLOWED_RECEIVE_CHANNELS = [

@@ -6,6 +6,7 @@ export interface AppSettings {
   language: 'zh-CN' | 'en'
   claudePath: string
   codexPath: string
+  opencodePath: string
   bufferSize: number
   terminalFont: string
   sidebarCollapsed: boolean
@@ -24,6 +25,7 @@ const defaults: AppSettings = {
   language: 'zh-CN',
   claudePath: '',
   codexPath: '',
+  opencodePath: '',
   bufferSize: 5000,
   terminalFont: 'Consolas, monospace',
   sidebarCollapsed: false,

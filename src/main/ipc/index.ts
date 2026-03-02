@@ -1,6 +1,7 @@
 import { CliManager } from '../services/cli-manager'
 import { ClaudeAdapter } from '../services/claude-adapter'
 import { CodexAdapter } from '../services/codex-adapter'
+import { OpenCodeAdapter } from '../services/opencode-adapter'
 import { ConfigService } from '../services/config-service'
 import { SessionManager } from '../services/session-manager'
 import { ProjectManager } from '../services/project-manager'
@@ -18,6 +19,7 @@ export interface Services {
   cliManager: CliManager
   claudeAdapter: ClaudeAdapter
   codexAdapter: CodexAdapter
+  openCodeAdapter: OpenCodeAdapter
   configService: ConfigService
   sessionManager: SessionManager
   projectManager: ProjectManager
@@ -27,7 +29,7 @@ export interface Services {
 
 export function registerAllHandlers(services: Services): void {
   registerConfigHandlers(services.configService)
-  registerCliHandlers(services.cliManager, services.claudeAdapter, services.codexAdapter)
+  registerCliHandlers(services.cliManager, services.claudeAdapter, services.codexAdapter, services.openCodeAdapter)
   registerSessionHandlers(services.sessionManager)
   registerProjectHandlers(services.projectManager, services.sessionManager)
   registerSkillHandlers(services.skillManager, services.projectManager)

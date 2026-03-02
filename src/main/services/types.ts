@@ -1,4 +1,4 @@
-export type CliType = 'claude' | 'codex'
+export type CliType = 'claude' | 'codex' | 'opencode'
 
 export interface ProcessInfo {
   id: string
@@ -44,4 +44,16 @@ export interface CodexSessionOptions {
   sandboxMode?: CodexSandboxMode
   approvalMode?: SupportedCodexApprovalMode
   inlineMode?: boolean
+}
+
+export interface OpenCodeSessionOptions {
+  cliPath?: string
+  model?: string
+  agent?: string
+  prompt?: string
+  sessionId?: string
+  continueLast?: boolean
+  fork?: boolean
+  attachUrl?: string
+  serverMode?: 'off' | 'attach'
 }

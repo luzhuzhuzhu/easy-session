@@ -38,6 +38,10 @@
               <input v-model="form.type" type="radio" value="codex" />
               {{ $t('session.codex') }}
             </label>
+            <label class="radio-label">
+              <input v-model="form.type" type="radio" value="opencode" />
+              {{ $t('session.opencode') }}
+            </label>
           </div>
         </div>
 
@@ -68,6 +72,49 @@
           </div>
         </template>
 
+        <template v-if="form.type === 'opencode'">
+          <div class="form-group">
+            <label>{{ $t('session.dialog.opencodeModel') }}</label>
+            <input v-model="opencodeOptions.model" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeModelPlaceholder')" />
+          </div>
+          <div class="form-group">
+            <label>{{ $t('session.dialog.opencodeAgent') }}</label>
+            <input v-model="opencodeOptions.agent" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeAgentPlaceholder')" />
+          </div>
+          <div class="form-group">
+            <label>{{ $t('session.dialog.opencodePrompt') }}</label>
+            <input v-model="opencodeOptions.prompt" type="text" class="form-input" :placeholder="$t('session.dialog.opencodePromptPlaceholder')" />
+          </div>
+          <div class="form-group">
+            <label>{{ $t('session.dialog.opencodeSessionId') }}</label>
+            <input v-model="opencodeOptions.sessionId" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeSessionIdPlaceholder')" />
+          </div>
+          <div class="form-group">
+            <label>{{ $t('session.dialog.opencodeServerMode') }}</label>
+            <select v-model="opencodeOptions.serverMode" class="form-input">
+              <option value="off">{{ $t('session.dialog.opencodeServerModeOff') }}</option>
+              <option value="attach">{{ $t('session.dialog.opencodeServerModeAttach') }}</option>
+            </select>
+          </div>
+          <div class="form-group" v-if="opencodeOptions.serverMode === 'attach'">
+            <label>{{ $t('session.dialog.opencodeAttachUrl') }}</label>
+            <input v-model="opencodeOptions.attachUrl" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeAttachUrlPlaceholder')" />
+          </div>
+          <div class="form-row">
+            <label class="check-label">
+              <input v-model="opencodeOptions.continueLast" type="checkbox" />
+              {{ $t('session.dialog.opencodeContinueLast') }}
+            </label>
+            <label class="check-label">
+              <input v-model="opencodeOptions.fork" type="checkbox" />
+              {{ $t('session.dialog.opencodeFork') }}
+            </label>
+          </div>
+          <p v-if="opencodeOptions.sessionId && opencodeOptions.continueLast" class="warning-text">
+            {{ $t('session.dialog.opencodeConflictHint') }}
+          </p>
+        </template>
+
         <div class="dialog-footer">
           <button type="button" class="btn" @click="$emit('cancel')">{{ $t('session.dialog.cancel') }}</button>
           <button type="submit" class="btn btn-primary">{{ $t('session.dialog.confirm') }}</button>
@@ -81,6 +128,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSessionsStore } from '@/stores/sessions'
+import { useSettingsStore } from '@/stores/settings'
 import { useToast } from '@/composables/useToast'
 import { ipc } from '@/api/ipc'
 
@@ -101,12 +149,23 @@ const emit = defineEmits<{ (e: 'cancel'): void; (e: 'created', sessionId?: strin
 
 const { t } = useI18n()
 const sessionsStore = useSessionsStore()
+const settingsStore = useSettingsStore()
 const toast = useToast()
 
 type CodexPermissionsMode = 'read-only' | 'default' | 'full-access'
 
-const form = ref({ name: '', icon: '', type: 'claude' as 'claude' | 'codex', projectPath: '' })
+const form = ref({ name: '', icon: '', type: 'claude' as 'claude' | 'codex' | 'opencode', projectPath: '' })
 const codexOptions = ref({ permissionsMode: 'default' as CodexPermissionsMode })
+const opencodeOptions = ref({
+  model: '',
+  agent: '',
+  prompt: '',
+  sessionId: '',
+  continueLast: false,
+  fork: false,
+  attachUrl: '',
+  serverMode: 'off' as 'off' | 'attach'
+})
 const pathError = ref('')
 const showEmojiPicker = ref(false)
 
@@ -120,7 +179,8 @@ const emojiList = [
 
 const defaultName = computed(() => {
   const count = sessionsStore.sessions.filter((s) => s.type === form.value.type).length + 1
-  return `${form.value.type === 'claude' ? 'Claude' : 'Codex'}-${String(count).padStart(3, '0')}`
+  const typeDisplayName = form.value.type === 'claude' ? 'Claude' : form.value.type === 'codex' ? 'Codex' : 'OpenCode'
+  return `${typeDisplayName}-${String(count).padStart(3, '0')}`
 })
 
 watch(
@@ -130,6 +190,16 @@ watch(
     form.value = { name: '', icon: '', type: 'claude', projectPath: props.defaultProjectPath || '' }
     showEmojiPicker.value = false
     codexOptions.value = { permissionsMode: 'default' }
+    opencodeOptions.value = {
+      model: '',
+      agent: '',
+      prompt: '',
+      sessionId: '',
+      continueLast: false,
+      fork: false,
+      attachUrl: '',
+      serverMode: 'off'
+    }
     pathError.value = ''
   }
 )
@@ -154,9 +224,29 @@ async function handleSubmit() {
   const options =
     form.value.type === 'codex'
       ? Object.fromEntries(Object.entries(codexOptions.value).filter(([, v]) => v))
-      : undefined
+      : form.value.type === 'opencode'
+        ? Object.fromEntries(
+            Object.entries({
+              cliPath: settingsStore.settings.opencodePath?.trim() || undefined,
+              model: opencodeOptions.value.model.trim() || undefined,
+              agent: opencodeOptions.value.agent.trim() || undefined,
+              prompt: opencodeOptions.value.prompt.trim() || undefined,
+              sessionId: opencodeOptions.value.sessionId.trim() || undefined,
+              continueLast: opencodeOptions.value.continueLast || undefined,
+              fork: opencodeOptions.value.fork || undefined,
+              attachUrl:
+                opencodeOptions.value.serverMode === 'attach'
+                  ? opencodeOptions.value.attachUrl.trim() || undefined
+                  : undefined,
+              serverMode: opencodeOptions.value.serverMode
+            }).filter(([, v]) => v)
+          )
+        : undefined
 
   try {
+    if (form.value.type === 'opencode' && opencodeOptions.value.sessionId && opencodeOptions.value.continueLast) {
+      toast.warning(t('session.dialog.opencodeConflictHint'))
+    }
     const session = await sessionsStore.createSession({
       name: form.value.name || defaultName.value,
       icon: form.value.icon || undefined,
@@ -247,6 +337,25 @@ async function handleSubmit() {
   cursor: pointer;
   font-size: var(--font-size-sm);
   color: var(--text-primary);
+}
+
+.form-row {
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.warning-text {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--status-warning);
 }
 
 .path-input {

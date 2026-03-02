@@ -5,9 +5,10 @@ import { SessionOutputManager } from './session-output'
 import { DataStore } from './data-store'
 import type { ClaudeSessionLifecycle } from './claude-session-lifecycle'
 import type { CodexSessionLifecycle } from './codex-session-lifecycle'
+import type { OpenCodeSessionLifecycle } from './opencode-session-lifecycle'
 import type { ISessionLifecycle } from './session-lifecycle'
 import type { CliType } from './types'
-import type { Session, CodexSession, CreateSessionParams, SessionFilter } from './session-types'
+import type { Session, CodexSession, OpenCodeSession, CreateSessionParams, SessionFilter } from './session-types'
 
 export class SessionManager {
   private static readonly PERSIST_DEBOUNCE_MS = 200
@@ -28,12 +29,32 @@ export class SessionManager {
     private cliManager: CliManager,
     claudeLifecycle: ClaudeSessionLifecycle,
     private codexLifecycle: CodexSessionLifecycle,
-    outputManager: SessionOutputManager
+    outputManager: SessionOutputManager,
+    private opencodeLifecycle?: OpenCodeSessionLifecycle
   ) {
     this.outputManager = outputManager
-    this.lifecycles = { claude: claudeLifecycle, codex: codexLifecycle }
+
+    const noopOpenCodeLifecycle: ISessionLifecycle = {
+      create: (_id, _name, _params) => {
+        throw new Error('OpenCode lifecycle is not configured')
+      },
+      startProcess: () => {
+        throw new Error('OpenCode lifecycle is not configured')
+      },
+      handleOutput: () => {},
+      cleanup: () => {},
+      migrateOnLoad: () => false,
+      hydrateSessionId: () => false
+    }
+
+    this.lifecycles = {
+      claude: claudeLifecycle,
+      codex: codexLifecycle,
+      opencode: this.opencodeLifecycle || noopOpenCodeLifecycle
+    }
     claudeLifecycle.setPersistCallback(() => this.persist())
     codexLifecycle.setPersistCallback(() => this.persist())
+    this.opencodeLifecycle?.setPersistCallback(() => this.persist())
 
     this.cliManager.onOutput((processId, data, stream) => {
       const sessionId = this.processIndex.get(processId)
@@ -123,7 +144,7 @@ export class SessionManager {
 
     for (const session of this.sessions.values()) {
       const current = this.sessionCounter.get(session.type) || 0
-      const match = session.name.match(/^(?:Claude|Codex)-(\d+)$/)
+      const match = session.name.match(/^(?:Claude|Codex|OpenCode)-(\d+)$/)
       if (match) {
         const num = parseInt(match[1], 10)
         if (num > current) this.sessionCounter.set(session.type, num)
@@ -144,8 +165,8 @@ export class SessionManager {
     const type = params.type
     const count = (this.sessionCounter.get(type) || 0) + 1
     this.sessionCounter.set(type, count)
-    const name =
-      params.name || `${type === 'claude' ? 'Claude' : 'Codex'}-${String(count).padStart(3, '0')}`
+    const typeDisplayName = type === 'claude' ? 'Claude' : type === 'codex' ? 'Codex' : 'OpenCode'
+    const name = params.name || `${typeDisplayName}-${String(count).padStart(3, '0')}`
 
     const session = this.lifecycles[type].create(id, name, params)
     this.sessions.set(id, session)
@@ -160,12 +181,20 @@ export class SessionManager {
         () => this.sessions.get(id) as CodexSession | undefined
       )
     }
+    if (session.type === 'opencode' && session.processId && this.opencodeLifecycle) {
+      this.opencodeLifecycle.ensureOpenCodeSessionIdAsync(
+        id,
+        session.projectPath,
+        session.processId,
+        () => this.sessions.get(id) as OpenCodeSession | undefined
+      )
+    }
 
     this.persist()
 
     if (params.startPaused && session.processId) {
       const expectedProcessId = session.processId
-      const pauseDelayMs = type === 'codex' ? 1200 : 500
+      const pauseDelayMs = type === 'codex' ? 1200 : type === 'opencode' ? 800 : 500
       setTimeout(() => {
         const current = this.sessions.get(id)
         if (!current || current.status !== 'running' || current.processId !== expectedProcessId) return
@@ -190,7 +219,7 @@ export class SessionManager {
     try {
       await this.lifecycles[session.type].startProcess(session, startAt)
       this.indexProcess(session)
-      this.scheduleCodexIdDiscovery(session, startAt)
+      this.scheduleSessionIdDiscovery(session, startAt)
     } catch (err) {
       session.processId = null
       session.status = 'error'
@@ -241,7 +270,7 @@ export class SessionManager {
     try {
       await this.lifecycles[session.type].startProcess(session, restartAt)
       this.indexProcess(session)
-      this.scheduleCodexIdDiscovery(session, restartAt)
+      this.scheduleSessionIdDiscovery(session, restartAt)
     } catch (err) {
       session.processId = null
       session.status = 'error'
@@ -406,7 +435,7 @@ export class SessionManager {
     if (processId) this.processIndex.delete(processId)
   }
 
-  private scheduleCodexIdDiscovery(session: Session, startAt: number): void {
+  private scheduleSessionIdDiscovery(session: Session, startAt: number): void {
     if (session.type === 'codex' && session.processId) {
       this.codexLifecycle.ensureCodexSessionIdAsync(
         session.id,
@@ -414,6 +443,14 @@ export class SessionManager {
         startAt,
         session.processId,
         () => this.sessions.get(session.id) as CodexSession | undefined
+      )
+    }
+    if (session.type === 'opencode' && session.processId && this.opencodeLifecycle) {
+      this.opencodeLifecycle.ensureOpenCodeSessionIdAsync(
+        session.id,
+        session.projectPath,
+        session.processId,
+        () => this.sessions.get(session.id) as OpenCodeSession | undefined
       )
     }
   }

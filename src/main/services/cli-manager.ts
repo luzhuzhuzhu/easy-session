@@ -138,10 +138,17 @@ export class CliManager {
       env: this.buildSpawnEnv(command)
     })
 
+    const lowerCommand = command.toLowerCase()
+    const cliType = lowerCommand.includes('opencode')
+      ? 'opencode'
+      : lowerCommand.includes('codex')
+        ? 'codex'
+        : 'claude'
+
     const info: ProcessInfo = {
       id,
       pid: child.pid,
-      cliType: command.includes('codex') ? 'codex' : 'claude',
+      cliType,
       command,
       args,
       status: 'running',

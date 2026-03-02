@@ -12,11 +12,12 @@
     projects: '项目管理',
     skills: '技能管理'
   },
-  dashboard: {
+dashboard: {
     welcome: '欢迎使用 EasySession',
     description: '原生终端，统一管理',
     claudeStatus: 'Claude CLI 状态',
     codexStatus: 'Codex CLI 状态',
+    opencodeStatus: 'OpenCode CLI 状态',
     activeProjects: '项目数量',
     activeSessions: '活跃会话',
     quickActions: '快捷操作',
@@ -34,7 +35,7 @@
     available: '可用',
     unavailable: '不可用'
   },
-  session: {
+session: {
     title: '会话管理',
     create: '新建会话',
     start: '启动',
@@ -45,6 +46,7 @@
     selectType: '选择类型',
     claude: 'Claude',
     codex: 'Codex',
+    opencode: 'OpenCode',
     noSessions: '暂无会话，点击上方按钮创建',
     noSessionsInProject: '该项目下暂无会话',
     noActive: '请选择一个会话',
@@ -95,6 +97,22 @@
       browse: '浏览',
       model: '模型',
       approvalMode: '权限模式',
+      opencodeModel: 'OpenCode 模型',
+      opencodeModelPlaceholder: '例如：anthropic/claude-sonnet-4',
+      opencodeAgent: 'OpenCode Agent',
+      opencodeAgentPlaceholder: '可选，填写 agent 名称',
+      opencodePrompt: '启动提示词',
+      opencodePromptPlaceholder: '可选，启动后自动发送',
+      opencodeSessionId: '恢复会话 ID',
+      opencodeSessionIdPlaceholder: '填写已有 OpenCode sessionId',
+      opencodeServerMode: '服务模式',
+      opencodeServerModeOff: '关闭（本地 CLI）',
+      opencodeServerModeAttach: '连接远端服务',
+      opencodeAttachUrl: '连接地址',
+      opencodeAttachUrlPlaceholder: '例如：http://127.0.0.1:4096',
+      opencodeContinueLast: '继续最近会话',
+      opencodeFork: '恢复时 fork 分支',
+      opencodeConflictHint: 'sessionId 与 continueLast 同时启用时，将优先使用 sessionId。',
       confirm: '确认',
       cancel: '取消',
       pathRequired: '项目路径为必填项'
@@ -239,7 +257,7 @@
     componentCrash: '页面组件发生错误',
     retry: '重试'
   },
-  settings: {
+settings: {
     title: '设置',
     appearance: '外观设置',
     language: '语言设置',
@@ -252,6 +270,7 @@
     themeLight: '浅色主题',
     claudePath: 'Claude CLI 路径',
     codexPath: 'Codex CLI 路径',
+    opencodePath: 'OpenCode CLI 路径',
     sessionWakeConfirm: '点击休眠会话时弹出启动确认',
     sessionsListPosition: '会话列表位置',
     sessionsListLeft: '左侧列表',

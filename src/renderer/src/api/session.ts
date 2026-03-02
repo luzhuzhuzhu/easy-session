@@ -1,7 +1,7 @@
 import type { IpcRendererEvent } from 'electron'
 import { ipc } from './ipc'
 
-export type CliType = 'claude' | 'codex'
+export type CliType = 'claude' | 'codex' | 'opencode'
 export type SessionStatus = 'idle' | 'running' | 'stopped' | 'error'
 
 export interface Session {
@@ -21,6 +21,7 @@ export interface Session {
   parentId: string | null
   claudeSessionId?: string | null
   codexSessionId?: string | null
+  opencodeSessionId?: string | null
 }
 
 export interface CreateSessionParams {

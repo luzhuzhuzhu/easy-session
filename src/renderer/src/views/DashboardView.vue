@@ -5,7 +5,7 @@
       <p>{{ $t('dashboard.description') }}</p>
     </div>
 
-    <div class="cards">
+<div class="cards">
       <div class="card cli-card">
         <h3>{{ $t('dashboard.claudeStatus') }}</h3>
         <div class="cli-status">
@@ -26,6 +26,17 @@
         <div v-if="!checking && appStore.codexAvailable" class="cli-detail">
           <div v-if="appStore.codexInfo.path"><span class="label">{{ $t('dashboard.cliPath') }}</span> <code>{{ appStore.codexInfo.path }}</code></div>
           <div v-if="appStore.codexInfo.version"><span class="label">{{ $t('dashboard.cliVersion') }}</span> {{ appStore.codexInfo.version }}</div>
+        </div>
+      </div>
+      <div class="card cli-card">
+        <h3>{{ $t('dashboard.opencodeStatus') }}</h3>
+        <div class="cli-status">
+          <span class="indicator" :class="statusClass(appStore.opencodeAvailable, checking)"></span>
+          <span class="status-text">{{ statusText(appStore.opencodeAvailable, checking) }}</span>
+        </div>
+        <div v-if="!checking && appStore.opencodeAvailable" class="cli-detail">
+          <div v-if="appStore.opencodeInfo.path"><span class="label">{{ $t('dashboard.cliPath') }}</span> <code>{{ appStore.opencodeInfo.path }}</code></div>
+          <div v-if="appStore.opencodeInfo.version"><span class="label">{{ $t('dashboard.cliVersion') }}</span> {{ appStore.opencodeInfo.version }}</div>
         </div>
       </div>
     </div>
@@ -141,7 +152,7 @@ onMounted(async () => {
 
 .cards {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
 }
