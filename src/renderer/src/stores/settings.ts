@@ -39,6 +39,10 @@ const defaults: AppSettings = {
   manualSessionOrder: {}
 }
 
+function toSerializableSettings(value: AppSettings): AppSettings {
+  return JSON.parse(JSON.stringify(toRaw(value))) as AppSettings
+}
+
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<AppSettings>({ ...defaults })
   const loaded = ref(false)
@@ -54,7 +58,7 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   async function save() {
-    await window.electronAPI.invoke('settings:write', toRaw(settings.value))
+    await window.electronAPI.invoke('settings:write', toSerializableSettings(settings.value))
   }
 
   async function update(partial: Partial<AppSettings>) {

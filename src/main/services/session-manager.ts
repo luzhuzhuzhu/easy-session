@@ -109,6 +109,12 @@ export class SessionManager {
         session.icon = null
         migrated = true
       }
+      // Legacy migration: OpenCode sessions used to default to "X" when no emoji was set.
+      // Normalize that default marker to "O".
+      if (session.type === 'opencode' && (session.icon === 'X' || session.icon === 'x')) {
+        session.icon = 'O'
+        migrated = true
+      }
       if (!Number.isFinite(session.totalRunMs)) {
         session.totalRunMs = 0
         migrated = true

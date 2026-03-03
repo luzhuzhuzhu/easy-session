@@ -85,7 +85,7 @@
             <span v-else class="type-badge" :class="activeSession.type">{{ activeSession.type === 'claude' ? 'C' : activeSession.type === 'codex' ? 'X' : 'O' }}</span>
             <span class="pane-session-name">{{ activeSession.name }}</span>
             <span class="status-tag" :class="activeSession.status">{{ activeSession.status }}</span>
-            <SessionRuntimeInfo :session="activeSession" />
+            <SessionRuntimeInfo class="pane-runtime-info" :session="activeSession" />
           </div>
           <div class="pane-header-actions">
             <button
@@ -566,23 +566,46 @@ onBeforeUnmount(() => {
   gap: var(--spacing-sm);
   padding: 8px var(--spacing-sm);
   border-bottom: 1px solid var(--border-color);
+  min-height: 44px;
 }
 
 .pane-header-info {
+  flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
+  overflow: hidden;
 }
 
 .pane-session-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--font-size-sm);
   font-weight: 600;
+}
+
+.pane-runtime-info {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.pane-header-info :deep(.status-tag) {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .pane-header-actions {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
+}
+
+.pane-header-actions :deep(.btn) {
+  white-space: nowrap;
 }
 
 .pane-empty {
