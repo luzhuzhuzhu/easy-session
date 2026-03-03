@@ -47,7 +47,9 @@ Resuming a CLI session is easy (`--resume`), but when you have multiple projects
 
 - 🖥️ **Session Management** — Create, resume, and group CLI sessions, one-click to restore previous context
 - ⚡ **Native Terminal Embedding** — Built on xterm.js + node-pty, fully preserving native CLI experience
-- 🔌 **Multi-CLI Support** — Claude CLI & Codex CLI supported, Gemini CLI and more planned
+- **Multi-CLI Support** - Claude CLI, Codex CLI & OpenCode CLI supported, Gemini CLI and more planned
+- **In-App Split Workspace** - Multi-pane workspace with split, close, even split, and layout reset
+- **Smart Priority Sorting** - Sort project cards/session tree by startup & usage activity (toggle supported)
 - 📁 **Project Management** — Organize sessions by project, bind working directories, quick switch
 - 📊 **Dashboard** — Overview of all session states and project status at a glance
 - ⚙️ **Config Editor** — GUI-based CLI config editing with live change detection
@@ -94,6 +96,9 @@ npm run dev
 
 - [x] Claude CLI support
 - [x] Codex CLI support
+- [x] OpenCode CLI support
+- [x] In-app split workspace (multi-pane)
+- [x] Smart project/session priority sorting
 - [x] Session grouping & project management
 - [x] i18n (English / 简体中文)
 - [ ] Gemini CLI support
