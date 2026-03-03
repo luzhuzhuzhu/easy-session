@@ -5,6 +5,7 @@
     <div class="tabs">
       <button class="tab" :class="{ active: configStore.activeTab === 'claude' }" @click="configStore.activeTab = 'claude'">{{ $t('config.claudeTab') }}</button>
       <button class="tab" :class="{ active: configStore.activeTab === 'codex' }" @click="configStore.activeTab = 'codex'">{{ $t('config.codexTab') }}</button>
+      <button class="tab" :class="{ active: configStore.activeTab === 'opencode' }" @click="configStore.activeTab = 'opencode'">{{ $t('config.opencodeTab') }}</button>
     </div>
 
     <div class="config-panel">
@@ -55,11 +56,20 @@ const messageType = ref<'success' | 'error'>('success')
 
 const claudePath = '~/.claude/settings.json'
 const codexPath = '~/.codex/config.json'
+const opencodePath = '~/.config/opencode/opencode.json'
 
-const currentPath = computed(() => configStore.activeTab === 'claude' ? claudePath : codexPath)
+const currentPath = computed(() => {
+  if (configStore.activeTab === 'claude') return claudePath
+  if (configStore.activeTab === 'codex') return codexPath
+  return opencodePath
+})
 
 const currentConfigText = computed(() => {
-  const cfg = configStore.activeTab === 'claude' ? configStore.claudeConfig : configStore.codexConfig
+  const cfg = configStore.activeTab === 'claude'
+    ? configStore.claudeConfig
+    : configStore.activeTab === 'codex'
+      ? configStore.codexConfig
+      : configStore.opencodeConfig
   return JSON.stringify(cfg, null, 2)
 })
 
@@ -72,8 +82,10 @@ function syncEditor() {
 async function loadCurrent() {
   if (configStore.activeTab === 'claude') {
     await configStore.loadClaudeConfig()
-  } else {
+  } else if (configStore.activeTab === 'codex') {
     await configStore.loadCodexConfig()
+  } else {
+    await configStore.loadOpenCodeConfig()
   }
   syncEditor()
 }
@@ -85,8 +97,10 @@ async function handleSave() {
     const parsed = JSON.parse(editText.value)
     if (configStore.activeTab === 'claude') {
       await configStore.saveClaudeConfig(parsed)
-    } else {
+    } else if (configStore.activeTab === 'codex') {
       await configStore.saveCodexConfig(parsed)
+    } else {
+      await configStore.saveOpenCodeConfig(parsed)
     }
     message.value = t('config.saveSuccess')
     messageType.value = 'success'

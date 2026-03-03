@@ -4,6 +4,7 @@ import { watch, FSWatcher } from 'fs'
 import {
   CLAUDE_GLOBAL_CONFIG,
   CODEX_CONFIG,
+  OPENCODE_GLOBAL_CONFIG,
   claudeProjectConfig
 } from './config-paths'
 
@@ -48,6 +49,14 @@ export class ConfigService {
 
   setCodexConfig(config: object): Promise<void> {
     return this.writeJsonFile(CODEX_CONFIG, config)
+  }
+
+  getOpenCodeConfig(): Promise<object> {
+    return this.readJsonFile(OPENCODE_GLOBAL_CONFIG)
+  }
+
+  setOpenCodeConfig(config: object): Promise<void> {
+    return this.writeJsonFile(OPENCODE_GLOBAL_CONFIG, config)
   }
 
   private retryTimers = new Map<string, NodeJS.Timeout>()

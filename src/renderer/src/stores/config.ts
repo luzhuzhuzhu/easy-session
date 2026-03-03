@@ -1,13 +1,21 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { readClaudeConfig, writeClaudeConfig, readCodexConfig, writeCodexConfig } from '@/api/config'
+import {
+  readClaudeConfig,
+  writeClaudeConfig,
+  readCodexConfig,
+  writeCodexConfig,
+  readOpenCodeConfig,
+  writeOpenCodeConfig
+} from '@/api/config'
 
 export const useConfigStore = defineStore('config', () => {
   const claudeConfig = ref<Record<string, unknown>>({})
   const codexConfig = ref<Record<string, unknown>>({})
+  const opencodeConfig = ref<Record<string, unknown>>({})
   const loading = ref(false)
   const lastSaved = ref<string | null>(null)
-  const activeTab = ref<'claude' | 'codex'>('claude')
+  const activeTab = ref<'claude' | 'codex' | 'opencode'>('claude')
 
   async function loadClaudeConfig() {
     loading.value = true
@@ -39,5 +47,33 @@ export const useConfigStore = defineStore('config', () => {
     lastSaved.value = new Date().toLocaleString('zh-CN')
   }
 
-  return { claudeConfig, codexConfig, loading, lastSaved, activeTab, loadClaudeConfig, saveClaudeConfig, loadCodexConfig, saveCodexConfig }
+  async function loadOpenCodeConfig() {
+    loading.value = true
+    try {
+      opencodeConfig.value = (await readOpenCodeConfig()) as Record<string, unknown>
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function saveOpenCodeConfig(config: Record<string, unknown>) {
+    await writeOpenCodeConfig(config)
+    opencodeConfig.value = config
+    lastSaved.value = new Date().toLocaleString('zh-CN')
+  }
+
+  return {
+    claudeConfig,
+    codexConfig,
+    opencodeConfig,
+    loading,
+    lastSaved,
+    activeTab,
+    loadClaudeConfig,
+    saveClaudeConfig,
+    loadCodexConfig,
+    saveCodexConfig,
+    loadOpenCodeConfig,
+    saveOpenCodeConfig
+  }
 })

@@ -26,6 +26,14 @@ export function registerConfigHandlers(configService: ConfigService): void {
     return configService.setCodexConfig(config)
   })
 
+  ipcMain.handle('config:opencode:read', () => {
+    return configService.getOpenCodeConfig()
+  })
+
+  ipcMain.handle('config:opencode:write', (_event, config: object) => {
+    return configService.setOpenCodeConfig(config)
+  })
+
   ipcMain.handle('config:watch:start', (_event, filePath: string) => {
     configService.watchConfig(filePath, (path) => {
       BrowserWindow.getAllWindows().forEach((win) => {

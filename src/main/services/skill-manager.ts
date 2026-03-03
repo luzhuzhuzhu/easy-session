@@ -17,11 +17,31 @@ interface SkillFileInfo {
 export class SkillManager {
   constructor(private sessionManager: SessionManager) {}
 
-  private getSkillRoot(source: CliType, projectPath?: string): string {
-    const base = projectPath || homedir()
-    return source === 'claude'
-      ? join(base, '.claude', 'skills')
-      : join(base, '.codex', 'skills')
+  private getPrimarySkillRoot(source: CliType, projectPath?: string): string {
+    if (source === 'claude') {
+      return projectPath
+        ? join(projectPath, '.claude', 'skills')
+        : join(homedir(), '.claude', 'skills')
+    }
+    if (source === 'codex') {
+      return projectPath
+        ? join(projectPath, '.codex', 'skills')
+        : join(homedir(), '.codex', 'skills')
+    }
+    return projectPath
+      ? join(projectPath, '.opencode', 'skills')
+      : join(homedir(), '.config', 'opencode', 'skills')
+  }
+
+  private getSkillRoots(source: CliType, projectPath?: string): string[] {
+    const primary = this.getPrimarySkillRoot(source, projectPath)
+    if (source !== 'opencode') return [primary]
+
+    const legacyAgents = projectPath
+      ? join(projectPath, '.agents', 'skills')
+      : join(homedir(), '.agents', 'skills')
+
+    return [primary, legacyAgents]
   }
 
   private normalizePath(pathValue: string): string {
@@ -43,7 +63,7 @@ export class SkillManager {
     if (idx <= 0) return null
 
     const source = id.slice(0, idx)
-    if (source !== 'claude' && source !== 'codex') return null
+    if (source !== 'claude' && source !== 'codex' && source !== 'opencode') return null
 
     try {
       const relativePath = decodeURIComponent(id.slice(idx + 1))
@@ -63,9 +83,9 @@ export class SkillManager {
   }
 
   private async listSkillFiles(source: CliType, projectPath?: string): Promise<SkillFileInfo[]> {
-    const rootDir = this.getSkillRoot(source, projectPath)
+    const rootDirs = this.getSkillRoots(source, projectPath)
 
-    const walk = async (currentDir: string): Promise<SkillFileInfo[]> => {
+    const walk = async (rootDir: string, currentDir: string): Promise<SkillFileInfo[]> => {
       let entries
       try {
         entries = await readdir(currentDir, { withFileTypes: true })
@@ -78,7 +98,7 @@ export class SkillManager {
       for (const entry of entries) {
         const fullPath = join(currentDir, entry.name)
         if (entry.isDirectory()) {
-          result.push(...await walk(fullPath))
+          result.push(...await walk(rootDir, fullPath))
           continue
         }
 
@@ -96,7 +116,22 @@ export class SkillManager {
       return result
     }
 
-    return walk(rootDir)
+    const dedupe = new Set<string>()
+    const merged: SkillFileInfo[] = []
+
+    for (const rootDir of rootDirs) {
+      const files = await walk(rootDir, rootDir)
+      for (const file of files) {
+        const key = process.platform === 'win32'
+          ? file.relativePath.toLowerCase()
+          : file.relativePath
+        if (dedupe.has(key)) continue
+        dedupe.add(key)
+        merged.push(file)
+      }
+    }
+
+    return merged
   }
 
   private inferCategory(relativePath: string): string {
@@ -200,30 +235,32 @@ export class SkillManager {
     const parsed = this.parseSkillId(id)
     if (!parsed) return null
 
-    const rootDir = this.getSkillRoot(parsed.source, projectPath)
-    const absolutePath = resolve(rootDir, parsed.relativePath)
+    const roots = this.getSkillRoots(parsed.source, projectPath)
 
-    // Prevent path traversal
-    if (!this.isPathInsideRoot(rootDir, absolutePath)) {
-      return null
+    for (const rootDir of roots) {
+      const absolutePath = resolve(rootDir, parsed.relativePath)
+
+      // Prevent path traversal
+      if (!this.isPathInsideRoot(rootDir, absolutePath)) {
+        continue
+      }
+
+      try {
+        const content = await readFile(absolutePath, 'utf-8')
+        const info: SkillFileInfo = {
+          source: parsed.source,
+          rootDir,
+          absolutePath,
+          relativePath: this.normalizePath(relative(rootDir, absolutePath))
+        }
+        const skill = this.buildSkillFromFileInfo(info, content)
+        return { info, skill, content }
+      } catch {
+        // try next compatible root
+      }
     }
 
-    let content: string
-    try {
-      content = await readFile(absolutePath, 'utf-8')
-    } catch {
-      return null
-    }
-
-    const info: SkillFileInfo = {
-      source: parsed.source,
-      rootDir,
-      absolutePath,
-      relativePath: this.normalizePath(relative(rootDir, absolutePath))
-    }
-
-    const skill = this.buildSkillFromFileInfo(info, content)
-    return { info, skill, content }
+    return null
   }
 
   private sanitizeSlug(value: string): string {
@@ -243,7 +280,7 @@ export class SkillManager {
     prompt: string
   }): string {
     const name = skill.name.trim() || 'Unnamed Skill'
-    const description = skill.description.trim() || 'Local skill managed by Claude-Codex-Mix'
+    const description = skill.description.trim() || 'Local skill managed by Claude-Codex-OpenCode-Mix'
     const prompt = skill.prompt.replace(/\r\n/g, '\n').trim()
 
     return [
@@ -260,7 +297,7 @@ export class SkillManager {
 
 
   private async createSkillFile(source: CliType, skill: Omit<Skill, 'id' | 'isBuiltin' | 'sourceCli' | 'filePath'>): Promise<Skill> {
-    const rootDir = this.getSkillRoot(source)
+    const rootDir = this.getPrimarySkillRoot(source)
     await mkdir(rootDir, { recursive: true })
 
     const baseSlug = this.sanitizeSlug(skill.slug || skill.name)
@@ -305,12 +342,13 @@ export class SkillManager {
   }
 
   async listSkills(filter?: SkillFilter): Promise<Skill[]> {
-    const [claudeFiles, codexFiles] = await Promise.all([
+    const [claudeFiles, codexFiles, opencodeFiles] = await Promise.all([
       this.listSkillFiles('claude'),
-      this.listSkillFiles('codex')
+      this.listSkillFiles('codex'),
+      this.listSkillFiles('opencode')
     ])
 
-    const files = [...claudeFiles, ...codexFiles]
+    const files = [...claudeFiles, ...codexFiles, ...opencodeFiles]
     const loaded = await Promise.all(
       files.map(async (fileInfo) => {
         try {
@@ -341,7 +379,9 @@ export class SkillManager {
   }
 
   async createSkill(skill: Omit<Skill, 'id' | 'isBuiltin' | 'sourceCli' | 'filePath'>): Promise<Skill> {
-    const targets = Array.from(new Set(skill.compatibleCli)).filter((cli): cli is CliType => cli === 'claude' || cli === 'codex')
+    const targets = Array.from(new Set(skill.compatibleCli)).filter(
+      (cli): cli is CliType => cli === 'claude' || cli === 'codex' || cli === 'opencode'
+    )
     const sources: CliType[] = targets.length > 0 ? targets : ['codex']
 
     let first: Skill | null = null
@@ -389,11 +429,12 @@ export class SkillManager {
   }
 
   async listProjectSkills(projectPath: string): Promise<Skill[]> {
-    const [claudeFiles, codexFiles] = await Promise.all([
+    const [claudeFiles, codexFiles, opencodeFiles] = await Promise.all([
       this.listSkillFiles('claude', projectPath),
-      this.listSkillFiles('codex', projectPath)
+      this.listSkillFiles('codex', projectPath),
+      this.listSkillFiles('opencode', projectPath)
     ])
-    const files = [...claudeFiles, ...codexFiles]
+    const files = [...claudeFiles, ...codexFiles, ...opencodeFiles]
     const loaded = await Promise.all(
       files.map(async (fileInfo) => {
         try {

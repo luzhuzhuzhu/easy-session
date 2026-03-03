@@ -17,6 +17,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'config:claude:read', 'config:claude:write',
   'config:claude:project:read', 'config:claude:project:write',
   'config:codex:read', 'config:codex:write',
+  'config:opencode:read', 'config:opencode:write',
   'config:watch:start', 'config:watch:stop',
   // workspace
   'workspace:getLayout', 'workspace:updateLayout', 'workspace:resetLayout',

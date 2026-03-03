@@ -24,6 +24,14 @@ export function writeCodexConfig(config: object): Promise<void> {
   return ipc.invoke<void>('config:codex:write', config)
 }
 
+export function readOpenCodeConfig(): Promise<object> {
+  return ipc.invoke<object>('config:opencode:read')
+}
+
+export function writeOpenCodeConfig(config: object): Promise<void> {
+  return ipc.invoke<void>('config:opencode:write', config)
+}
+
 export function watchConfig(filePath: string): Promise<void> {
   return ipc.invoke<void>('config:watch:start', filePath)
 }

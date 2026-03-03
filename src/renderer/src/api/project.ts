@@ -50,8 +50,8 @@ export function getProjectSessions(projectId: string): Promise<Session[]> {
   return ipc.invoke<Session[]>('project:sessions', projectId)
 }
 
-export function detectProject(projectPath: string): Promise<{ claude: boolean; codex: boolean }> {
-  return ipc.invoke<{ claude: boolean; codex: boolean }>('project:detect', projectPath)
+export function detectProject(projectPath: string): Promise<{ claude: boolean; codex: boolean; opencode: boolean }> {
+  return ipc.invoke<{ claude: boolean; codex: boolean; opencode: boolean }>('project:detect', projectPath)
 }
 
 export function readProjectPrompt(

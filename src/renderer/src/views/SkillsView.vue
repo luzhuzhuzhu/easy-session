@@ -97,6 +97,11 @@ const toast = useToast()
 
 const selectedSkill = ref<Skill | undefined>()
 const collapsed = reactive<Record<string, boolean>>({})
+const cliDisplayName: Record<'claude' | 'codex' | 'opencode', string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  opencode: 'OpenCode'
+}
 
 // 从 filePath 提取 skills/ 之后的目录段（去掉 SKILL.md）
 function getPathSegments(filePath: string): string[] {
@@ -144,10 +149,10 @@ const flatItems = computed<FlatItem[]>(() => {
     byCli.get(cli)!.push(s)
   }
 
-  for (const cli of ['claude', 'codex']) {
+  for (const cli of ['claude', 'codex', 'opencode'] as const) {
     const skills = byCli.get(cli)
     if (!skills?.length) continue
-    items.push({ depth: 0, type: 'cli', name: cli === 'claude' ? 'Claude' : 'Codex', key: cli, count: skills.length, cli })
+    items.push({ depth: 0, type: 'cli', name: cliDisplayName[cli], key: cli, count: skills.length, cli })
     if (collapsed[cli]) continue
 
     // 构建目录树
@@ -251,6 +256,7 @@ onMounted(async () => {
     border-left: 3px solid transparent;
     &.claude { border-left-color: var(--accent-primary); }
     &.codex { border-left-color: var(--accent-secondary); }
+    &.opencode { border-left-color: var(--status-info); }
     &:first-child { margin-top: 0; }
   }
 

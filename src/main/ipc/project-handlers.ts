@@ -73,7 +73,11 @@ export function registerProjectHandlers(
       hasCodexDir,
       hasCodexConfig,
       hasAgentsFile,
-      hasAgentsFileUpper
+      hasAgentsFileUpper,
+      hasOpenCodeDir,
+      hasOpenCodeConfig,
+      hasOpenCodeSkills,
+      hasAgentsSkills
     ] = await Promise.all([
       exists('.claude'),
       exists(join('.claude', 'settings.json')),
@@ -82,12 +86,17 @@ export function registerProjectHandlers(
       exists('.codex'),
       exists(join('.codex', 'config.json')),
       exists('AGENTS.md'),
-      exists('AGENTS.MD')
+      exists('AGENTS.MD'),
+      exists('.opencode'),
+      exists('opencode.json'),
+      exists(join('.opencode', 'skills')),
+      exists(join('.agents', 'skills'))
     ])
 
     return {
       claude: hasClaudeDir || hasClaudeSettings || hasClaudePrompt || hasClaudePromptUpper,
-      codex: hasCodexDir || hasCodexConfig || hasAgentsFile || hasAgentsFileUpper
+      codex: hasCodexDir || hasCodexConfig || hasAgentsFile || hasAgentsFileUpper,
+      opencode: hasOpenCodeDir || hasOpenCodeConfig || hasOpenCodeSkills || hasAgentsSkills
     }
   })
 

@@ -82,7 +82,7 @@
         <div class="pane-header">
           <div class="pane-header-info">
             <span v-if="activeSession.icon" class="session-icon">{{ activeSession.icon }}</span>
-            <span v-else class="type-badge" :class="activeSession.type">{{ activeSession.type === 'claude' ? 'C' : 'X' }}</span>
+            <span v-else class="type-badge" :class="activeSession.type">{{ activeSession.type === 'claude' ? 'C' : activeSession.type === 'codex' ? 'X' : 'O' }}</span>
             <span class="pane-session-name">{{ activeSession.name }}</span>
             <span class="status-tag" :class="activeSession.status">{{ activeSession.status }}</span>
             <SessionRuntimeInfo :session="activeSession" />

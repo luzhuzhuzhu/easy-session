@@ -1,6 +1,6 @@
 import { ipc } from './ipc'
 
-export type CliType = 'claude' | 'codex'
+export type CliType = 'claude' | 'codex' | 'opencode'
 
 export interface SkillInputField {
   name: string

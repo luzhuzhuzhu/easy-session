@@ -24,6 +24,7 @@
           <span v-if="detectResult" class="detect-badges">
             <span class="detect-badge" :class="{ found: detectResult.claude }">.claude/</span>
             <span class="detect-badge" :class="{ found: detectResult.codex }">codex</span>
+            <span class="detect-badge" :class="{ found: detectResult.opencode }">.opencode/</span>
           </span>
         </div>
       </section>
@@ -40,7 +41,7 @@
             <div v-for="s in projectSessions" :key="s.id" class="session-card">
               <div class="session-main" @click="toggleSessionExpand(s.id)">
                 <div class="session-main-left">
-                  <span class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : 'X' }}</span>
+                  <span class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : s.type === 'codex' ? 'X' : 'O' }}</span>
                   <div class="session-main-text">
                     <span class="session-name">{{ s.name }}</span>
                     <span class="session-sub">
@@ -84,6 +85,7 @@
                   <div v-if="s.type === 'codex'" class="detail-item"><span class="label">{{ $t('session.permissionMode') }}</span><span class="value">{{ codexPermissionModeLabel(s) }}</span></div>
                   <div v-if="s.codexSessionId" class="detail-item"><span class="label">{{ $t('projectDetail.codexSessionId') }}</span><span class="value">{{ s.codexSessionId }}</span></div>
                   <div v-if="s.claudeSessionId" class="detail-item"><span class="label">{{ $t('projectDetail.claudeSessionId') }}</span><span class="value">{{ s.claudeSessionId }}</span></div>
+                  <div v-if="s.opencodeSessionId" class="detail-item"><span class="label">{{ $t('projectDetail.opencodeSessionId') }}</span><span class="value">{{ s.opencodeSessionId }}</span></div>
                 </div>
 
                 <div class="options-wrap">
@@ -165,7 +167,7 @@
             <div v-for="sk in projectSkills" :key="sk.id" class="skill-card">
               <div class="skill-main">
                 <div class="skill-info">
-                  <span class="type-badge" :class="sk.sourceCli">{{ sk.sourceCli === 'claude' ? 'C' : 'X' }}</span>
+                  <span class="type-badge" :class="sk.sourceCli">{{ sk.sourceCli === 'claude' ? 'C' : sk.sourceCli === 'codex' ? 'X' : 'O' }}</span>
                   <div class="skill-text">
                     <span class="skill-name">{{ sk.name }}</span>
                     <span class="skill-desc">{{ sk.description || '-' }}</span>
@@ -219,7 +221,7 @@ const { t } = useI18n()
 const toast = useToast()
 
 const project = ref<Awaited<ReturnType<typeof getProject>>>(null)
-const detectResult = ref<{ claude: boolean; codex: boolean } | null>(null)
+const detectResult = ref<{ claude: boolean; codex: boolean; opencode: boolean } | null>(null)
 const projectSessions = ref<Session[]>([])
 const editName = ref('')
 const sessionsOpen = ref(true)

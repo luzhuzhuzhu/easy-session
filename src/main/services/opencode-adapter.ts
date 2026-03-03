@@ -129,7 +129,7 @@ export class OpenCodeAdapter {
   getConfigPaths(): { global: string; project: (p: string) => string } {
     const home = homedir()
     return {
-      global: join(home, '.config', 'opencode', 'config.json'),
+      global: join(home, '.config', 'opencode', 'opencode.json'),
       project: (p: string) => join(p, 'opencode.json')
     }
   }

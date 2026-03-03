@@ -297,6 +297,7 @@ textarea.form-input { resize: vertical; font-family: inherit; }
 
   &.claude { background: rgba(108, 158, 255, 0.15); color: var(--accent-primary); }
   &.codex { background: rgba(124, 77, 255, 0.15); color: var(--accent-secondary); }
+  &.opencode { background: rgba(96, 165, 250, 0.18); color: var(--status-info); }
   &.lg { width: 32px; height: 32px; font-size: var(--font-size-md); }
   &.sm { width: auto; height: auto; padding: 2px 8px; font-weight: 500; }
 }

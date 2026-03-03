@@ -1,6 +1,6 @@
 import { ipc } from './ipc'
 
-export type CliType = 'claude' | 'codex'
+export type CliType = 'claude' | 'codex' | 'opencode'
 
 export interface ProcessInfo {
   id: string
@@ -36,4 +36,8 @@ export function getClaudeVersion(): Promise<string> {
 
 export function getCodexVersion(): Promise<string> {
   return ipc.invoke<string>('cli:codex:version')
+}
+
+export function getOpenCodeVersion(preferredPath?: string): Promise<string> {
+  return ipc.invoke<string>('cli:opencode:version', preferredPath)
 }

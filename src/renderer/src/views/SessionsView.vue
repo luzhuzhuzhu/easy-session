@@ -7,6 +7,7 @@
           <option value="">{{ $t('session.filter') }}</option>
           <option value="claude">Claude</option>
           <option value="codex">Codex</option>
+          <option value="opencode">OpenCode</option>
         </select>
 
         <div class="top-list-area">
@@ -38,7 +39,7 @@
                 @contextmenu.prevent="openContextMenu($event, s)"
               >
                 <span v-if="s.icon" class="session-icon">{{ s.icon }}</span>
-                <span v-else class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : 'X' }}</span>
+                <span v-else class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : s.type === 'codex' ? 'X' : 'O' }}</span>
                 <span v-if="!isListCollapsed" class="top-item-name">{{ s.name }}</span>
                 <span class="status-dot" :class="s.status"></span>
               </button>
@@ -64,6 +65,7 @@
           <option value="">{{ $t('session.filter') }}</option>
           <option value="claude">Claude</option>
           <option value="codex">Codex</option>
+          <option value="opencode">OpenCode</option>
         </select>
       </div>
       <div v-else class="collapsed-toolbar">
@@ -72,6 +74,7 @@
           <option value="">*</option>
           <option value="claude">C</option>
           <option value="codex">X</option>
+          <option value="opencode">O</option>
         </select>
       </div>
 
@@ -119,7 +122,7 @@
                 @contextmenu.prevent="openContextMenu($event, s)"
               >
                 <span v-if="s.icon" class="session-icon">{{ s.icon }}</span>
-                <span v-else class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : 'X' }}</span>
+                <span v-else class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : s.type === 'codex' ? 'X' : 'O' }}</span>
                 <div class="item-info">
                   <span class="item-name">{{ s.name }}</span>
                   <span class="item-time">{{ formatTime(s.createdAt) }}</span>
@@ -149,7 +152,7 @@
             @contextmenu.prevent="openContextMenu($event, s)"
           >
             <span v-if="s.icon" class="session-icon">{{ s.icon }}</span>
-            <span v-else class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : 'X' }}</span>
+            <span v-else class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : s.type === 'codex' ? 'X' : 'O' }}</span>
             <span class="status-dot" :class="s.status"></span>
           </button>
         </template>
