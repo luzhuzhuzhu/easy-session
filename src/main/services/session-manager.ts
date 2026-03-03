@@ -13,6 +13,7 @@ import type { Session, CodexSession, OpenCodeSession, CreateSessionParams, Sessi
 export class SessionManager {
   private static readonly PERSIST_DEBOUNCE_MS = 200
   private static readonly ACTIVITY_PERSIST_THROTTLE_MS = 5_000
+  private static readonly OPENCODE_EXIT_GRACE_MS = 180
 
   private sessions = new Map<string, Session>()
   private sessionCounter = new Map<string, number>()
@@ -68,8 +69,10 @@ export class SessionManager {
     })
 
     this.cliManager.onExit((processId, code) => {
-      // 延迟处理 exit，给 ConPTY 下可能迟到的最后一批 onData 机会先到达
-      setTimeout(() => this.handleProcessExit(processId, code), 0)
+      const sessionId = this.processIndex.get(processId)
+      const session = sessionId ? this.sessions.get(sessionId) : undefined
+      const delayMs = session?.type === 'opencode' ? SessionManager.OPENCODE_EXIT_GRACE_MS : 0
+      setTimeout(() => this.handleProcessExit(processId, code), delayMs)
     })
   }
 
@@ -90,7 +93,7 @@ export class SessionManager {
     }
 
     let migrated = !!result.restoredFromBackup
-    if (migrated) console.warn('[SessionManager] 会话数据从备份恢复')
+    if (migrated) console.warn('[SessionManager] session data restored from backup')
     const now = Date.now()
 
     for (const session of result.data) {
@@ -551,3 +554,4 @@ export class SessionManager {
     this.persist()
   }
 }
+

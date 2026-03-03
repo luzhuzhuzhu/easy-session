@@ -37,6 +37,7 @@ export interface OpenCodeSession extends SessionBase {
   type: 'opencode'
   options: OpenCodeSessionOptions
   opencodeSessionId: string | null
+  opencodeSessionIdSource?: 'user' | 'output' | 'list' | null
 }
 
 export type Session = ClaudeSession | CodexSession | OpenCodeSession

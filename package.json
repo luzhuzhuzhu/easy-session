@@ -1,6 +1,6 @@
 {
   "name": "easysession",
-  "version": "0.1.1",
+  "version": "0.1.5",
   "description": "EasySession: 原生终端，统一管理",
   "main": "./out/main/index.js",
   "scripts": {

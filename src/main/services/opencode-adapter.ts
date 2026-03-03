@@ -5,6 +5,14 @@ import { randomUUID } from 'crypto'
 import { CliManager } from './cli-manager'
 import type { OpenCodeSessionOptions } from './types'
 
+const OPENCODE_SESSION_HINT_PATTERNS = [
+  /(?:--session|-s)\s+([A-Za-z0-9_-]{6,128})/gi,
+  /session(?:\s+id)?\s*[:=]\s*([A-Za-z0-9_-]{6,128})/gi,
+  /\/s\/([A-Za-z0-9_-]{6,128})/gi
+]
+const OPENCODE_SESSION_ID_FALLBACK_PATTERN = /\b(ses_[A-Za-z0-9_-]{6,128})\b/gi
+const OPENCODE_SESSION_DISCOVERY_MAX_SKEW_MS = 5 * 60_000
+
 export class OpenCodeAdapter {
   private cliManager: CliManager
   private customPath: string | null = null
@@ -129,7 +137,10 @@ export class OpenCodeAdapter {
   async findSessionIdByProjectPath(
     projectPath: string,
     preferredPath?: string,
-    maxCount = 80
+    maxCount = 80,
+    targetStartMs?: number,
+    maxSkewMs = OPENCODE_SESSION_DISCOVERY_MAX_SKEW_MS,
+    requireTimestamp = false
   ): Promise<string | null> {
     const executable = this.getExecutable(preferredPath)
     const command = `"${executable}" session list --format json --max-count ${Math.max(1, maxCount)}`
@@ -152,7 +163,8 @@ export class OpenCodeAdapter {
 
           const matched = candidates
             .filter((item) => this.pathMatches(item.path, targetPath))
-            .sort((a, b) => b.timestamp - a.timestamp)
+            .filter((item) => this.isWithinTimeWindow(item.timestamp, targetStartMs, maxSkewMs, requireTimestamp))
+            .sort((a, b) => this.compareSessionCandidates(a, b, targetStartMs))
 
           resolve(matched[0]?.id ?? null)
         } catch {
@@ -163,19 +175,26 @@ export class OpenCodeAdapter {
   }
 
   extractSessionIdFromOutput(data: string): string | null {
-    const patterns = [
-      /(?:session(?:\s+id)?\s*[:=]\s*|--session\s+)([A-Za-z0-9_-]{6,128})/gi,
-      /\/s\/([A-Za-z0-9_-]{6,128})/gi
-    ]
+    const hints: string[] = []
 
-    let found: string | null = null
-    for (const pattern of patterns) {
+    for (const pattern of OPENCODE_SESSION_HINT_PATTERNS) {
+      pattern.lastIndex = 0
       let match: RegExpExecArray | null = null
       while ((match = pattern.exec(data)) !== null) {
-        found = match[1]
+        hints.push(match[1])
       }
     }
-    return found
+
+    OPENCODE_SESSION_ID_FALLBACK_PATTERN.lastIndex = 0
+    let fallback: RegExpExecArray | null = null
+    while ((fallback = OPENCODE_SESSION_ID_FALLBACK_PATTERN.exec(data)) !== null) {
+      hints.push(fallback[1])
+    }
+
+    if (hints.length === 0) return null
+
+    const preferred = hints.filter((id) => id.toLowerCase().startsWith('ses_'))
+    return (preferred.length > 0 ? preferred[preferred.length - 1] : hints[hints.length - 1]) || null
   }
 
   private buildArgs(options?: OpenCodeSessionOptions): string[] {
@@ -220,6 +239,41 @@ export class OpenCodeAdapter {
     return 0
   }
 
+  private isWithinTimeWindow(
+    timestamp: number,
+    targetStartMs?: number,
+    maxSkewMs = OPENCODE_SESSION_DISCOVERY_MAX_SKEW_MS,
+    requireTimestamp = false
+  ): boolean {
+    if (!Number.isFinite(targetStartMs)) return true
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return !requireTimestamp
+    if (timestamp < (targetStartMs as number) - 2_000) return false
+    return Math.abs(timestamp - (targetStartMs as number)) <= maxSkewMs
+  }
+
+  private compareSessionCandidates(
+    a: { id: string; path: string | null; timestamp: number },
+    b: { id: string; path: string | null; timestamp: number },
+    targetStartMs?: number
+  ): number {
+    if (Number.isFinite(targetStartMs)) {
+      const distA = this.distanceToTarget(a.timestamp, targetStartMs as number)
+      const distB = this.distanceToTarget(b.timestamp, targetStartMs as number)
+      if (distA !== distB) return distA - distB
+    }
+
+    const aHasSesPrefix = a.id.toLowerCase().startsWith('ses_') ? 1 : 0
+    const bHasSesPrefix = b.id.toLowerCase().startsWith('ses_') ? 1 : 0
+    if (aHasSesPrefix !== bHasSesPrefix) return bHasSesPrefix - aHasSesPrefix
+
+    return b.timestamp - a.timestamp
+  }
+
+  private distanceToTarget(timestamp: number, targetStartMs: number): number {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return Number.POSITIVE_INFINITY
+    return Math.abs(timestamp - targetStartMs)
+  }
+
   private collectSessionCandidates(input: unknown): Array<{ id: string; path: string | null; timestamp: number }> {
     const results: Array<{ id: string; path: string | null; timestamp: number }> = []
 
@@ -233,15 +287,38 @@ export class OpenCodeAdapter {
 
       const obj = value as Record<string, unknown>
 
-      const id = typeof obj.id === 'string' && obj.id.trim().length > 0 ? obj.id.trim() : null
+      const idFields = ['id', 'sessionID', 'sessionId'] as const
+      const id = idFields
+        .map((field) => (typeof obj[field] === 'string' ? (obj[field] as string).trim() : ''))
+        .find((item) => item.length > 0) || null
       const pathFields = ['path', 'cwd', 'projectPath', 'project', 'directory'] as const
       const path = pathFields
         .map((field) => (typeof obj[field] === 'string' ? (obj[field] as string).trim() : ''))
         .find((item) => item.length > 0) || null
-      const timeFields = ['updatedAt', 'lastUsedAt', 'createdAt', 'startAt', 'timestamp'] as const
-      const timestamp = timeFields
+
+      const timeFields = [
+        'startAt',
+        'startedAt',
+        'createdAt',
+        'created',
+        'timestamp',
+        'lastUsedAt',
+        'updatedAt',
+        'updated'
+      ] as const
+      const directTimestamp = timeFields
         .map((field) => this.parseTimestamp(obj[field]))
         .find((item) => item > 0) || 0
+      const nestedTime =
+        obj.time && typeof obj.time === 'object' && !Array.isArray(obj.time)
+          ? (obj.time as Record<string, unknown>)
+          : null
+      const nestedTimestamp = nestedTime
+        ? [nestedTime.created, nestedTime.started, nestedTime.updated]
+          .map((item) => this.parseTimestamp(item))
+          .find((item) => item > 0) || 0
+        : 0
+      const timestamp = directTimestamp || nestedTimestamp
 
       if (id && path) {
         results.push({ id, path, timestamp })

@@ -20,6 +20,9 @@ export interface JsonParseErrorInfo {
 
 export class DataStore<T> {
   private static readonly JSON_POSITION_REGEX = /position\s+(\d+)/i
+  private static readonly MISSING_VALUE_REGEX = /:\s*,/m
+  private static readonly TRAILING_COMMA_REGEX = /,\s*[}\]]/m
+  private static readonly DOUBLE_COMMA_REGEX = /,\s*,/m
   private static saveTails = new Map<string, Promise<void>>()
   private static readonly RENAME_RETRY_LIMIT = 2
   private readonly queueKey: string
@@ -135,10 +138,17 @@ export class DataStore<T> {
     const detail: JsonParseErrorInfo = { message }
 
     const matched = DataStore.JSON_POSITION_REGEX.exec(message)
-    if (!matched) return detail
+    let position: number | null = null
+    if (matched) {
+      const parsed = Number(matched[1])
+      if (Number.isFinite(parsed)) position = parsed
+    }
 
-    const position = Number(matched[1])
-    if (!Number.isFinite(position)) return detail
+    if (position === null) {
+      position = DataStore.inferParseErrorPosition(content)
+    }
+
+    if (position === null) return detail
 
     detail.position = DataStore.clampPosition(content, position)
     const { line, column } = DataStore.toLineColumn(content, position)
@@ -147,6 +157,28 @@ export class DataStore<T> {
     detail.snippet = DataStore.buildSnippet(content, position)
 
     return detail
+  }
+
+  private static inferParseErrorPosition(content: string): number | null {
+    const missingValueMatch = DataStore.MISSING_VALUE_REGEX.exec(content)
+    if (missingValueMatch && typeof missingValueMatch.index === 'number') {
+      return missingValueMatch.index + missingValueMatch[0].indexOf(',')
+    }
+
+    const trailingCommaMatch = DataStore.TRAILING_COMMA_REGEX.exec(content)
+    if (trailingCommaMatch && typeof trailingCommaMatch.index === 'number') {
+      return trailingCommaMatch.index
+    }
+
+    const doubleCommaMatch = DataStore.DOUBLE_COMMA_REGEX.exec(content)
+    if (doubleCommaMatch && typeof doubleCommaMatch.index === 'number') {
+      return doubleCommaMatch.index + doubleCommaMatch[0].lastIndexOf(',')
+    }
+
+    const firstContentIdx = content.search(/\S/)
+    if (firstContentIdx >= 0) return firstContentIdx
+
+    return null
   }
 
   private async loadFile(path: string): Promise<LoadResult<T>> {

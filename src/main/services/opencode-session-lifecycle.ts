@@ -24,13 +24,20 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
   create(id: string, name: string, params: CreateSessionParams): OpenCodeSession {
     const options = (params.options || {}) as OpenCodeSessionOptions
     const opencodeSessionId = options.sessionId || null
+    const opencodeSessionIdSource: OpenCodeSession['opencodeSessionIdSource'] = options.sessionId ? 'user' : null
     const now = Date.now()
 
     let processId: string | null = null
     let status: 'running' | 'error' = 'running'
 
     try {
-      processId = this.determineStartupStrategy(params.projectPath, options, opencodeSessionId, true)
+      processId = this.determineStartupStrategy(
+        params.projectPath,
+        options,
+        opencodeSessionId,
+        opencodeSessionIdSource,
+        true
+      )
       this.warnOnConflictingResumeOptions(id, options)
     } catch (err) {
       status = 'error'
@@ -54,7 +61,8 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
       processId,
       options,
       parentId: params.parentId || null,
-      opencodeSessionId
+      opencodeSessionId,
+      opencodeSessionIdSource
     }
   }
 
@@ -67,7 +75,13 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
     const options = s.options || {}
 
     try {
-      s.processId = this.determineStartupStrategy(s.projectPath, options, s.opencodeSessionId, false)
+      s.processId = this.determineStartupStrategy(
+        s.projectPath,
+        options,
+        s.opencodeSessionId,
+        s.opencodeSessionIdSource,
+        false
+      )
       this.warnOnConflictingResumeOptions(s.id, options)
       s.status = 'running'
       s.lastStartAt = startAt
@@ -96,6 +110,7 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
     const found = this.openCodeAdapter.extractSessionIdFromOutput(merged)
     if (found && s.opencodeSessionId !== found) {
       s.opencodeSessionId = found
+      s.opencodeSessionIdSource = 'output'
       this._persistFn?.()
     }
   }
@@ -118,12 +133,21 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
     const s = session as OpenCodeSession
     if (s.opencodeSessionId) return false
 
+    const targetStart = s.lastStartAt || s.createdAt
+    const strictFallback = !this.shouldUseListDiscovery(s)
+    const maxSkew = strictFallback ? 60_000 : undefined
+
     const discovered = await this.openCodeAdapter.findSessionIdByProjectPath(
       s.projectPath,
-      s.options?.cliPath
+      s.options?.cliPath,
+      80,
+      targetStart,
+      maxSkew,
+      strictFallback
     )
     if (!discovered) return false
     s.opencodeSessionId = discovered
+    s.opencodeSessionIdSource = 'list'
     return true
   }
 
@@ -143,12 +167,23 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
       if (session.processId !== expectedProcessId) return
       if (session.opencodeSessionId) return
 
-      const discovered =
-        this.openCodeAdapter.extractSessionIdFromOutput(this.sessionHintBuffers.get(sessionId) || '') ||
-        await this.openCodeAdapter.findSessionIdByProjectPath(projectPath, session.options?.cliPath)
+      const fromOutput = this.openCodeAdapter.extractSessionIdFromOutput(this.sessionHintBuffers.get(sessionId) || '')
+      const strictFallback = !this.shouldUseListDiscovery(session)
+      const maxSkew = strictFallback ? 60_000 : undefined
+      const discovered = fromOutput
+        ? fromOutput
+        : await this.openCodeAdapter.findSessionIdByProjectPath(
+            projectPath,
+            session.options?.cliPath,
+            80,
+            session.lastStartAt || session.createdAt,
+            maxSkew,
+            strictFallback
+          )
 
       if (discovered) {
         session.opencodeSessionId = discovered
+        session.opencodeSessionIdSource = fromOutput ? 'output' : 'list'
         this._persistFn?.()
         return
       }
@@ -168,6 +203,7 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
     projectPath: string,
     options: OpenCodeSessionOptions,
     opencodeSessionId: string | null,
+    opencodeSessionIdSource: OpenCodeSession['opencodeSessionIdSource'],
     isCreate: boolean
   ): string {
     if (options.attachUrl && options.serverMode === 'attach') {
@@ -180,14 +216,14 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
       return this.openCodeAdapter.resumeSession(projectPath, options, options.sessionId, options.fork)
     }
 
-    if (opencodeSessionId) {
-      this.logStartupStrategy('session', { sessionId: opencodeSessionId })
-      return this.openCodeAdapter.resumeSession(projectPath, options, opencodeSessionId, options.fork)
-    }
-
     if (options.continueLast) {
       this.logStartupStrategy('continueLast', {})
       return this.openCodeAdapter.continueLastSession(projectPath, options, options.fork)
+    }
+
+    if (opencodeSessionId && this.shouldUseStoredSessionId(options, opencodeSessionIdSource)) {
+      this.logStartupStrategy('session', { sessionId: opencodeSessionId })
+      return this.openCodeAdapter.resumeSession(projectPath, options, opencodeSessionId, options.fork)
     }
 
     this.logStartupStrategy('new', { create: isCreate })
@@ -214,5 +250,23 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
 
   private logStartupStrategy(strategy: string, details: Record<string, unknown>): void {
     console.log(`[OpenCode] Startup strategy: ${strategy}`, details)
+  }
+
+  private shouldUseListDiscovery(session: OpenCodeSession): boolean {
+    const options = session.options || {}
+    if (options.sessionId) return true
+    if (options.continueLast) return true
+    if (options.serverMode === 'attach' && !!options.attachUrl) return true
+    return false
+  }
+
+  private shouldUseStoredSessionId(
+    options: OpenCodeSessionOptions,
+    source: OpenCodeSession['opencodeSessionIdSource']
+  ): boolean {
+    if (options.sessionId) return true
+    if (source === 'user' || source === 'output') return true
+    if (source === 'list') return true
+    return false
   }
 }

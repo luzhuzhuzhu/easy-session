@@ -46,7 +46,7 @@ describe('CodexAdapter.findSessionIdByProjectPath', () => {
     rmSync(tempHome, { recursive: true, force: true })
   })
 
-  it('should return null when targetStartMs is missing', () => {
+  it('should return null when targetStartMs is missing', async () => {
     const target = Date.parse('2026-02-19T12:00:00.000Z')
     writeSessionMetaFile(
       tempHome,
@@ -56,11 +56,11 @@ describe('CodexAdapter.findSessionIdByProjectPath', () => {
       target + 2_000
     )
 
-    const result = adapter.findSessionIdByProjectPath('D:/repo/project-a')
+    const result = await adapter.findSessionIdByProjectPath('D:/repo/project-a')
     expect(result).toBeNull()
   })
 
-  it('should return the session id when there is exactly one candidate in the time window', () => {
+  it('should return the session id when there is exactly one candidate in the time window', async () => {
     const target = Date.parse('2026-02-19T12:00:00.000Z')
     writeSessionMetaFile(
       tempHome,
@@ -77,11 +77,11 @@ describe('CodexAdapter.findSessionIdByProjectPath', () => {
       target + 5 * 60_000
     )
 
-    const result = adapter.findSessionIdByProjectPath('D:/repo/project-a', target, 10_000)
+    const result = await adapter.findSessionIdByProjectPath('D:/repo/project-a', target, 10_000)
     expect(result).toBe('22222222-2222-2222-2222-222222222222')
   })
 
-  it('should return null when multiple different ids are in the same time window', () => {
+  it('should choose the closest id when multiple different ids are in the same time window', async () => {
     const target = Date.parse('2026-02-19T12:00:00.000Z')
     writeSessionMetaFile(
       tempHome,
@@ -98,11 +98,11 @@ describe('CodexAdapter.findSessionIdByProjectPath', () => {
       target - 1_000
     )
 
-    const result = adapter.findSessionIdByProjectPath('D:/repo/project-a', target, 10_000)
+    const result = await adapter.findSessionIdByProjectPath('D:/repo/project-a', target, 10_000)
     expect(result).toBe('55555555-5555-5555-5555-555555555555')
   })
 
-  it('should return null when nearest candidates are too close to distinguish', () => {
+  it('should return null when nearest candidates are too close to distinguish', async () => {
     const target = Date.parse('2026-02-19T12:00:00.000Z')
     writeSessionMetaFile(
       tempHome,
@@ -119,7 +119,7 @@ describe('CodexAdapter.findSessionIdByProjectPath', () => {
       target + 550
     )
 
-    const result = adapter.findSessionIdByProjectPath('D:/repo/project-a', target, 10_000)
+    const result = await adapter.findSessionIdByProjectPath('D:/repo/project-a', target, 10_000)
     expect(result).toBeNull()
   })
 })

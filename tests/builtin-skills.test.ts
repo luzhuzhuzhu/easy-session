@@ -1,87 +1,91 @@
-import { describe, it, expect } from 'vitest'
-import { BUILTIN_SKILLS } from '../src/main/services/builtin-skills'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs'
+import { dirname, join } from 'path'
+import { tmpdir } from 'os'
+import { SkillManager } from '../src/main/services/skill-manager'
 
-describe('BUILTIN_SKILLS', () => {
-  it('should have 6 builtin skills', () => {
-    expect(BUILTIN_SKILLS).toHaveLength(6)
+const mocked = vi.hoisted(() => ({
+  home: ''
+}))
+
+vi.mock('os', async (importOriginal) => {
+  const original = await importOriginal<typeof import('os')>()
+  return {
+    ...original,
+    homedir: () => mocked.home
+  }
+})
+
+function writeSkill(home: string, source: 'claude' | 'codex', relPath: string, content: string): void {
+  const root = source === 'claude' ? '.claude' : '.codex'
+  const filePath = join(home, root, 'skills', relPath, 'SKILL.md')
+  mkdirSync(dirname(filePath), { recursive: true })
+  writeFileSync(filePath, content, 'utf8')
+}
+
+describe('SkillManager builtin skill discovery', () => {
+  let home: string
+  let manager: SkillManager
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'easysession-skills-'))
+    mocked.home = home
+    manager = new SkillManager({ sendInput: () => true } as any)
   })
 
-  it('should all be marked as builtin', () => {
-    for (const skill of BUILTIN_SKILLS) {
-      expect(skill.isBuiltin).toBe(true)
-    }
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true })
   })
 
-  it('should have unique slugs', () => {
-    const slugs = BUILTIN_SKILLS.map(s => s.slug)
-    expect(new Set(slugs).size).toBe(slugs.length)
+  it('marks .system skills as builtin and categorizes them as system', async () => {
+    writeSkill(
+      home,
+      'codex',
+      '.system/code-review',
+      '# Code Review\n\nBuiltin review skill\n\n## Prompt\n\nReview {{filePath}}\n'
+    )
+    writeSkill(
+      home,
+      'codex',
+      'custom/fix-bug',
+      '# Fix Bug\n\nProject custom skill\n\n## Prompt\n\nFix {{filePath}}\n'
+    )
+
+    const skills = await manager.listSkills()
+    const builtin = skills.find((s) => s.slug === 'code-review')
+    const custom = skills.find((s) => s.slug === 'fix-bug')
+
+    expect(builtin).toBeDefined()
+    expect(builtin?.isBuiltin).toBe(true)
+    expect(builtin?.category).toBe('system')
+    expect(builtin?.compatibleCli).toEqual(['codex'])
+
+    expect(custom).toBeDefined()
+    expect(custom?.isBuiltin).toBe(false)
+    expect(custom?.category).toBe('custom')
   })
 
-  it('should have unique ids', () => {
-    const ids = BUILTIN_SKILLS.map(s => s.id)
+  it('derives fields from template placeholders and keeps ids unique', async () => {
+    writeSkill(
+      home,
+      'claude',
+      '.system/explain-code',
+      '# Explain Code\n\nBuiltin explainer\n\n## Prompt\n\nExplain {{filePath}} with {{language}}\n'
+    )
+    writeSkill(
+      home,
+      'codex',
+      '.system/explain-code',
+      '# Explain Code\n\nBuiltin explainer\n\n## Prompt\n\nExplain {{filePath}} with {{language}}\n'
+    )
+
+    const skills = await manager.listSkills()
+    const ids = skills.map((s) => s.id)
     expect(new Set(ids).size).toBe(ids.length)
-  })
 
-  const expectedSlugs = [
-    'code-review',
-    'generate-tests',
-    'explain-code',
-    'fix-bug',
-    'architecture-analysis',
-    'refactor'
-  ]
-
-  it.each(expectedSlugs)('should contain skill with slug "%s"', (slug) => {
-    expect(BUILTIN_SKILLS.find(s => s.slug === slug)).toBeDefined()
-  })
-
-  it('architecture-analysis should only be compatible with claude', () => {
-    const skill = BUILTIN_SKILLS.find(s => s.slug === 'architecture-analysis')!
-    expect(skill.compatibleCli).toEqual(['claude'])
-  })
-
-  it('other skills should be compatible with both claude and codex', () => {
-    const others = BUILTIN_SKILLS.filter(s => s.slug !== 'architecture-analysis')
-    for (const skill of others) {
-      expect(skill.compatibleCli).toContain('claude')
-      expect(skill.compatibleCli).toContain('codex')
-    }
-  })
-
-  it('should have correct output formats', () => {
-    const formats: Record<string, string> = {
-      'code-review': 'markdown',
-      'generate-tests': 'text',
-      'explain-code': 'markdown',
-      'fix-bug': 'diff',
-      'architecture-analysis': 'markdown',
-      'refactor': 'diff'
-    }
-    for (const [slug, format] of Object.entries(formats)) {
-      const skill = BUILTIN_SKILLS.find(s => s.slug === slug)!
-      expect(skill.outputSchema.format).toBe(format)
-    }
-  })
-
-  it('should have valid categories', () => {
-    const validCategories = ['开发', '审查', '测试', '分析']
-    for (const skill of BUILTIN_SKILLS) {
-      expect(validCategories).toContain(skill.category)
-    }
-  })
-
-  it('generate-tests framework should default to vitest', () => {
-    const skill = BUILTIN_SKILLS.find(s => s.slug === 'generate-tests')!
-    const fw = skill.inputSchema.fields.find(f => f.name === 'framework')!
-    expect(fw.default).toBe('vitest')
-  })
-
-  it('prompts should contain {{variable}} placeholders matching input fields', () => {
-    for (const skill of BUILTIN_SKILLS) {
-      const requiredFields = skill.inputSchema.fields.filter(f => f.required)
-      for (const field of requiredFields) {
-        expect(skill.prompt).toContain(`{{${field.name}}}`)
-      }
-    }
+    const claudeSkill = skills.find((s) => s.sourceCli === 'claude' && s.slug === 'explain-code')
+    expect(claudeSkill).toBeDefined()
+    const fieldNames = claudeSkill?.inputSchema.fields.map((f) => f.name).sort()
+    expect(fieldNames).toEqual(['filePath', 'language'])
   })
 })

@@ -47,10 +47,10 @@ describe('CodexSessionLifecycle', () => {
     lifecycle = new CodexSessionLifecycle(adapter as any, outputManager as any)
   })
 
-  it('should start a new conversation when no trusted id is available', () => {
+  it('should start a new conversation when no trusted id is available', async () => {
     const session = createCodexSession()
 
-    lifecycle.startProcess(session, 2_000)
+    await lifecycle.startProcess(session, 2_000)
 
     expect(adapter.resumeSession).not.toHaveBeenCalled()
     expect(adapter.startSession).toHaveBeenCalledWith('D:/repo/project-a', {})
@@ -64,12 +64,12 @@ describe('CodexSessionLifecycle', () => {
     expect(session.lastStartAt).toBe(2_000)
   })
 
-  it('should resume by stored id before trying any fallback', () => {
+  it('should resume by stored id before trying any fallback', async () => {
     const session = createCodexSession({
       codexSessionId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
     })
 
-    lifecycle.startProcess(session, 3_000)
+    await lifecycle.startProcess(session, 3_000)
 
     expect(adapter.resumeSession).toHaveBeenCalledWith(
       'D:/repo/project-a',
@@ -80,24 +80,24 @@ describe('CodexSessionLifecycle', () => {
     expect(adapter.findSessionIdByProjectPath).not.toHaveBeenCalled()
   })
 
-  it('should hydrate id from output history and avoid filesystem lookup', () => {
+  it('should hydrate id from output history and avoid filesystem lookup', async () => {
     outputManager.getHistory.mockReturnValue([
       { text: 'Tips: codex resume bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\n' }
     ])
     const session = createCodexSession()
 
-    const changed = lifecycle.hydrateSessionId(session)
+    const changed = await lifecycle.hydrateSessionId(session)
 
     expect(changed).toBe(true)
     expect(session.codexSessionId).toBe('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')
     expect(adapter.findSessionIdByProjectPath).not.toHaveBeenCalled()
   })
 
-  it('should fallback to strict adapter lookup when history has no id', () => {
-    adapter.findSessionIdByProjectPath.mockReturnValue('cccccccc-cccc-cccc-cccc-cccccccccccc')
+  it('should fallback to strict adapter lookup when history has no id', async () => {
+    adapter.findSessionIdByProjectPath.mockResolvedValue('cccccccc-cccc-cccc-cccc-cccccccccccc')
     const session = createCodexSession({ lastStartAt: 9_999 })
 
-    const changed = lifecycle.hydrateSessionId(session)
+    const changed = await lifecycle.hydrateSessionId(session)
 
     expect(changed).toBe(true)
     expect(session.codexSessionId).toBe('cccccccc-cccc-cccc-cccc-cccccccccccc')
