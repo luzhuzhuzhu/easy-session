@@ -253,7 +253,9 @@ session: {
     resumeScroll: '恢复自动滚动',
     copyAll: '复制全部',
     clearOutput: '清空输出',
-    copySuccess: '已复制到剪贴板'
+    copySuccess: '已复制到剪贴板',
+    zoomPresets: '缩放预设',
+    resetZoom: '重置缩放大小'
   },
   error: {
     componentCrash: '页面组件发生错误',

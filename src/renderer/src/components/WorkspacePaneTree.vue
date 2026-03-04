@@ -6,6 +6,7 @@
         :node="node.first"
         :tabs-index="tabsIndex"
         :sessions-by-id="sessionsById"
+        :pane-zoom-percent-by-id="paneZoomPercentById"
         :active-pane-id="activePaneId"
         :can-close-panes="canClosePanes"
         :pane-ids="paneIds"
@@ -29,6 +30,8 @@
         @restart-session="emit('restart-session', $event)"
         @destroy-session="emit('destroy-session', $event)"
         @clear-output="emit('clear-output', $event)"
+        @set-pane-zoom="emit('set-pane-zoom', $event)"
+        @reset-pane-zoom="emit('reset-pane-zoom', $event)"
       />
     </div>
     <div class="splitter" @mousedown.prevent="startSplitResize"></div>
@@ -38,6 +41,7 @@
         :node="node.second"
         :tabs-index="tabsIndex"
         :sessions-by-id="sessionsById"
+        :pane-zoom-percent-by-id="paneZoomPercentById"
         :active-pane-id="activePaneId"
         :can-close-panes="canClosePanes"
         :pane-ids="paneIds"
@@ -61,6 +65,8 @@
         @restart-session="emit('restart-session', $event)"
         @destroy-session="emit('destroy-session', $event)"
         @clear-output="emit('clear-output', $event)"
+        @set-pane-zoom="emit('set-pane-zoom', $event)"
+        @reset-pane-zoom="emit('reset-pane-zoom', $event)"
       />
     </div>
   </div>
@@ -88,6 +94,29 @@
             <SessionRuntimeInfo class="pane-runtime-info" :session="activeSession" />
           </div>
           <div class="pane-header-actions">
+            <div ref="zoomControlRef" class="pane-zoom-control">
+              <button
+                class="pane-zoom-reset-btn"
+                type="button"
+                :title="`${t('terminal.zoomPresets')} / ${t('terminal.resetZoom')}`"
+                @click.stop="toggleZoomMenu"
+                @dblclick.stop="handleResetPaneZoom"
+              >
+                🔍 {{ activePaneZoomPercent }}%
+              </button>
+              <div v-if="zoomMenuOpen" class="pane-zoom-menu" @click.stop>
+                <button
+                  v-for="percent in ZOOM_PRESET_PERCENTS"
+                  :key="percent"
+                  class="pane-zoom-item"
+                  :class="{ active: percent === activePaneZoomPercent }"
+                  type="button"
+                  @click="handleSetPaneZoom(percent)"
+                >
+                  {{ percent }}%
+                </button>
+              </div>
+            </div>
             <button
               v-if="activeSession.status !== 'running'"
               class="btn btn-primary btn-sm"
@@ -130,7 +159,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Session } from '@/api/session'
 import type {
   WorkspaceLayoutNode,
@@ -141,12 +171,14 @@ import TerminalOutput from '@/components/TerminalOutput.vue'
 import SessionRuntimeInfo from '@/components/SessionRuntimeInfo.vue'
 
 defineOptions({ name: 'WorkspacePaneTree' })
+const { t } = useI18n()
 
 const props = defineProps<{
   nodePath: string
   node: WorkspaceLayoutNode
   tabsIndex: Record<string, WorkspaceTabState>
   sessionsById: Record<string, Session>
+  paneZoomPercentById: Record<string, number>
   activePaneId: string
   canClosePanes: boolean
   paneIds: string[]
@@ -173,11 +205,16 @@ const emit = defineEmits<{
   'restart-session': [sessionId: string]
   'destroy-session': [sessionId: string]
   'clear-output': [sessionId: string]
+  'set-pane-zoom': [payload: { paneId: string; percent: number }]
+  'reset-pane-zoom': [paneId: string]
 }>()
 
 const edgeDropDirection = ref<WorkspaceSplitDirection | null>(null)
 const paneMenu = ref({ visible: false, x: 0, y: 0 })
 const isResizingSplit = ref(false)
+const zoomMenuOpen = ref(false)
+const zoomControlRef = ref<HTMLElement | null>(null)
+const ZOOM_PRESET_PERCENTS = [80, 90, 100, 110, 125, 150] as const
 
 const firstChildStyle = computed(() => {
   if (props.node.type !== 'split') return {}
@@ -197,10 +234,31 @@ const activeSession = computed<Session | null>(() => {
   if (!sessionId) return null
   return props.sessionsById[sessionId] ?? null
 })
+const activePaneZoomPercent = computed<number>(() => {
+  if (props.node.type !== 'leaf') return 100
+  return props.paneZoomPercentById[props.node.paneId] ?? 100
+})
 
 function handleFocusPane(): void {
   if (props.node.type !== 'leaf') return
   emit('focus-pane', props.node.paneId)
+}
+
+function handleResetPaneZoom(): void {
+  if (props.node.type !== 'leaf') return
+  zoomMenuOpen.value = false
+  emit('reset-pane-zoom', props.node.paneId)
+}
+
+function toggleZoomMenu(): void {
+  if (props.node.type !== 'leaf') return
+  zoomMenuOpen.value = !zoomMenuOpen.value
+}
+
+function handleSetPaneZoom(percent: number): void {
+  if (props.node.type !== 'leaf') return
+  zoomMenuOpen.value = false
+  emit('set-pane-zoom', { paneId: props.node.paneId, percent })
 }
 
 let detachResizeListeners: (() => void) | null = null
@@ -412,6 +470,7 @@ function handlePaneEdgeDrop(e: DragEvent): void {
 
 function closeMenus(): void {
   paneMenu.value.visible = false
+  zoomMenuOpen.value = false
 }
 
 function openPaneMenu(e: MouseEvent): void {
@@ -453,7 +512,28 @@ onBeforeUnmount(() => {
     window.cancelAnimationFrame(edgeRaf)
     edgeRaf = 0
   }
+  document.removeEventListener('pointerdown', handleGlobalPointerDown)
 })
+
+function handleGlobalPointerDown(e: PointerEvent): void {
+  if (!zoomMenuOpen.value) return
+  const host = zoomControlRef.value
+  const target = e.target as Node | null
+  if (!host || !target || !host.contains(target)) {
+    zoomMenuOpen.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', handleGlobalPointerDown)
+})
+
+watch(
+  () => props.node.type === 'leaf' ? props.node.paneId : '',
+  () => {
+    zoomMenuOpen.value = false
+  }
+)
 </script>
 
 <style scoped lang="scss">
@@ -645,6 +725,66 @@ onBeforeUnmount(() => {
 .pane-runtime-info {
   min-width: 0;
   flex-shrink: 1;
+}
+
+.pane-zoom-reset-btn {
+  flex-shrink: 0;
+  height: 22px;
+  min-width: 42px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 20px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+}
+
+.pane-zoom-control {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.pane-zoom-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 72px;
+  padding: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-md);
+}
+
+.pane-zoom-item {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: right;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  &.active {
+    color: var(--accent-primary);
+    background: rgba(108, 158, 255, 0.12);
+  }
 }
 
 .pane-header-info :deep(.status-tag) {

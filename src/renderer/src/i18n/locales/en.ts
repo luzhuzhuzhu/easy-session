@@ -253,7 +253,9 @@ session: {
     resumeScroll: 'Resume Auto-scroll',
     copyAll: 'Copy All',
     clearOutput: 'Clear Output',
-    copySuccess: 'Copied to clipboard'
+    copySuccess: 'Copied to clipboard',
+    zoomPresets: 'Zoom Presets',
+    resetZoom: 'Reset Zoom Size'
   },
   error: {
     componentCrash: 'A component error occurred',

@@ -175,6 +175,7 @@
         :node="workspaceLayout.root"
         :tabs-index="workspaceLayout.tabs"
         :sessions-by-id="sessionsById"
+        :pane-zoom-percent-by-id="paneZoomPercentById"
         :active-pane-id="workspaceLayout.activePaneId"
         :can-close-panes="workspaceStore.paneCount > 1"
         :pane-ids="workspaceStore.paneIds"
@@ -198,6 +199,8 @@
         @restart-session="handleRestart"
         @destroy-session="handleDestroy"
         @clear-output="sessionsStore.clearSessionOutput($event)"
+        @set-pane-zoom="handleSetPaneZoom"
+        @reset-pane-zoom="handleResetPaneZoom"
       />
     </main>
 
@@ -558,6 +561,26 @@ const activeSessionForDialog = computed(() => {
 
 const isTopLayout = computed(() => settingsStore.settings.sessionsListPosition === 'top')
 const isListCollapsed = computed(() => settingsStore.settings.sessionsPanelCollapsed)
+const DEFAULT_FONT_SIZE = 13
+const MIN_FONT_SIZE = 9
+const MAX_FONT_SIZE = 28
+
+function clampFontSize(size: number): number {
+  if (!Number.isFinite(size)) return DEFAULT_FONT_SIZE
+  return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(size)))
+}
+
+const paneZoomPercentById = computed<Record<string, number>>(() => {
+  const result: Record<string, number> = {}
+  const baseFontSize = clampFontSize(settingsStore.settings.terminalFontSize ?? DEFAULT_FONT_SIZE)
+  const byPane = settingsStore.settings.terminalFontSizeByPane || {}
+  for (const paneId of workspaceStore.paneIds) {
+    const paneFontSize = clampFontSize(byPane[paneId] ?? baseFontSize)
+    const percent = Math.round((paneFontSize / baseFontSize) * 100)
+    result[paneId] = Math.max(50, Math.min(300, percent))
+  }
+  return result
+})
 
 function pruneTerminalFontSizeByPane(activePaneIds: string[]): void {
   const current = settingsStore.settings.terminalFontSizeByPane || {}
@@ -670,6 +693,36 @@ async function toggleListPosition() {
 
 async function toggleListCollapsed() {
   await updateSessionUiSettings({ sessionsPanelCollapsed: !settingsStore.settings.sessionsPanelCollapsed })
+}
+
+async function handleResetPaneZoom(paneId: string) {
+  if (!paneId) return
+  const current = settingsStore.settings.terminalFontSizeByPane || {}
+  if (!(paneId in current)) return
+  const next = { ...current }
+  delete next[paneId]
+  await updateSessionUiSettings({ terminalFontSizeByPane: next })
+}
+
+async function handleSetPaneZoom(payload: { paneId: string; percent: number }) {
+  const paneId = payload.paneId
+  if (!paneId) return
+  const percent = Number(payload.percent)
+  if (!Number.isFinite(percent) || percent <= 0) return
+
+  const baseFontSize = clampFontSize(settingsStore.settings.terminalFontSize ?? DEFAULT_FONT_SIZE)
+  const targetFontSize = clampFontSize((baseFontSize * percent) / 100)
+  const current = settingsStore.settings.terminalFontSizeByPane || {}
+  const next = { ...current }
+
+  if (targetFontSize === baseFontSize) {
+    if (!(paneId in next)) return
+    delete next[paneId]
+  } else {
+    if (next[paneId] === targetFontSize) return
+    next[paneId] = targetFontSize
+  }
+  await updateSessionUiSettings({ terminalFontSizeByPane: next })
 }
 
 function handleFocusPane(paneId: string) {
