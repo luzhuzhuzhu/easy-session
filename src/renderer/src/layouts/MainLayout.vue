@@ -92,7 +92,7 @@ import { useSessionsStore } from '@/stores/sessions'
 import { useSettingsStore } from '@/stores/settings'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import { SHORTCUT_LABELS } from '@/composables/useShortcuts'
-import logoSrc from '@/assets/logo-easy-session.png'
+import logoSrc from '@/assets/logo-easy-session-light.png'
 
 const route = useRoute()
 const { t } = useI18n()

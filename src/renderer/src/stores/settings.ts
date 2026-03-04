@@ -9,6 +9,8 @@ export interface AppSettings {
   opencodePath: string
   bufferSize: number
   terminalFont: string
+  terminalFontSize: number
+  terminalFontSizeByPane: Record<string, number>
   sidebarCollapsed: boolean
   sessionWakeConfirm: boolean
   sessionsPanelCollapsed: boolean
@@ -28,6 +30,8 @@ const defaults: AppSettings = {
   opencodePath: '',
   bufferSize: 5000,
   terminalFont: 'Consolas, monospace',
+  terminalFontSize: 13,
+  terminalFontSizeByPane: {},
   sidebarCollapsed: false,
   sessionWakeConfirm: true,
   sessionsPanelCollapsed: false,

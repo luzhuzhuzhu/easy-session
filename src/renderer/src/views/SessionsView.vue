@@ -559,6 +559,26 @@ const activeSessionForDialog = computed(() => {
 const isTopLayout = computed(() => settingsStore.settings.sessionsListPosition === 'top')
 const isListCollapsed = computed(() => settingsStore.settings.sessionsPanelCollapsed)
 
+function pruneTerminalFontSizeByPane(activePaneIds: string[]): void {
+  const current = settingsStore.settings.terminalFontSizeByPane || {}
+  if (Object.keys(current).length === 0) return
+
+  const activePaneIdSet = new Set(activePaneIds)
+  const next: Record<string, number> = {}
+  let changed = false
+
+  for (const [paneId, fontSize] of Object.entries(current)) {
+    if (!activePaneIdSet.has(paneId)) {
+      changed = true
+      continue
+    }
+    next[paneId] = fontSize
+  }
+
+  if (!changed) return
+  void updateSessionUiSettings({ terminalFontSizeByPane: next })
+}
+
 watch(
   projectSessionTree,
   (groups) => {
@@ -573,6 +593,15 @@ watch(
       if (!keys.has(key)) delete next[key]
     }
     expandedProjectMap.value = next
+  },
+  { immediate: true }
+)
+
+watch(
+  [() => settingsStore.loaded, () => workspaceStore.loaded, () => workspaceStore.paneIds.join('|')],
+  ([settingsLoaded, workspaceLoaded]) => {
+    if (!settingsLoaded || !workspaceLoaded) return
+    pruneTerminalFontSizeByPane(workspaceStore.paneIds)
   },
   { immediate: true }
 )

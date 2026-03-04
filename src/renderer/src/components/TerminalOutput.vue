@@ -12,12 +12,18 @@
       <button class="tool-btn" :title="$t('terminal.copyAll')" @click="copyAll">CP</button>
       <button class="tool-btn" :title="$t('terminal.clearOutput')" @click="handleClear">CL</button>
     </div>
-    <div class="terminal-container" ref="containerRef" @mousedown="handleFocus" @contextmenu="handleContextMenu"></div>
+    <div
+      class="terminal-container"
+      ref="containerRef"
+      @mousedown="handleFocus"
+      @contextmenu="handleContextMenu"
+      @wheel.capture="handleWheel"
+    ></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -26,11 +32,13 @@ import { getOutputHistory, resizeTerminal, writeToSession } from '@/api/session'
 import type { OutputEvent, OutputLine } from '@/api/session'
 import { subscribeSessionOutput } from '@/services/session-output-stream'
 import { useToast } from '@/composables/useToast'
+import { useSettingsStore } from '@/stores/settings'
 
-const props = defineProps<{ sessionId?: string | null; processKey?: string | null }>()
+const props = defineProps<{ sessionId?: string | null; processKey?: string | null; paneId?: string | null }>()
 const emit = defineEmits<{ clear: [] }>()
 const { t } = useI18n()
 const toast = useToast()
+const settingsStore = useSettingsStore()
 
 const containerRef = ref<HTMLElement | null>(null)
 let term: Terminal | null = null
@@ -48,6 +56,64 @@ const autoScroll = ref(true)
 let suppressAutoScrollTracking = false
 const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('windows')
 const HISTORY_LOAD_LINES = 20000
+const DEFAULT_FONT_SIZE = 13
+const MIN_FONT_SIZE = 9
+const MAX_FONT_SIZE = 28
+const FONT_SIZE_PERSIST_DEBOUNCE_MS = 320
+let fontSizePersistTimer: ReturnType<typeof setTimeout> | null = null
+let hasPendingFontSizePersist = false
+
+function clampFontSize(size: number): number {
+  if (!Number.isFinite(size)) return DEFAULT_FONT_SIZE
+  return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(size)))
+}
+
+function resolveFontSizeByPane(paneId?: string | null): number {
+  const byPane = settingsStore.settings.terminalFontSizeByPane || {}
+  const paneSpecific = paneId ? byPane[paneId] : undefined
+  if (typeof paneSpecific === 'number' && Number.isFinite(paneSpecific)) {
+    return clampFontSize(paneSpecific)
+  }
+  return clampFontSize(settingsStore.settings.terminalFontSize ?? DEFAULT_FONT_SIZE)
+}
+
+const activePaneFontSize = computed(() => resolveFontSizeByPane(props.paneId))
+
+function applyTermFontSize(size: number, forceSync = true): void {
+  if (!term) return
+  const next = clampFontSize(size)
+  if (term.options.fontSize === next) return
+  term.options.fontSize = next
+  if (forceSync) {
+    fitAndSync(true)
+  }
+}
+
+function schedulePersistFontSize(): void {
+  hasPendingFontSizePersist = true
+  if (fontSizePersistTimer) {
+    clearTimeout(fontSizePersistTimer)
+  }
+  fontSizePersistTimer = setTimeout(() => {
+    fontSizePersistTimer = null
+    hasPendingFontSizePersist = false
+    void settingsStore.save()
+  }, FONT_SIZE_PERSIST_DEBOUNCE_MS)
+}
+
+function updatePaneFontSize(size: number): void {
+  const paneId = props.paneId
+  if (!paneId) return
+  const next = clampFontSize(size)
+  const prev = settingsStore.settings.terminalFontSizeByPane?.[paneId]
+  if (prev === next) return
+
+  settingsStore.settings.terminalFontSizeByPane = {
+    ...(settingsStore.settings.terminalFontSizeByPane || {}),
+    [paneId]: next
+  }
+  schedulePersistFontSize()
+}
 
 // 安全剪贴板写入，窗口失焦时不抛异常
 async function safeWriteClipboard(text: string): Promise<boolean> {
@@ -128,21 +194,37 @@ function reloadSessionView(): void {
   void loadHistory().then(focusTerminalForIME)
 }
 
+function isEditableElement(target: Element | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+  return target.isContentEditable
+}
+
 function focusTerminalForIME(): void {
   if (!term) return
+  if (!document.hasFocus()) return
+  const host = containerRef.value
+  if (!host) return
+
+  const active = document.activeElement
+  if (active && isEditableElement(active) && !host.contains(active)) {
+    return
+  }
+
   const focusTextarea = () => {
     term?.focus()
-    const textarea = containerRef.value?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+    const textarea = host.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
     textarea?.focus({ preventScroll: true })
   }
 
-  // Windows IME 需要先释放旧焦点上下文，再延迟附着到终端 textarea
-  if (document.activeElement instanceof HTMLElement) {
-    document.activeElement.blur()
-  }
+  // Keep IME behavior while avoiding global blur/focus thrash after session destroy.
   requestAnimationFrame(() => {
+    const current = document.activeElement
+    if (current && isEditableElement(current) && !host.contains(current)) {
+      return
+    }
     focusTextarea()
-    setTimeout(focusTextarea, 120)
   })
 }
 
@@ -174,7 +256,7 @@ function initTerminal(): void {
     disableStdin: false,
     convertEol: false,
     scrollback: 20000,
-    fontSize: 13,
+    fontSize: activePaneFontSize.value,
     fontFamily: 'Consolas, "Courier New", monospace',
     rightClickSelectsWord: true,
     theme: { background: '#0f1419', foreground: '#d1d5db', cursor: '#6c9eff', selectionBackground: 'rgba(108, 158, 255, 0.3)' },
@@ -365,6 +447,21 @@ function handleContextMenu(e: MouseEvent): void {
   }
 }
 
+function handleWheel(e: WheelEvent): void {
+  if (!term) return
+  if (!(e.ctrlKey || e.metaKey)) return
+  e.preventDefault()
+  e.stopPropagation()
+
+  const current = clampFontSize(Number(term.options.fontSize ?? activePaneFontSize.value))
+  const next = current + (e.deltaY < 0 ? 1 : -1)
+  const clamped = clampFontSize(next)
+  if (clamped === current) return
+
+  applyTermFontSize(clamped, true)
+  updatePaneFontSize(clamped)
+}
+
 function handleFocus(): void {
   term?.focus()
 }
@@ -413,6 +510,13 @@ watch(
   }
 )
 
+watch(
+  activePaneFontSize,
+  (size) => {
+    applyTermFontSize(size, true)
+  }
+)
+
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
@@ -428,6 +532,14 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (fontSizePersistTimer) {
+    clearTimeout(fontSizePersistTimer)
+    fontSizePersistTimer = null
+  }
+  if (hasPendingFontSizePersist) {
+    hasPendingFontSizePersist = false
+    void settingsStore.save()
+  }
   if (resizeTimer) {
     clearTimeout(resizeTimer)
     resizeTimer = null

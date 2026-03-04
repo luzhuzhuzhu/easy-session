@@ -106,6 +106,7 @@
         <TerminalOutput
           :session-id="activeSession.id"
           :process-key="activeSession.processId"
+          :pane-id="node.paneId"
           @clear="emit('clear-output', activeSession.id)"
         />
       </template>
@@ -205,21 +206,52 @@ function handleFocusPane(): void {
 let detachResizeListeners: (() => void) | null = null
 let edgeRaf = 0
 let pendingEdgeUpdate: { host: HTMLElement; clientX: number; clientY: number } | null = null
+let previousBodyCursor: string | null = null
+let previousBodyUserSelect: string | null = null
 
 function clearResizeListeners(): void {
   detachResizeListeners?.()
   detachResizeListeners = null
   isResizingSplit.value = false
+  if (typeof document !== 'undefined' && document.body) {
+    const bodyStyle = document.body.style
+    if (previousBodyCursor !== null) {
+      bodyStyle.cursor = previousBodyCursor
+      previousBodyCursor = null
+    } else {
+      bodyStyle.removeProperty('cursor')
+    }
+    if (previousBodyUserSelect !== null) {
+      bodyStyle.userSelect = previousBodyUserSelect
+      previousBodyUserSelect = null
+    } else {
+      bodyStyle.removeProperty('user-select')
+    }
+  }
 }
 
 function startSplitResize(e: MouseEvent): void {
   if (props.node.type !== 'split') return
+  if (detachResizeListeners) {
+    clearResizeListeners()
+  }
   const host = (e.currentTarget as HTMLElement | null)?.parentElement as HTMLElement | null
   if (!host) return
   const direction = props.node.direction
   isResizingSplit.value = true
+  if (typeof document !== 'undefined' && document.body) {
+    const bodyStyle = document.body.style
+    previousBodyCursor = bodyStyle.cursor
+    previousBodyUserSelect = bodyStyle.userSelect
+    bodyStyle.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize'
+    bodyStyle.userSelect = 'none'
+  }
 
   const onMove = (ev: MouseEvent) => {
+    if (ev.buttons === 0) {
+      clearResizeListeners()
+      return
+    }
     const rect = host.getBoundingClientRect()
     if (rect.width <= 0 || rect.height <= 0) return
     const rawRatio =
@@ -234,11 +266,21 @@ function startSplitResize(e: MouseEvent): void {
     clearResizeListeners()
   }
 
+  const onVisibilityChange = () => {
+    if (document.visibilityState !== 'visible') {
+      clearResizeListeners()
+    }
+  }
+
   window.addEventListener('mousemove', onMove)
   window.addEventListener('mouseup', onUp, { once: true })
+  window.addEventListener('blur', onUp, { once: true })
+  document.addEventListener('visibilitychange', onVisibilityChange)
   detachResizeListeners = () => {
     window.removeEventListener('mousemove', onMove)
     window.removeEventListener('mouseup', onUp)
+    window.removeEventListener('blur', onUp)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
   }
 }
 
@@ -447,11 +489,23 @@ onBeforeUnmount(() => {
   flex: 0 0 4px;
   border-radius: 4px;
   background: rgba(58, 68, 89, 0.55);
+  cursor: col-resize;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.splitter:hover {
+  background: rgba(108, 158, 255, 0.65);
+  box-shadow: 0 0 0 1px rgba(108, 158, 255, 0.35);
+}
+
+.workspace-split.resizing .splitter {
+  background: rgba(108, 158, 255, 0.8);
 }
 
 .workspace-split.vertical .splitter {
   width: 100%;
   min-height: 4px;
+  cursor: row-resize;
 }
 
 .workspace-split.horizontal .splitter {
