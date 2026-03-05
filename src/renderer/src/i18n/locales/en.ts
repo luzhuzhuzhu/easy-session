@@ -24,6 +24,8 @@ dashboard: {
     newProject: 'New Project',
     newSession: 'New Session',
     openConfig: 'Open Config',
+    showConfig: 'Show Config Editor',
+    hideConfig: 'Hide Config Editor',
     cliPath: 'Path',
     cliVersion: 'Version',
     recentProjects: 'Recent Projects',

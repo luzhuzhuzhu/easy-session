@@ -5,7 +5,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 
 const NAV_SHORTCUTS: Record<string, string> = {
   '1': '/dashboard',
-  '2': '/config',
+  '2': '/dashboard?panel=advanced',
   '3': '/sessions',
   '4': '/projects',
   '5': '/skills'
@@ -13,7 +13,6 @@ const NAV_SHORTCUTS: Record<string, string> = {
 
 export const SHORTCUT_LABELS: Record<string, string> = {
   '/dashboard': 'Ctrl+1',
-  '/config': 'Ctrl+2',
   '/sessions': 'Ctrl+3',
   '/projects': 'Ctrl+4',
   '/skills': 'Ctrl+5',

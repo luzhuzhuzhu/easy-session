@@ -119,36 +119,37 @@
             <code>{{ promptFilePath }}</code>
           </div>
 
-          <div v-if="promptLoading" class="loading-state">{{ $t('config.loading') }}</div>
-          <template v-else>
+          <div class="prompt-editor-wrap">
             <textarea
               v-model="promptEditText"
               class="setting-textarea prompt-editor"
               :class="{ modified: promptModified }"
               rows="12"
               spellcheck="false"
+              :readonly="promptLoading"
             />
+            <div v-if="promptLoading" class="prompt-loading-overlay">{{ $t('config.loading') }}</div>
+          </div>
 
-            <div class="prompt-hints">
-              <span v-if="!promptExists" class="empty-hint">{{ $t('projectDetail.promptMissing') }}</span>
-              <span v-if="promptModified" class="modified-hint">{{ $t('config.modified') }}</span>
-            </div>
+          <div class="prompt-hints">
+            <span v-if="!promptExists" class="empty-hint">{{ $t('projectDetail.promptMissing') }}</span>
+            <span v-if="promptModified" class="modified-hint">{{ $t('config.modified') }}</span>
+          </div>
 
-            <div class="actions">
-              <button
-                class="btn btn-primary btn-sm"
-                :disabled="!promptModified || promptSaving"
-                @click="savePromptContent"
-              >
-                {{ $t('config.save') }}
-              </button>
-              <button class="btn btn-sm" :disabled="promptSaving" @click="reloadPromptContent">
-                {{ $t('config.reload') }}
-              </button>
-            </div>
+          <div class="actions">
+            <button
+              class="btn btn-primary btn-sm"
+              :disabled="!promptModified || promptSaving"
+              @click="savePromptContent"
+            >
+              {{ $t('config.save') }}
+            </button>
+            <button class="btn btn-sm" :disabled="promptSaving" @click="reloadPromptContent">
+              {{ $t('config.reload') }}
+            </button>
+          </div>
 
-            <div v-if="promptMessage" class="message" :class="promptMessageType">{{ promptMessage }}</div>
-          </template>
+          <div v-if="promptMessage" class="message" :class="promptMessageType">{{ promptMessage }}</div>
         </div>
       </section>
 
@@ -242,6 +243,21 @@ const promptMessage = ref('')
 const promptMessageType = ref<'success' | 'error'>('success')
 const promptModified = computed(() => promptEditText.value !== promptSourceText.value)
 let promptLoadToken = 0
+
+type PromptTabCache = {
+  loaded: boolean
+  projectId: string
+  path: string
+  exists: boolean
+  source: string
+  edit: string
+}
+
+const promptCache = ref<Record<ProjectPromptCliType, PromptTabCache>>({
+  claude: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' },
+  codex: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' },
+  opencode: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' }
+})
 
 const now = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
@@ -359,8 +375,40 @@ function openSession(sessionId: string) {
   void router.push({ path: '/sessions', query: { sessionId } })
 }
 
-async function loadPromptContent() {
+function resetPromptCache() {
+  promptCache.value = {
+    claude: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' },
+    codex: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' },
+    opencode: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' }
+  }
+}
+
+function cacheCurrentPromptState(tab: ProjectPromptCliType) {
   if (!project.value) return
+  promptCache.value[tab] = {
+    loaded: true,
+    projectId: project.value.id,
+    path: promptFilePath.value,
+    exists: promptExists.value,
+    source: promptSourceText.value,
+    edit: promptEditText.value
+  }
+}
+
+function applyPromptCache(tab: ProjectPromptCliType): boolean {
+  if (!project.value) return false
+  const cached = promptCache.value[tab]
+  if (!cached.loaded || cached.projectId !== project.value.id) return false
+  promptFilePath.value = cached.path
+  promptExists.value = cached.exists
+  promptSourceText.value = cached.source
+  promptEditText.value = cached.edit
+  return true
+}
+
+async function loadPromptContent(force = false) {
+  if (!project.value) return
+  if (!force && applyPromptCache(promptTab.value)) return
   const token = ++promptLoadToken
   promptLoading.value = true
   promptMessage.value = ''
@@ -376,6 +424,7 @@ async function loadPromptContent() {
     promptExists.value = promptFile.exists
     promptSourceText.value = promptFile.content
     promptEditText.value = promptFile.content
+    cacheCurrentPromptState(promptTab.value)
   } catch (e: unknown) {
     if (token !== promptLoadToken) return
     promptMessage.value = t('config.saveError') + ': ' + (e instanceof Error ? e.message : String(e))
@@ -397,6 +446,7 @@ async function savePromptContent() {
     promptExists.value = true
     promptSourceText.value = saved.content
     promptEditText.value = saved.content
+    cacheCurrentPromptState(promptTab.value)
     promptMessage.value = t('projectDetail.promptSaved')
     promptMessageType.value = 'success'
     toast.success(t('projectDetail.promptSaved'))
@@ -410,7 +460,7 @@ async function savePromptContent() {
 }
 
 async function reloadPromptContent() {
-  await loadPromptContent()
+  await loadPromptContent(true)
 }
 
 async function loadProjectSkills() {
@@ -454,6 +504,7 @@ async function loadProject() {
     project.value = p
     editName.value = p.name
     expandedSessionId.value = null
+    resetPromptCache()
 
     detectResult.value = await detectProject(p.path)
     await reloadProjectSessions()
@@ -479,7 +530,10 @@ watch(() => route.params.id, () => {
   void loadProject()
 })
 
-watch(promptTab, () => {
+watch(promptTab, (_next, prev) => {
+  if (prev) {
+    cacheCurrentPromptState(prev)
+  }
   if (project.value) {
     void loadPromptContent()
   }
@@ -773,6 +827,22 @@ watch(promptTab, () => {
   background: var(--bg-primary);
   line-height: 1.6;
   &.modified { border-color: var(--status-warning); }
+}
+
+.prompt-editor-wrap {
+  position: relative;
+}
+
+.prompt-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  background: rgba(15, 20, 25, 0.32);
+  border-radius: var(--radius-sm);
+  backdrop-filter: blur(1px);
 }
 
 .prompt-hints {

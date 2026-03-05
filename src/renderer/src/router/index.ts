@@ -5,7 +5,7 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: '/dashboard' },
     { path: '/dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
-    { path: '/config', name: 'config', component: () => import('@/views/ConfigView.vue') },
+    { path: '/config', redirect: { path: '/dashboard', query: { panel: 'advanced' } } },
     { path: '/sessions', name: 'sessions', component: () => import('@/views/SessionsView.vue') },
     { path: '/projects', name: 'projects', component: () => import('@/views/ProjectsView.vue') },
     { path: '/projects/:id', name: 'projectDetail', component: () => import('@/views/ProjectDetailView.vue') },

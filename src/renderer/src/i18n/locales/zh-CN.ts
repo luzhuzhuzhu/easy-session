@@ -24,6 +24,8 @@ dashboard: {
     newProject: '新建项目',
     newSession: '新建会话',
     openConfig: '打开配置',
+    showConfig: '展开配置编辑器',
+    hideConfig: '收起配置编辑器',
     cliPath: '路径',
     cliVersion: '版本',
     recentProjects: '最近项目',

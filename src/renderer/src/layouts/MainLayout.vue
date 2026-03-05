@@ -102,7 +102,6 @@ const sessionsStore = useSessionsStore()
 const settingsStore = useSettingsStore()
 const navItems = [
   { path: "/dashboard", icon: "D", label: "nav.dashboard" },
-  { path: "/config", icon: "C", label: "nav.config" },
   { path: "/sessions", icon: "S", label: "nav.sessions" },
   { path: "/projects", icon: "P", label: "nav.projects" },
   { path: "/skills", icon: "K", label: "nav.skills" }

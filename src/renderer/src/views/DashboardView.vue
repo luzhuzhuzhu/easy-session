@@ -72,27 +72,40 @@
       <div class="actions">
         <button class="action-btn" @click="handleNewProject">{{ $t('dashboard.newProject') }}</button>
         <button class="action-btn" @click="$router.push('/sessions')">{{ $t('dashboard.newSession') }}</button>
-        <button class="action-btn" @click="$router.push('/config')">{{ $t('dashboard.openConfig') }}</button>
+        <button class="action-btn" @click="openConfigPanel">{{ $t('dashboard.openConfig') }}</button>
       </div>
+    </div>
+
+    <div class="config-merged">
+      <div class="config-merged-head">
+        <h3>{{ $t('config.title') }}</h3>
+        <button class="action-btn action-btn-small" @click="toggleConfigPanel">
+          {{ $t(configPanelOpen ? 'dashboard.hideConfig' : 'dashboard.showConfig') }}
+        </button>
+      </div>
+      <ConfigEditorPanel v-if="configPanelOpen" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useProjectsStore } from '@/stores/projects'
 import { useSessionsStore } from '@/stores/sessions'
 import { selectFolder } from '@/api/project'
+import ConfigEditorPanel from '@/components/ConfigEditorPanel.vue'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const projectsStore = useProjectsStore()
 const sessionsStore = useSessionsStore()
 const checking = ref(true)
+const configPanelOpen = ref(false)
 
 const runningSessions = computed(() =>
   sessionsStore.sessions.filter((s) => s.status === 'running').length
@@ -108,6 +121,35 @@ function statusText(available: boolean, isChecking: boolean) {
   return available ? t('status.available') : t('status.unavailable')
 }
 
+function queryPanelValue(): string {
+  const panel = route.query.panel
+  return Array.isArray(panel) ? String(panel[0] || '') : String(panel || '')
+}
+
+function syncPanelFromQuery(): void {
+  configPanelOpen.value = queryPanelValue() === 'advanced'
+}
+
+function replacePanelQuery(open: boolean): void {
+  const nextQuery = { ...route.query } as Record<string, unknown>
+  if (open) {
+    nextQuery.panel = 'advanced'
+  } else {
+    delete nextQuery.panel
+  }
+  void router.replace({ path: '/dashboard', query: nextQuery })
+}
+
+function openConfigPanel(): void {
+  configPanelOpen.value = true
+  replacePanelQuery(true)
+}
+
+function toggleConfigPanel(): void {
+  configPanelOpen.value = !configPanelOpen.value
+  replacePanelQuery(configPanelOpen.value)
+}
+
 async function handleNewProject() {
   try {
     const folder = await selectFolder()
@@ -121,6 +163,7 @@ async function handleNewProject() {
 }
 
 onMounted(async () => {
+  syncPanelFromQuery()
   await appStore.init()
   await Promise.all([
     appStore.checkCliStatus(),
@@ -129,12 +172,19 @@ onMounted(async () => {
   ])
   checking.value = false
 })
+
+watch(
+  () => route.query.panel,
+  () => {
+    syncPanelFromQuery()
+  }
+)
 </script>
 
 <style scoped lang="scss">
 .dashboard {
   padding: var(--spacing-xl);
-  max-width: 960px;
+  max-width: 1200px;
 }
 
 .welcome {
@@ -288,6 +338,23 @@ onMounted(async () => {
   }
 }
 
+.config-merged {
+  margin-top: var(--spacing-lg);
+}
+
+.config-merged-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-sm);
+
+  h3 {
+    font-size: var(--font-size-md);
+    color: var(--text-secondary);
+    margin: 0;
+  }
+}
+
 .actions {
   display: flex;
   gap: var(--spacing-md);
@@ -310,5 +377,9 @@ onMounted(async () => {
   }
 
   &:active { transform: scale(0.97); }
+}
+
+.action-btn-small {
+  padding: 6px 12px;
 }
 </style>
