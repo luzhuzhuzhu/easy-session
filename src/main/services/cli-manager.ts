@@ -4,6 +4,7 @@ import { existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import type { ProcessInfo, ProcessOutput } from './types'
+import type { RemoteNetworkSettingsManager } from './remote-network-settings-manager'
 
 export type OutputListener = (id: string, data: string, stream: 'stdout' | 'stderr') => void
 export type ExitListener = (id: string, code: number | null) => void
@@ -11,6 +12,20 @@ export type ExitListener = (id: string, code: number | null) => void
 interface OutputBufferState {
   chunks: string[]
   bytes: number
+}
+
+function redactProxyUrl(rawValue: string | null): string | null {
+  if (!rawValue) return null
+  try {
+    const parsed = new URL(rawValue)
+    if (parsed.username || parsed.password) {
+      parsed.username = parsed.username ? '***' : ''
+      parsed.password = parsed.password ? '***' : ''
+    }
+    return parsed.toString().replace(/\/$/, '')
+  } catch {
+    return rawValue
+  }
 }
 
 export class CliManager {
@@ -27,6 +42,7 @@ export class CliManager {
   private outputBuffers = new Map<string, OutputBufferState>()
   private outputListeners = new Set<OutputListener>()
   private exitListeners = new Set<ExitListener>()
+  private remoteNetworkSettingsManager: RemoteNetworkSettingsManager | null = null
 
   onOutput(listener: OutputListener): () => void {
     this.outputListeners.add(listener)
@@ -44,6 +60,10 @@ export class CliManager {
 
   offExit(listener: ExitListener): void {
     this.exitListeners.delete(listener)
+  }
+
+  setRemoteNetworkSettingsManager(manager: RemoteNetworkSettingsManager | null): void {
+    this.remoteNetworkSettingsManager = manager
   }
 
   private sendToRenderer(channel: string, data: unknown): void {
@@ -100,9 +120,15 @@ export class CliManager {
   }
 
   private buildSpawnEnv(command: string): Record<string, string> {
-    const env = Object.fromEntries(
+    const baseEnv = Object.fromEntries(
       Object.entries(process.env).filter(([, value]) => typeof value === 'string')
     ) as Record<string, string>
+
+    const networkState = this.remoteNetworkSettingsManager
+      ? this.remoteNetworkSettingsManager.buildCliEnvironment(baseEnv)
+      : null
+    const networkEnv = networkState ? networkState.env : { ...baseEnv }
+    const env = networkEnv
 
     env.TERM = env.TERM || 'xterm-256color'
 
@@ -116,6 +142,15 @@ export class CliManager {
           env.CLAUDE_CODE_GIT_BASH_PATH = gitBashPath
         }
       }
+    }
+
+    if (networkState) {
+      const injectedKeys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'].filter(
+        (key) => !!env[key]
+      )
+      console.info(
+        `[cli-network] command=${command} proxyMode=${networkState.state.proxyMode} proxyUrl=${redactProxyUrl(networkState.state.proxyUrl) ?? '-'} injectedKeys=${injectedKeys.join(',') || 'none'}`
+      )
     }
 
     return env
@@ -164,6 +199,15 @@ export class CliManager {
       this.appendToBuffer(id, data)
       const output: ProcessOutput = { id, stream: 'stdout', data, timestamp: Date.now() }
       this.sendToRenderer('cli:output', output)
+      if (this.remoteNetworkSettingsManager) {
+        const analysis = this.remoteNetworkSettingsManager.analyzeCliFailure(data)
+        if (analysis.matched && analysis.category) {
+          const reason = analysis.reason
+            ? `${analysis.reason}：${data.trim()}`.trim()
+            : data.trim()
+          void this.remoteNetworkSettingsManager.recordCliFailure(info.cliType, reason, analysis.category)
+        }
+      }
       this.outputListeners.forEach((fn) => {
         fn(id, data, 'stdout')
       })

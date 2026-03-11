@@ -28,27 +28,29 @@ import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { getOutputHistory, resizeTerminal, writeToSession } from '@/api/session'
-import type { OutputEvent, OutputLine } from '@/api/session'
-import { subscribeSessionOutput } from '@/services/session-output-stream'
+import type { OutputLine } from '@/api/session'
 import { useToast } from '@/composables/useToast'
 import { useSettingsStore } from '@/stores/settings'
+import { getSharedGatewayResolver, type GatewayOutputEvent } from '@/gateways'
+import type { SessionRef } from '@/models/unified-resource'
 
-const props = defineProps<{ sessionId?: string | null; processKey?: string | null; paneId?: string | null }>()
+const props = defineProps<{ sessionRef?: SessionRef | null; processKey?: string | null; paneId?: string | null }>()
 const emit = defineEmits<{ clear: [] }>()
 const { t } = useI18n()
 const toast = useToast()
 const settingsStore = useSettingsStore()
+const gatewayResolver = getSharedGatewayResolver()
 
 const containerRef = ref<HTMLElement | null>(null)
 let term: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let lastRenderedSeq = 0
 let loadToken = 0
+let subscribeToken = 0
 let unlistenOutput: (() => void) | null = null
-let subscribedSessionId: string | null = null
+let subscribedGlobalSessionKey: string | null = null
 let loadingHistory = false
-const pendingEvents: OutputEvent[] = []
+const pendingEvents: GatewayOutputEvent[] = []
 let lastSyncedCols = -1
 let lastSyncedRows = -1
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
@@ -62,6 +64,10 @@ const MAX_FONT_SIZE = 28
 const FONT_SIZE_PERSIST_DEBOUNCE_MS = 320
 let fontSizePersistTimer: ReturnType<typeof setTimeout> | null = null
 let hasPendingFontSizePersist = false
+
+function isSessionWritable(): boolean {
+  return !!props.processKey
+}
 
 function clampFontSize(size: number): number {
   if (!Number.isFinite(size)) return DEFAULT_FONT_SIZE
@@ -142,14 +148,28 @@ function resolveSeq(line: OutputLine, fallback: number): number {
   return fallback
 }
 
+async function resolveGatewayContext(): Promise<{
+  gateway: Awaited<ReturnType<typeof gatewayResolver.resolve>>
+  sessionRef: SessionRef
+} | null> {
+  const sessionRef = props.sessionRef ?? null
+  if (!sessionRef) return null
+  const gateway = await gatewayResolver.resolve(sessionRef.instanceId)
+  return { gateway, sessionRef }
+}
+
 function syncPtySize(force = false): void {
-  if (!term || !props.sessionId) return
+  if (!term || !props.sessionRef || !isSessionWritable()) return
 
   if (!force && term.cols === lastSyncedCols && term.rows === lastSyncedRows) return
   lastSyncedCols = term.cols
   lastSyncedRows = term.rows
 
-  void resizeTerminal(props.sessionId, term.cols, term.rows)
+  void (async () => {
+    const context = await resolveGatewayContext()
+    if (!context) return
+    await context.gateway.resize(context.sessionRef.instanceId, context.sessionRef.sessionId, term.cols, term.rows)
+  })()
 }
 
 function fitAndSync(force = false): void {
@@ -169,28 +189,37 @@ function scheduleResize(): void {
   }, 160)
 }
 
-function bindOutput(): void {
-  const sessionId = props.sessionId ?? null
-  if (sessionId === subscribedSessionId && unlistenOutput) return
+async function bindOutput(): Promise<void> {
+  const sessionRef = props.sessionRef ?? null
+  const nextGlobalSessionKey = sessionRef?.globalSessionKey ?? null
+  if (nextGlobalSessionKey === subscribedGlobalSessionKey && unlistenOutput) return
 
   if (unlistenOutput) {
     unlistenOutput()
     unlistenOutput = null
   }
-  subscribedSessionId = null
+  subscribedGlobalSessionKey = null
 
-  if (!sessionId) return
+  if (!sessionRef) return
 
-  unlistenOutput = subscribeSessionOutput(sessionId, (event) => {
-    applyLiveOutput(event)
-  })
-  subscribedSessionId = sessionId
+  const token = ++subscribeToken
+  const context = await resolveGatewayContext()
+  if (!context || token !== subscribeToken) return
+
+  unlistenOutput = context.gateway.subscribeOutput(
+    context.sessionRef.instanceId,
+    context.sessionRef.sessionId,
+    (event) => {
+      applyLiveOutput(event)
+    }
+  )
+  subscribedGlobalSessionKey = context.sessionRef.globalSessionKey
 }
 
 function reloadSessionView(): void {
   initTerminal()
   loadingHistory = true
-  bindOutput()
+  void bindOutput()
   void loadHistory().then(focusTerminalForIME)
 }
 
@@ -202,7 +231,7 @@ function isEditableElement(target: Element | null): boolean {
 }
 
 function focusTerminalForIME(): void {
-  if (!term) return
+  if (!term || !isSessionWritable()) return
   if (!document.hasFocus()) return
   const host = containerRef.value
   if (!host) return
@@ -253,7 +282,7 @@ function initTerminal(): void {
 
   term = new Terminal({
     cursorBlink: true,
-    disableStdin: false,
+    disableStdin: !isSessionWritable(),
     convertEol: false,
     scrollback: 20000,
     fontSize: activePaneFontSize.value,
@@ -304,9 +333,17 @@ function initTerminal(): void {
   })
 
   term.onData((data: string) => {
-    if (props.sessionId) {
-      void writeToSession(props.sessionId, data)
-    }
+    const sessionRef = props.sessionRef
+    if (!sessionRef || !isSessionWritable()) return
+    void (async () => {
+      const context = await resolveGatewayContext()
+      if (!context) return
+      try {
+        await context.gateway.writeRaw(context.sessionRef.instanceId, context.sessionRef.sessionId, data)
+      } catch (error) {
+        console.warn('[TerminalOutput] writeRaw failed', error)
+      }
+    })()
   })
 
   term.onScroll(() => {
@@ -349,8 +386,8 @@ function toggleAutoScroll(): void {
 }
 
 async function loadHistory(): Promise<void> {
-  const sessionId = props.sessionId
-  if (!term || !sessionId) {
+  const sessionRef = props.sessionRef ?? null
+  if (!term || !sessionRef) {
     resetLocalBuffer()
     return
   }
@@ -361,13 +398,22 @@ async function loadHistory(): Promise<void> {
   let history: OutputLine[] = []
 
   try {
-    history = await getOutputHistory(sessionId, HISTORY_LOAD_LINES)
+    const context = await resolveGatewayContext()
+    if (!context) {
+      loadingHistory = false
+      return
+    }
+    history = await context.gateway.getOutputHistory(
+      context.sessionRef.instanceId,
+      context.sessionRef.sessionId,
+      HISTORY_LOAD_LINES
+    )
   } catch {
     loadingHistory = false
     return
   }
 
-  if (token !== loadToken || !term || props.sessionId !== sessionId) {
+  if (token !== loadToken || !term || props.sessionRef?.globalSessionKey !== sessionRef.globalSessionKey) {
     loadingHistory = false
     return
   }
@@ -399,8 +445,8 @@ async function loadHistory(): Promise<void> {
   }
 }
 
-function applyLiveOutputNow(event: OutputEvent): void {
-  if (!term || !props.sessionId || event.sessionId !== props.sessionId) return
+function applyLiveOutputNow(event: GatewayOutputEvent): void {
+  if (!term || !props.sessionRef || event.globalSessionKey !== props.sessionRef.globalSessionKey) return
 
   const seq = resolveSeq(
     { text: event.data, stream: event.stream, timestamp: event.timestamp, seq: event.seq },
@@ -418,8 +464,8 @@ function applyLiveOutputNow(event: OutputEvent): void {
   scrollToBottom(false)
 }
 
-function applyLiveOutput(event: OutputEvent): void {
-  if (!props.sessionId || event.sessionId !== props.sessionId) return
+function applyLiveOutput(event: GatewayOutputEvent): void {
+  if (!props.sessionRef || event.globalSessionKey !== props.sessionRef.globalSessionKey) return
   if (loadingHistory) {
     pendingEvents.push(event)
     return
@@ -430,8 +476,14 @@ function applyLiveOutput(event: OutputEvent): void {
 async function pasteFromClipboard(): Promise<void> {
   try {
     const text = await navigator.clipboard.readText()
-    if (text && props.sessionId) {
-      await writeToSession(props.sessionId, text)
+    if (text && props.sessionRef && isSessionWritable()) {
+      const context = await resolveGatewayContext()
+      if (!context) return
+      try {
+        await context.gateway.writeRaw(context.sessionRef.instanceId, context.sessionRef.sessionId, text)
+      } catch (error) {
+        console.warn('[TerminalOutput] paste writeRaw failed', error)
+      }
     }
   } catch {
     // Ignore clipboard read failure.
@@ -463,6 +515,7 @@ function handleWheel(e: WheelEvent): void {
 }
 
 function handleFocus(): void {
+  if (!isSessionWritable()) return
   term?.focus()
 }
 
@@ -477,10 +530,16 @@ async function copyAll(): Promise<void> {
     return
   }
 
-  if (!props.sessionId) return
+  if (!props.sessionRef) return
 
   try {
-    const history = await getOutputHistory(props.sessionId, HISTORY_LOAD_LINES)
+    const context = await resolveGatewayContext()
+    if (!context) return
+    const history = await context.gateway.getOutputHistory(
+      context.sessionRef.instanceId,
+      context.sessionRef.sessionId,
+      HISTORY_LOAD_LINES
+    )
     if (await safeWriteClipboard(history.map((line) => line.text).join(''))) {
       toast.success(t('terminal.copySuccess'))
     }
@@ -496,7 +555,7 @@ function handleClear(): void {
 }
 
 watch(
-  () => props.sessionId,
+  () => props.sessionRef?.globalSessionKey,
   () => {
     reloadSessionView()
   },
@@ -506,6 +565,9 @@ watch(
 watch(
   () => props.processKey,
   () => {
+    if (term) {
+      term.options.disableStdin = !isSessionWritable()
+    }
     syncPtySize(true)
   }
 )
@@ -546,7 +608,7 @@ onBeforeUnmount(() => {
   }
   unlistenOutput?.()
   unlistenOutput = null
-  subscribedSessionId = null
+  subscribedGlobalSessionKey = null
   loadingHistory = false
   pendingEvents.length = 0
   resizeObserver?.disconnect()

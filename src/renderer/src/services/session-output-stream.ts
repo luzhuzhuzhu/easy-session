@@ -1,15 +1,28 @@
-import { onSessionOutput, type OutputEvent } from '@/api/session'
+import { onSessionOutput, type OutputEvent } from '@/api/local-session'
+import {
+  buildGlobalSessionKey,
+  LOCAL_INSTANCE_ID,
+  type SessionRef
+} from '../models/unified-resource'
 
 type OutputListener = (event: OutputEvent) => void
 
-const listenersBySession = new Map<string, Set<OutputListener>>()
+const listenersByGlobalKey = new Map<string, Set<OutputListener>>()
 let unlistenIpc: (() => void) | null = null
+
+function resolveGlobalSessionKey(target: SessionRef | string): string {
+  if (typeof target === 'string') {
+    return buildGlobalSessionKey(LOCAL_INSTANCE_ID, target)
+  }
+  return target.globalSessionKey
+}
 
 function ensureBridge(): void {
   if (unlistenIpc) return
 
   unlistenIpc = onSessionOutput((event) => {
-    const listeners = listenersBySession.get(event.sessionId)
+    const globalSessionKey = buildGlobalSessionKey(LOCAL_INSTANCE_ID, event.sessionId)
+    const listeners = listenersByGlobalKey.get(globalSessionKey)
     if (!listeners || listeners.size === 0) return
 
     for (const listener of listeners) {
@@ -18,22 +31,24 @@ function ensureBridge(): void {
   })
 }
 
-export function subscribeSessionOutput(sessionId: string, listener: OutputListener): () => void {
+export function subscribeSessionOutput(target: SessionRef | string, listener: OutputListener): () => void {
   ensureBridge()
 
-  let listeners = listenersBySession.get(sessionId)
+  const globalSessionKey = resolveGlobalSessionKey(target)
+
+  let listeners = listenersByGlobalKey.get(globalSessionKey)
   if (!listeners) {
     listeners = new Set<OutputListener>()
-    listenersBySession.set(sessionId, listeners)
+    listenersByGlobalKey.set(globalSessionKey, listeners)
   }
   listeners.add(listener)
 
   return () => {
-    const current = listenersBySession.get(sessionId)
+    const current = listenersByGlobalKey.get(globalSessionKey)
     if (!current) return
     current.delete(listener)
     if (current.size === 0) {
-      listenersBySession.delete(sessionId)
+      listenersByGlobalKey.delete(globalSessionKey)
     }
   }
 }

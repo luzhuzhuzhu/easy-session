@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="project-detail-page">
     <div class="breadcrumb">
       <router-link to="/projects" class="breadcrumb-link">{{ $t('project.title') }}</router-link>
@@ -14,6 +14,8 @@
           <input
             v-model="editName"
             class="name-input"
+            :class="{ disabled: !canEditProjectName }"
+            :readonly="!canEditProjectName"
             @blur="saveName"
             @keydown.enter="($event.target as HTMLInputElement).blur()"
           />
@@ -32,14 +34,26 @@
       <section class="panel">
         <div class="panel-header" @click="sessionsOpen = !sessionsOpen">
           <span class="panel-title">{{ $t('projectDetail.sessions') }} ({{ projectSessions.length }})</span>
-          <span class="panel-toggle" :class="{ open: sessionsOpen }">&gt;</span>
+          <div class="panel-header-actions" @click.stop>
+            <button
+              v-if="canCreateSessions && project"
+              class="btn btn-sm"
+              @click="openCreateSessionDialog"
+            >
+              {{ $t('projectDetail.newSession') }}
+            </button>
+            <span class="panel-toggle" :class="{ open: sessionsOpen }">&gt;</span>
+          </div>
         </div>
         <div v-if="sessionsOpen" class="panel-body">
+          <div v-if="canCreateSessions" class="session-create-hint">
+            {{ $t('projectDetail.newSessionPausedHint') }}
+          </div>
           <div v-if="projectSessions.length === 0" class="empty-hint">{{ $t('projectDetail.noSessions') }}</div>
 
-          <div v-else class="session-list">
-            <div v-for="s in projectSessions" :key="s.id" class="session-card">
-              <div class="session-main" @click="toggleSessionExpand(s.id)">
+            <div v-else class="session-list">
+            <div v-for="s in projectSessions" :key="s.globalSessionKey" class="session-card">
+              <div class="session-main" @click="toggleSessionExpand(s.sessionId)">
                 <div class="session-main-left">
                   <span class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : s.type === 'codex' ? 'X' : 'O' }}</span>
                   <div class="session-main-text">
@@ -52,29 +66,29 @@
                 </div>
 
                 <div class="session-actions" @click.stop>
-                  <button class="btn btn-sm" @click="openSession(s.id)">{{ $t('projectDetail.enterSession') }}</button>
+                  <button class="btn btn-sm" @click="openSession(s)">{{ $t('projectDetail.enterSession') }}</button>
                   <button
-                    v-if="s.status !== 'running'"
+                    v-if="canStartSessions && s.status !== 'running'"
                     class="btn btn-sm"
-                    @click="startSessionFromProject(s.id)"
+                    @click="startSessionFromProject(s.sessionId)"
                   >
                     {{ $t('session.start') }}
                   </button>
                   <button
-                    v-else
+                    v-else-if="canPauseSessions"
                     class="btn btn-sm"
-                    @click="pauseSessionFromProject(s.id)"
+                    @click="pauseSessionFromProject(s.sessionId)"
                   >
                     {{ $t('session.pause') }}
                   </button>
-                  <button class="btn btn-sm" @click="restartSessionFromProject(s.id)">{{ $t('session.restart') }}</button>
-                  <button class="btn btn-sm btn-danger" @click="destroySessionFromProject(s.id)">{{ $t('session.destroy') }}</button>
+                  <button v-if="canRestartSessions" class="btn btn-sm" @click="restartSessionFromProject(s.sessionId)">{{ $t('session.restart') }}</button>
+                  <button v-if="canDestroySessions" class="btn btn-sm btn-danger" @click="destroySessionFromProject(s.sessionId)">{{ $t('session.destroy') }}</button>
                 </div>
               </div>
 
-              <div v-if="expandedSessionId === s.id" class="session-expand">
+              <div v-if="expandedSessionId === s.sessionId" class="session-expand">
                 <div class="detail-grid">
-                  <div class="detail-item"><span class="label">{{ $t('session.id') }}</span><span class="value">{{ s.id }}</span></div>
+                  <div class="detail-item"><span class="label">{{ $t('session.id') }}</span><span class="value">{{ s.sessionId }}</span></div>
                   <div class="detail-item"><span class="label">{{ $t('projectDetail.sessionType') }}</span><span class="value">{{ s.type }}</span></div>
                   <div class="detail-item"><span class="label">{{ $t('projectDetail.sessionStatus') }}</span><span class="value">{{ $t(`session.status.${s.status}`) }}</span></div>
                   <div class="detail-item"><span class="label">{{ $t('session.project') }}</span><span class="value">{{ s.projectPath }}</span></div>
@@ -99,7 +113,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section v-if="showPromptPanel" class="panel">
         <div class="panel-header" @click="promptsOpen = !promptsOpen">
           <span class="panel-title">{{ $t('projectDetail.prompts') }}</span>
           <span class="panel-toggle" :class="{ open: promptsOpen }">&gt;</span>
@@ -126,7 +140,7 @@
               :class="{ modified: promptModified }"
               rows="12"
               spellcheck="false"
-              :readonly="promptLoading"
+              :readonly="promptLoading || !canWritePrompt"
             />
             <div v-if="promptLoading" class="prompt-loading-overlay">{{ $t('config.loading') }}</div>
           </div>
@@ -139,7 +153,7 @@
           <div class="actions">
             <button
               class="btn btn-primary btn-sm"
-              :disabled="!promptModified || promptSaving"
+              :disabled="!canWritePrompt || !promptModified || promptSaving"
               @click="savePromptContent"
             >
               {{ $t('config.save') }}
@@ -153,7 +167,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section v-if="showSkillsPanel" class="panel">
         <div class="panel-header" @click="skillsOpen = !skillsOpen">
           <span class="panel-title">{{ $t('projectDetail.skills') }} ({{ projectSkills.length }})</span>
           <span class="panel-toggle" :class="{ open: skillsOpen }">&gt;</span>
@@ -184,6 +198,19 @@
         </div>
       </section>
     </template>
+
+    <CreateSessionDialog
+      :visible="showCreateSessionDialog"
+      :target-instance-id="project?.instanceId || LOCAL_INSTANCE_ID"
+      :target-project-id="project?.projectId"
+      :target-project-path="project?.path || ''"
+      :default-project-path="project?.path || ''"
+      :lock-project-path="true"
+      :start-paused="true"
+      :activate-on-create="false"
+      @cancel="closeCreateSessionDialog"
+      @created="handleCreateSessionCreated"
+    />
   </div>
 </template>
 
@@ -192,40 +219,34 @@ import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useProjectsStore } from '@/stores/projects'
+import { useInstancesStore } from '@/stores/instances'
+import { useSessionsStore } from '@/stores/sessions'
 import { useToast } from '@/composables/useToast'
-import {
-  getProject,
-  detectProject,
-  getProjectSessions,
-  readProjectPrompt,
-  writeProjectPrompt,
-  type ProjectPromptCliType
-} from '@/api/project'
-import {
-  startSession as startSessionApi,
-  pauseSession as pauseSessionApi,
-  restartSession as restartSessionApi,
-  destroySession as destroySessionApi,
-  type Session
-} from '@/api/session'
+import CreateSessionDialog from '@/components/CreateSessionDialog.vue'
 import {
   listProjectSkills,
   deleteProjectSkill,
   openSkillPath,
   type Skill
 } from '@/api/skill'
+import { LOCAL_INSTANCE_ID, type ProjectRef, type UnifiedProject, type UnifiedSession } from '@/models/unified-resource'
+import type { ProjectPromptCliType } from '@/api/local-project'
+import { resolveProjectRouteRef } from '@/utils/project-routing'
 
 const route = useRoute()
 const router = useRouter()
 const projectsStore = useProjectsStore()
+const instancesStore = useInstancesStore()
+const sessionsStore = useSessionsStore()
 const { t } = useI18n()
 const toast = useToast()
 
-const project = ref<Awaited<ReturnType<typeof getProject>>>(null)
+const project = ref<UnifiedProject | null>(null)
 const detectResult = ref<{ claude: boolean; codex: boolean; opencode: boolean } | null>(null)
-const projectSessions = ref<Session[]>([])
+const projectSessions = ref<UnifiedSession[]>([])
 const editName = ref('')
 const sessionsOpen = ref(true)
+const showCreateSessionDialog = ref(false)
 const promptsOpen = ref(true)
 const expandedSessionId = ref<string | null>(null)
 
@@ -244,9 +265,25 @@ const promptMessageType = ref<'success' | 'error'>('success')
 const promptModified = computed(() => promptEditText.value !== promptSourceText.value)
 let promptLoadToken = 0
 
+const projectRef = computed<ProjectRef | null>(() => resolveProjectRouteRef(route))
+const projectCapabilities = computed(() => {
+  if (!project.value) return null
+  return instancesStore.getInstance(project.value.instanceId)?.capabilities ?? null
+})
+const canCreateSessions = computed(() => !!projectCapabilities.value?.sessionCreate)
+const canEditProjectName = computed(() => !!projectCapabilities.value?.projectUpdate)
+const canStartSessions = computed(() => !!projectCapabilities.value?.sessionStart)
+const canPauseSessions = computed(() => !!projectCapabilities.value?.sessionPause)
+const canRestartSessions = computed(() => !!projectCapabilities.value?.sessionRestart)
+const canDestroySessions = computed(() => !!projectCapabilities.value?.sessionDestroy)
+const canReadPrompt = computed(() => !!projectCapabilities.value?.projectPromptRead)
+const canWritePrompt = computed(() => !!projectCapabilities.value?.projectPromptWrite)
+const showPromptPanel = computed(() => canReadPrompt.value || canWritePrompt.value)
+const showSkillsPanel = computed(() => project.value?.instanceId === LOCAL_INSTANCE_ID)
+
 type PromptTabCache = {
   loaded: boolean
-  projectId: string
+  projectKey: string
   path: string
   exists: boolean
   source: string
@@ -254,9 +291,8 @@ type PromptTabCache = {
 }
 
 const promptCache = ref<Record<ProjectPromptCliType, PromptTabCache>>({
-  claude: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' },
-  codex: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' },
-  opencode: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' }
+  claude: { loaded: false, projectKey: '', path: '', exists: false, source: '', edit: '' },
+  codex: { loaded: false, projectKey: '', path: '', exists: false, source: '', edit: '' }
 })
 
 const now = ref(Date.now())
@@ -283,7 +319,7 @@ function formatDuration(ms: number): string {
   return parts.join(' ')
 }
 
-function getTotalRuntimeMs(session: Session): number {
+function getTotalRuntimeMs(session: UnifiedSession): number {
   const base = Number.isFinite(session.totalRunMs) ? Number(session.totalRunMs) : 0
   if (session.status === 'running' && Number.isFinite(session.lastStartAt)) {
     return base + Math.max(0, now.value - Number(session.lastStartAt))
@@ -291,14 +327,14 @@ function getTotalRuntimeMs(session: Session): number {
   return base
 }
 
-function getSingleRuntimeMs(session: Session): number {
+function getSingleRuntimeMs(session: UnifiedSession): number {
   if (session.status === 'running' && Number.isFinite(session.lastStartAt)) {
     return Math.max(0, now.value - Number(session.lastStartAt))
   }
   return Number.isFinite(session.lastRunMs) ? Number(session.lastRunMs) : 0
 }
 
-function codexPermissionModeLabel(session: Session): string {
+function codexPermissionModeLabel(session: UnifiedSession): string {
   if (session.type !== 'codex') return '-'
 
   const options = session.options || {}
@@ -321,17 +357,31 @@ function toggleSessionExpand(id: string) {
   expandedSessionId.value = expandedSessionId.value === id ? null : id
 }
 
+function openCreateSessionDialog() {
+  showCreateSessionDialog.value = true
+}
+
+function closeCreateSessionDialog() {
+  showCreateSessionDialog.value = false
+}
+
 async function reloadProjectSessions() {
-  if (!project.value) return
-  projectSessions.value = await getProjectSessions(project.value.id)
-  if (expandedSessionId.value && !projectSessions.value.some((item) => item.id === expandedSessionId.value)) {
+  if (!projectRef.value) return
+  projectSessions.value = await projectsStore.listProjectSessionsForRef(projectRef.value)
+  if (expandedSessionId.value && !projectSessions.value.some((item) => item.sessionId === expandedSessionId.value)) {
     expandedSessionId.value = null
   }
 }
 
 async function startSessionFromProject(id: string) {
   try {
-    await startSessionApi(id)
+    const target = projectSessions.value.find((session) => session.sessionId === id)
+    if (!target) throw new Error('Session not found')
+    await sessionsStore.startSessionRef({
+      instanceId: target.instanceId,
+      sessionId: target.sessionId,
+      globalSessionKey: target.globalSessionKey
+    })
     await reloadProjectSessions()
     toast.success(t('toast.sessionStarted'))
   } catch (e: unknown) {
@@ -341,7 +391,13 @@ async function startSessionFromProject(id: string) {
 
 async function pauseSessionFromProject(id: string) {
   try {
-    await pauseSessionApi(id)
+    const target = projectSessions.value.find((session) => session.sessionId === id)
+    if (!target) throw new Error('Session not found')
+    await sessionsStore.pauseSessionRef({
+      instanceId: target.instanceId,
+      sessionId: target.sessionId,
+      globalSessionKey: target.globalSessionKey
+    })
     await reloadProjectSessions()
     toast.success(t('toast.sessionPaused'))
   } catch (e: unknown) {
@@ -351,7 +407,13 @@ async function pauseSessionFromProject(id: string) {
 
 async function restartSessionFromProject(id: string) {
   try {
-    await restartSessionApi(id)
+    const target = projectSessions.value.find((session) => session.sessionId === id)
+    if (!target) throw new Error('Session not found')
+    await sessionsStore.restartSessionRef({
+      instanceId: target.instanceId,
+      sessionId: target.sessionId,
+      globalSessionKey: target.globalSessionKey
+    })
     await reloadProjectSessions()
     toast.success(t('toast.sessionRestarted'))
   } catch (e: unknown) {
@@ -362,8 +424,13 @@ async function restartSessionFromProject(id: string) {
 async function destroySessionFromProject(id: string) {
   if (!confirm(t('session.confirmDestroy'))) return
   try {
-    const ok = await destroySessionApi(id)
-    if (!ok) throw new Error('Failed to destroy session')
+    const target = projectSessions.value.find((session) => session.sessionId === id)
+    if (!target) throw new Error('Session not found')
+    await sessionsStore.destroySessionRef({
+      instanceId: target.instanceId,
+      sessionId: target.sessionId,
+      globalSessionKey: target.globalSessionKey
+    })
     await reloadProjectSessions()
     toast.success(t('toast.sessionDestroyed'))
   } catch (e: unknown) {
@@ -371,15 +438,19 @@ async function destroySessionFromProject(id: string) {
   }
 }
 
-function openSession(sessionId: string) {
-  void router.push({ path: '/sessions', query: { sessionId } })
+function openSession(session: UnifiedSession) {
+  void router.push({ path: '/sessions', query: { globalSessionKey: session.globalSessionKey } })
+}
+
+async function handleCreateSessionCreated() {
+  closeCreateSessionDialog()
+  await reloadProjectSessions()
 }
 
 function resetPromptCache() {
   promptCache.value = {
-    claude: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' },
-    codex: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' },
-    opencode: { loaded: false, projectId: '', path: '', exists: false, source: '', edit: '' }
+    claude: { loaded: false, projectKey: '', path: '', exists: false, source: '', edit: '' },
+    codex: { loaded: false, projectKey: '', path: '', exists: false, source: '', edit: '' }
   }
 }
 
@@ -387,7 +458,7 @@ function cacheCurrentPromptState(tab: ProjectPromptCliType) {
   if (!project.value) return
   promptCache.value[tab] = {
     loaded: true,
-    projectId: project.value.id,
+    projectKey: project.value.globalProjectKey,
     path: promptFilePath.value,
     exists: promptExists.value,
     source: promptSourceText.value,
@@ -398,7 +469,7 @@ function cacheCurrentPromptState(tab: ProjectPromptCliType) {
 function applyPromptCache(tab: ProjectPromptCliType): boolean {
   if (!project.value) return false
   const cached = promptCache.value[tab]
-  if (!cached.loaded || cached.projectId !== project.value.id) return false
+  if (!cached.loaded || cached.projectKey !== project.value.globalProjectKey) return false
   promptFilePath.value = cached.path
   promptExists.value = cached.exists
   promptSourceText.value = cached.source
@@ -407,13 +478,13 @@ function applyPromptCache(tab: ProjectPromptCliType): boolean {
 }
 
 async function loadPromptContent(force = false) {
-  if (!project.value) return
+  if (!project.value || !projectRef.value || !showPromptPanel.value) return
   if (!force && applyPromptCache(promptTab.value)) return
   const token = ++promptLoadToken
   promptLoading.value = true
   promptMessage.value = ''
   try {
-    const promptFile = await readProjectPrompt(project.value.id, promptTab.value)
+    const promptFile = await projectsStore.readProjectPromptForRef(projectRef.value, promptTab.value)
     if (token !== promptLoadToken) return
     if (!promptFile) {
       promptMessage.value = t('config.saveError') + ': Project not found'
@@ -435,11 +506,11 @@ async function loadPromptContent(force = false) {
 }
 
 async function savePromptContent() {
-  if (!project.value) return
+  if (!project.value || !projectRef.value || !canWritePrompt.value) return
   promptSaving.value = true
   promptMessage.value = ''
   try {
-    const saved = await writeProjectPrompt(project.value.id, promptTab.value, promptEditText.value)
+    const saved = await projectsStore.writeProjectPromptForRef(projectRef.value, promptTab.value, promptEditText.value)
     if (!saved) throw new Error('Project not found')
 
     promptFilePath.value = saved.path
@@ -464,14 +535,17 @@ async function reloadPromptContent() {
 }
 
 async function loadProjectSkills() {
-  if (!project.value) return
-  projectSkills.value = await listProjectSkills(project.value.id)
+  if (!project.value || project.value.instanceId !== LOCAL_INSTANCE_ID) {
+    projectSkills.value = []
+    return
+  }
+  projectSkills.value = await listProjectSkills(project.value.projectId)
 }
 
 async function handleDeleteProjectSkill(skill: Skill) {
-  if (!project.value || !confirm(t('skill.confirmDelete'))) return
+  if (!project.value || project.value.instanceId !== LOCAL_INSTANCE_ID || !confirm(t('skill.confirmDelete'))) return
   try {
-    await deleteProjectSkill(project.value.id, skill.id)
+    await deleteProjectSkill(project.value.projectId, skill.id)
     await loadProjectSkills()
     toast.success(t('projectDetail.skillDeleted'))
   } catch (e: unknown) {
@@ -484,32 +558,90 @@ async function handleOpenSkillPath(filePath: string) {
 }
 
 async function saveName() {
-  if (!project.value || editName.value === project.value.name) return
+  if (!project.value || !projectRef.value || !canEditProjectName.value) return
+  const nextName = editName.value.trim()
+  if (!nextName) {
+    editName.value = project.value.name
+    return
+  }
+  if (nextName === project.value.name) return
   try {
-    const updated = await projectsStore.updateProject(project.value.id, { name: editName.value })
+    const updated = await projectsStore.updateProjectRef(projectRef.value, { name: nextName })
+    if (!updated) {
+      throw new Error('Project not found')
+    }
     project.value = updated
-  } catch {
-    // handled by global error boundary
+    editName.value = updated.name
+    toast.success(t('toast.projectUpdated'))
+  } catch (e: unknown) {
+    editName.value = project.value.name
+    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
   }
 }
 
 async function loadProject() {
-  const id = route.params.id as string
+  const currentProjectRef = projectRef.value
+  if (!currentProjectRef) {
+    router.replace('/projects')
+    return
+  }
   try {
-    const p = await getProject(id)
+    const initialProject = await projectsStore.getProjectByRef(currentProjectRef)
+    if (!initialProject) {
+      router.replace('/projects')
+      return
+    }
+
+    const shouldOpenProject = !!instancesStore.getInstance(initialProject.instanceId)?.capabilities?.projectOpen
+    const p = shouldOpenProject
+      ? (await projectsStore.openProjectRef(currentProjectRef).catch(() => initialProject)) ?? initialProject
+      : initialProject
+
+    if (!shouldOpenProject) {
+      projectsStore.setActiveProjectRef(currentProjectRef)
+    }
+
     if (!p) {
       router.replace('/projects')
       return
     }
     project.value = p
+    projectsStore.setActiveProjectRef(currentProjectRef)
     editName.value = p.name
     expandedSessionId.value = null
     resetPromptCache()
 
-    detectResult.value = await detectProject(p.path)
-    await reloadProjectSessions()
-    await loadPromptContent()
-    await loadProjectSkills()
+    if (projectCapabilities.value?.projectDetect) {
+      try {
+        detectResult.value = await projectsStore.detectProjectForRef(currentProjectRef)
+      } catch {
+        detectResult.value = null
+      }
+    } else {
+      detectResult.value = null
+    }
+
+    try {
+      await reloadProjectSessions()
+    } catch {
+      projectSessions.value = []
+      expandedSessionId.value = null
+    }
+
+    if (showPromptPanel.value) {
+      await loadPromptContent()
+    } else {
+      promptFilePath.value = ''
+      promptExists.value = false
+      promptSourceText.value = ''
+      promptEditText.value = ''
+      promptMessage.value = ''
+    }
+    try {
+      await loadProjectSkills()
+    } catch {
+      projectSkills.value = []
+    }
   } catch {
     router.replace('/projects')
   }
@@ -526,7 +658,7 @@ onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
 
-watch(() => route.params.id, () => {
+watch(() => [route.name, route.params.id, route.params.instanceId, route.params.projectId], () => {
   void loadProject()
 })
 
@@ -642,6 +774,12 @@ watch(promptTab, (_next, prev) => {
 
 .panel-title { font-weight: 600; font-size: var(--font-size-md); }
 
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
 .panel-toggle {
   color: var(--text-muted);
   transition: transform var(--transition-fast);
@@ -649,6 +787,12 @@ watch(promptTab, (_next, prev) => {
 }
 
 .panel-body { padding: 0 var(--spacing-lg) var(--spacing-lg); }
+
+.session-create-hint {
+  margin: var(--spacing-sm) 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
 
 .empty-hint {
   color: var(--text-muted);
@@ -935,3 +1079,4 @@ watch(promptTab, (_next, prev) => {
   margin-top: var(--spacing-xs);
 }
 </style>
+

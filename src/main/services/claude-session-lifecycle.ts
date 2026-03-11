@@ -8,15 +8,14 @@ import type { ClaudeSessionOptions } from './types'
 const CLAUDE_INVALID_SESSION_PATTERN = /No conversation found(?: with session ID)?/i
 
 export class ClaudeSessionLifecycle implements ISessionLifecycle {
-  private persistFn: (() => void) | null = null
-
   constructor(
     private claudeAdapter: ClaudeAdapter,
     private outputManager: SessionOutputManager
   ) {}
 
-  setPersistCallback(fn: () => void): void {
-    this.persistFn = fn
+  setPersistCallback(_fn: () => void): void {
+    // Claude lifecycle当前不需要在输出阶段主动触发持久化，
+    // 但 SessionManager 会统一注入该回调，保留此方法以兼容调用方。
   }
 
   create(id: string, name: string, params: CreateSessionParams): ClaudeSession {

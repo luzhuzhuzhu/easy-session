@@ -1,6 +1,8 @@
 import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { exec } from 'child_process'
+import dotenv from 'dotenv'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { CliManager } from './services/cli-manager'
 import { ClaudeAdapter } from './services/claude-adapter'
@@ -15,9 +17,29 @@ import { ProjectManager } from './services/project-manager'
 import { SkillManager } from './services/skill-manager'
 import { DataStore } from './services/data-store'
 import { registerAllHandlers } from './ipc'
+import { registerRemoteInstanceHandlers } from './ipc/remote-instance-handlers'
+import { registerRemoteServiceHandlers } from './ipc/remote-service-handlers'
+import { registerCloudflareTunnelHandlers } from './ipc/cloudflare-tunnel-handlers'
+import { registerRemoteNetworkHandlers } from './ipc/remote-network-handlers'
+import { registerRemoteGatewayHandlers } from './ipc/remote-gateway-handlers'
 import { WorkspaceLayoutManager } from './services/workspace-layout-manager'
+import { RemoteInstanceManager } from './services/remote-instance-manager'
+import { RemoteServiceManager } from './services/remote-service-manager'
+import { CloudflareTunnelManager } from './services/cloudflare-tunnel-manager'
+import { RemoteNetworkSettingsManager } from './services/remote-network-settings-manager'
+import { RemoteGatewayManager } from './services/remote-gateway-manager'
 
 import { SessionOutputManager } from './services/session-output'
+
+function loadEnvironmentFiles(): void {
+  const candidates = [join(process.cwd(), '.env.local'), join(process.cwd(), '.env')]
+  for (const filePath of candidates) {
+    if (!existsSync(filePath)) continue
+    dotenv.config({ path: filePath, override: false })
+  }
+}
+
+loadEnvironmentFiles()
 
 const cliManager = new CliManager()
 const claudeAdapter = new ClaudeAdapter(cliManager)
@@ -38,6 +60,11 @@ const sessionManager = new SessionManager(
 const projectManager = new ProjectManager()
 const skillManager = new SkillManager(sessionManager)
 const workspaceLayoutManager = new WorkspaceLayoutManager()
+let remoteInstanceManager: RemoteInstanceManager | null = null
+let remoteServiceManager: RemoteServiceManager | null = null
+let cloudflareTunnelManager: CloudflareTunnelManager | null = null
+let remoteNetworkSettingsManager: RemoteNetworkSettingsManager | null = null
+let remoteGatewayManager: RemoteGatewayManager | null = null
 
 const SHUTDOWN_FLUSH_WARN_MS = 12_000
 const SHUTDOWN_START_CHANNEL = 'app:shutdown-start'
@@ -68,7 +95,11 @@ async function flushAllStoresOnShutdown(): Promise<void> {
   const values = await Promise.allSettled([
     sessionManager.flush(),
     projectManager.flush(),
-    workspaceLayoutManager.flush()
+    workspaceLayoutManager.flush(),
+    remoteInstanceManager?.flush() ?? Promise.resolve(),
+    remoteServiceManager?.flush() ?? Promise.resolve(),
+    cloudflareTunnelManager?.flush() ?? Promise.resolve(),
+    remoteNetworkSettingsManager?.flush() ?? Promise.resolve()
   ]).finally(() => {
     clearTimeout(warnTimer)
   })
@@ -102,6 +133,36 @@ async function shutdownApp(): Promise<void> {
 
   notifyShutdownStarted()
   await delay(80)
+
+  if (cloudflareTunnelManager) {
+    try {
+      await cloudflareTunnelManager.stop()
+    } catch (err) {
+      console.warn('[cloudflare-tunnel] stop failed:', err)
+    } finally {
+      cloudflareTunnelManager = null
+    }
+  }
+
+  if (remoteServiceManager) {
+    try {
+      await remoteServiceManager.stop()
+    } catch (err) {
+      console.warn('[remote] stop failed:', err)
+    } finally {
+      remoteServiceManager = null
+    }
+  }
+
+  if (remoteGatewayManager) {
+    try {
+      remoteGatewayManager.dispose()
+    } catch (err) {
+      console.warn('[remote-gateway] dispose failed:', err)
+    } finally {
+      remoteGatewayManager = null
+    }
+  }
 
   sessionManager.shutdownAll()
   cliManager.killAll()
@@ -249,11 +310,32 @@ app.whenReady().then(async () => {
   try {
     const userData = app.getPath('userData')
     sessionManager.setStore(new DataStore(join(userData, 'sessions.json')))
+    remoteInstanceManager = new RemoteInstanceManager(userData)
+    remoteNetworkSettingsManager = new RemoteNetworkSettingsManager(userData)
+    remoteGatewayManager = new RemoteGatewayManager(remoteInstanceManager)
+    cliManager.setRemoteNetworkSettingsManager(remoteNetworkSettingsManager)
+    remoteServiceManager = new RemoteServiceManager(
+      {
+        sessionManager,
+        projectManager,
+        outputManager
+      },
+      userData
+    )
+    cloudflareTunnelManager = new CloudflareTunnelManager(
+      userData,
+      remoteServiceManager,
+      remoteNetworkSettingsManager
+    )
 
-    const [projectResult, sessionResult, workspaceResult] = await Promise.allSettled([
+    const [projectResult, sessionResult, workspaceResult, remoteInstanceResult, remoteNetworkSettingsResult, remoteServiceResult, cloudflareTunnelResult] = await Promise.allSettled([
       projectManager.init(),
       sessionManager.loadSessions(),
-      workspaceLayoutManager.init()
+      workspaceLayoutManager.init(),
+      remoteInstanceManager.init(),
+      remoteNetworkSettingsManager.init(),
+      remoteServiceManager.init(),
+      cloudflareTunnelManager.init()
     ])
 
     if (projectResult.status === 'rejected') {
@@ -265,6 +347,24 @@ app.whenReady().then(async () => {
     if (workspaceResult.status === 'rejected') {
       console.error('[init] workspace layout init failed:', workspaceResult.reason)
     }
+    if (remoteInstanceResult.status === 'rejected') {
+      console.error('[init] remote instance init failed:', remoteInstanceResult.reason)
+    }
+    if (remoteNetworkSettingsResult.status === 'rejected') {
+      console.error('[init] remote network settings init failed:', remoteNetworkSettingsResult.reason)
+    }
+    if (remoteServiceResult.status === 'rejected') {
+      console.error('[init] remote service init failed:', remoteServiceResult.reason)
+    }
+    if (cloudflareTunnelResult.status === 'rejected') {
+      console.error('[init] cloudflare tunnel init failed:', cloudflareTunnelResult.reason)
+    }
+
+    registerRemoteInstanceHandlers(remoteInstanceManager)
+    registerRemoteServiceHandlers(remoteServiceManager)
+    registerCloudflareTunnelHandlers(cloudflareTunnelManager)
+    registerRemoteNetworkHandlers(remoteNetworkSettingsManager)
+    registerRemoteGatewayHandlers(remoteGatewayManager)
 
     electronApp.setAppUserModelId('com.easysession')
 
@@ -273,7 +373,6 @@ app.whenReady().then(async () => {
     })
 
     createWindow()
-
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow()

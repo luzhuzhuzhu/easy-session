@@ -44,7 +44,7 @@
     <div class="cards">
       <div class="card stat-card">
         <h3>{{ $t('dashboard.activeProjects') }}</h3>
-        <span class="stat">{{ projectsStore.projects.length }}</span>
+        <span class="stat">{{ quickAccessProjectCount }}</span>
       </div>
       <div class="card stat-card">
         <h3>{{ $t('dashboard.activeSessions') }}</h3>
@@ -52,17 +52,20 @@
       </div>
     </div>
 
-    <div v-if="projectsStore.recentProjects.length" class="recent-projects">
-      <h3>{{ $t('dashboard.recentProjects') }}</h3>
-      <div class="recent-list">
-        <div
-          v-for="p in projectsStore.recentProjects.slice(0, 5)"
-          :key="p.id"
-          class="recent-item"
-          @click="$router.push(`/projects/${p.id}`)"
-        >
-          <span class="recent-name">{{ p.name }}</span>
-          <span class="recent-path">{{ p.path }}</span>
+      <div v-if="quickAccessRecentProjects.length" class="recent-projects">
+        <h3>{{ $t('dashboard.recentProjects') }}</h3>
+        <p v-if="projectsStore.unavailableRemoteProjectCount > 0" class="recent-note">
+          {{ $t('dashboard.remoteUnavailableHint') }}
+        </p>
+        <div class="recent-list">
+          <div
+            v-for="p in quickAccessRecentProjects"
+            :key="p.globalProjectKey"
+            class="recent-item"
+            @click="$router.push(buildProjectRouteLocation(p))"
+          >
+            <span class="recent-name">{{ p.name }}</span>
+            <span class="recent-path">{{ p.path }}</span>
         </div>
       </div>
     </div>
@@ -90,13 +93,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useProjectsStore } from '@/stores/projects'
 import { useSessionsStore } from '@/stores/sessions'
-import { selectFolder } from '@/api/project'
+import { useInstancesStore } from '@/stores/instances'
+import { selectFolder } from '@/api/local-project'
 import ConfigEditorPanel from '@/components/ConfigEditorPanel.vue'
+import { buildProjectRouteLocation } from '@/utils/project-routing'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -104,12 +109,15 @@ const router = useRouter()
 const appStore = useAppStore()
 const projectsStore = useProjectsStore()
 const sessionsStore = useSessionsStore()
+const instancesStore = useInstancesStore()
 const checking = ref(true)
 const configPanelOpen = ref(false)
 
 const runningSessions = computed(() =>
-  sessionsStore.sessions.filter((s) => s.status === 'running').length
+  sessionsStore.unifiedSessions.filter((session) => session.status === 'running').length
 )
+const quickAccessProjectCount = computed(() => projectsStore.quickAccessProjectCount)
+const quickAccessRecentProjects = computed(() => projectsStore.quickAccessRecentProjects)
 
 function statusClass(available: boolean, isChecking: boolean) {
   if (isChecking) return 'checking'
@@ -131,7 +139,7 @@ function syncPanelFromQuery(): void {
 }
 
 function replacePanelQuery(open: boolean): void {
-  const nextQuery = { ...route.query } as Record<string, unknown>
+  const nextQuery: LocationQueryRaw = { ...route.query }
   if (open) {
     nextQuery.panel = 'advanced'
   } else {
@@ -155,7 +163,11 @@ async function handleNewProject() {
     const folder = await selectFolder()
     if (folder) {
       const project = await projectsStore.addProject(folder)
-      router.push(`/projects/${project.id}`)
+      router.push(buildProjectRouteLocation({
+        instanceId: 'local',
+        projectId: project.id,
+        globalProjectKey: `local:${project.id}`
+      }))
     }
   } catch (e: unknown) {
     // Will be caught by global error handler
@@ -165,10 +177,11 @@ async function handleNewProject() {
 onMounted(async () => {
   syncPanelFromQuery()
   await appStore.init()
+  await instancesStore.fetchInstances()
   await Promise.all([
     appStore.checkCliStatus(),
-    projectsStore.fetchProjects(),
-    sessionsStore.fetchSessions()
+    projectsStore.fetchAllProjects(),
+    sessionsStore.fetchAllSessions()
   ])
   checking.value = false
 })
@@ -298,6 +311,12 @@ watch(
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
+}
+
+.recent-note {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
 }
 
 .recent-item {

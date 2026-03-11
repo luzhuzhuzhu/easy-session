@@ -21,7 +21,7 @@ vi.mock('fs/promises', async (importOriginal) => {
 vi.mock('../src/main/services/project-store', () => ({
   ProjectStore: class MockProjectStore {
     async load() {
-      return { projects: mocks.storeState.projects, restoredFromBackup: false }
+      return { projects: mocks.storeState.projects, restoredFromBackup: false, normalized: false }
     }
 
     async save(projects: any[]) {

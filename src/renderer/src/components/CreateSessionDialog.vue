@@ -50,7 +50,7 @@
           <div class="path-input">
             <input v-model="form.projectPath" type="text" class="form-input" readonly />
             <button
-              v-if="!props.lockProjectPath"
+              v-if="canBrowseProjectPath"
               type="button"
               class="btn btn-sm"
               @click="selectFolder"
@@ -131,21 +131,37 @@ import { useSessionsStore } from '@/stores/sessions'
 import { useSettingsStore } from '@/stores/settings'
 import { useToast } from '@/composables/useToast'
 import { ipc } from '@/api/ipc'
+import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
 
 const props = withDefaults(defineProps<{
   visible: boolean
   defaultProjectPath?: string
+  targetInstanceId?: string
+  targetProjectId?: string
+  targetProjectPath?: string
   lockProjectPath?: boolean
   startPaused?: boolean
   activateOnCreate?: boolean
 }>(), {
   defaultProjectPath: '',
+  targetInstanceId: LOCAL_INSTANCE_ID,
+  targetProjectId: undefined,
+  targetProjectPath: '',
   lockProjectPath: false,
   startPaused: false,
   activateOnCreate: true
 })
 
-const emit = defineEmits<{ (e: 'cancel'): void; (e: 'created', sessionId?: string): void }>()
+interface CreateSessionDialogCreatedPayload {
+  instanceId: string
+  sessionId: string
+  globalSessionKey: string
+}
+
+const emit = defineEmits<{
+  (e: 'cancel'): void
+  (e: 'created', payload?: CreateSessionDialogCreatedPayload): void
+}>()
 
 const { t } = useI18n()
 const sessionsStore = useSessionsStore()
@@ -178,16 +194,25 @@ const emojiList = [
 ]
 
 const defaultName = computed(() => {
-  const count = sessionsStore.sessions.filter((s) => s.type === form.value.type).length + 1
+  const count = sessionsStore.unifiedSessions.filter((s) => s.type === form.value.type).length + 1
   const typeDisplayName = form.value.type === 'claude' ? 'Claude' : form.value.type === 'codex' ? 'Codex' : 'OpenCode'
   return `${typeDisplayName}-${String(count).padStart(3, '0')}`
+})
+
+const canBrowseProjectPath = computed(() => {
+  return !props.lockProjectPath && (props.targetInstanceId || LOCAL_INSTANCE_ID) === LOCAL_INSTANCE_ID
 })
 
 watch(
   () => props.visible,
   (visible) => {
     if (!visible) return
-    form.value = { name: '', icon: '', type: 'claude', projectPath: props.defaultProjectPath || '' }
+    form.value = {
+      name: '',
+      icon: '',
+      type: 'claude',
+      projectPath: props.targetProjectPath || props.defaultProjectPath || ''
+    }
     showEmojiPicker.value = false
     codexOptions.value = { permissionsMode: 'default' }
     opencodeOptions.value = {
@@ -205,6 +230,7 @@ watch(
 )
 
 async function selectFolder() {
+  if (!canBrowseProjectPath.value) return
   try {
     const result = await ipc.invoke<string | null>('dialog:selectFolder')
     if (!result) return
@@ -216,7 +242,15 @@ async function selectFolder() {
 }
 
 async function handleSubmit() {
-  if (!form.value.projectPath) {
+  const instanceId = props.targetInstanceId || LOCAL_INSTANCE_ID
+  const resolvedProjectPath = form.value.projectPath || props.targetProjectPath || ''
+
+  if (instanceId === LOCAL_INSTANCE_ID && !resolvedProjectPath) {
+    pathError.value = t('session.dialog.pathRequired')
+    return
+  }
+
+  if (instanceId !== LOCAL_INSTANCE_ID && !props.targetProjectId && !resolvedProjectPath) {
     pathError.value = t('session.dialog.pathRequired')
     return
   }
@@ -247,17 +281,26 @@ async function handleSubmit() {
     if (form.value.type === 'opencode' && opencodeOptions.value.sessionId && opencodeOptions.value.continueLast) {
       toast.warning(t('session.dialog.opencodeConflictHint'))
     }
-    const session = await sessionsStore.createSession({
-      name: form.value.name || defaultName.value,
-      icon: form.value.icon || undefined,
-      type: form.value.type,
-      projectPath: form.value.projectPath,
-      options: options && Object.keys(options).length > 0 ? options : undefined,
-      startPaused: props.startPaused
-    }, { activate: props.activateOnCreate })
+    const session = await sessionsStore.createSessionForInstance(
+      instanceId,
+      {
+        name: form.value.name || defaultName.value,
+        icon: form.value.icon || undefined,
+        type: form.value.type,
+        projectId: props.targetProjectId || undefined,
+        projectPath: resolvedProjectPath || undefined,
+        options: options && Object.keys(options).length > 0 ? options : undefined,
+        startPaused: props.startPaused
+      },
+      { activate: props.activateOnCreate }
+    )
 
     toast.success(t('toast.sessionCreated'))
-    emit('created', session.id)
+    emit('created', {
+      instanceId: session.instanceId,
+      sessionId: session.sessionId,
+      globalSessionKey: session.globalSessionKey
+    })
   } catch (e: unknown) {
     toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
   }

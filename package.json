@@ -1,14 +1,16 @@
 {
   "name": "easysession",
-  "version": "0.1.7-beta",
+  "version": "0.2.6",
   "description": "EasySession: 原生终端，统一管理",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:remote:tunnel": "cloudflared tunnel --url http://127.0.0.1:18765",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "build:win": "electron-vite build && electron-builder --win",
     "build:dir": "electron-vite build && electron-builder --win --dir",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npx playwright test --config=playwright.config.ts"
@@ -20,12 +22,21 @@
     "@electron-toolkit/utils": "^3.0.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
     "node-pty": "^1.1.0",
     "pinia": "^2.3.1",
+    "pino": "^9.9.4",
+    "pino-http": "^10.5.0",
     "skills": "^1.4.3",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.3",
     "vue": "^3.5.28",
     "vue-i18n": "^9.14.4",
-    "vue-router": "^4.6.4"
+    "vue-router": "^4.6.4",
+    "zod": "^4.1.11"
   },
   "build": {
     "appId": "com.easysession.app",
@@ -50,6 +61,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.4",
     "@types/node": "^22.19.11",
     "@vitejs/plugin-vue": "^5.2.4",
     "electron": "^33.4.11",

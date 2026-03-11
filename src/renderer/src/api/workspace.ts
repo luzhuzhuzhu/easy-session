@@ -4,7 +4,10 @@ export type WorkspaceSplitDirection = 'horizontal' | 'vertical'
 
 export interface WorkspaceTabState {
   id: string
+  resourceType: 'session'
+  instanceId: string
   sessionId: string
+  globalSessionKey: string
   pinned: boolean
   createdAt: number
 }
@@ -27,7 +30,7 @@ export interface WorkspaceSplitNode {
 export type WorkspaceLayoutNode = WorkspaceLeafNode | WorkspaceSplitNode
 
 export interface WorkspaceLayoutState {
-  version: 1
+  version: 2
   root: WorkspaceLayoutNode
   tabs: Record<string, WorkspaceTabState>
   activePaneId: string

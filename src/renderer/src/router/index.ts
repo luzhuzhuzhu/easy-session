@@ -8,6 +8,11 @@ const router = createRouter({
     { path: '/config', redirect: { path: '/dashboard', query: { panel: 'advanced' } } },
     { path: '/sessions', name: 'sessions', component: () => import('@/views/SessionsView.vue') },
     { path: '/projects', name: 'projects', component: () => import('@/views/ProjectsView.vue') },
+    {
+      path: '/instances/:instanceId/projects/:projectId',
+      name: 'instanceProjectDetail',
+      component: () => import('@/views/ProjectDetailView.vue')
+    },
     { path: '/projects/:id', name: 'projectDetail', component: () => import('@/views/ProjectDetailView.vue') },
     { path: '/skills', name: 'skills', component: () => import('@/views/SkillsView.vue') },
     { path: '/settings', name: 'settings', component: () => import('@/views/SettingsView.vue') }

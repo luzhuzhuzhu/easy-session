@@ -5,7 +5,8 @@
         :node-path="`${nodePath}.first`"
         :node="node.first"
         :tabs-index="tabsIndex"
-        :sessions-by-id="sessionsById"
+        :resolved-tabs-index="resolvedTabsIndex"
+        :sessions-by-global-key="sessionsByGlobalKey"
         :pane-zoom-percent-by-id="paneZoomPercentById"
         :active-pane-id="activePaneId"
         :can-close-panes="canClosePanes"
@@ -32,6 +33,7 @@
         @clear-output="emit('clear-output', $event)"
         @set-pane-zoom="emit('set-pane-zoom', $event)"
         @reset-pane-zoom="emit('reset-pane-zoom', $event)"
+        @swap-pane-tabs="emit('swap-pane-tabs', $event)"
       />
     </div>
     <div class="splitter" @mousedown.prevent="startSplitResize"></div>
@@ -40,7 +42,8 @@
         :node-path="`${nodePath}.second`"
         :node="node.second"
         :tabs-index="tabsIndex"
-        :sessions-by-id="sessionsById"
+        :resolved-tabs-index="resolvedTabsIndex"
+        :sessions-by-global-key="sessionsByGlobalKey"
         :pane-zoom-percent-by-id="paneZoomPercentById"
         :active-pane-id="activePaneId"
         :can-close-panes="canClosePanes"
@@ -67,6 +70,7 @@
         @clear-output="emit('clear-output', $event)"
         @set-pane-zoom="emit('set-pane-zoom', $event)"
         @reset-pane-zoom="emit('reset-pane-zoom', $event)"
+        @swap-pane-tabs="emit('swap-pane-tabs', $event)"
       />
     </div>
   </div>
@@ -85,7 +89,16 @@
 
     <div class="pane-content">
       <template v-if="activeSession">
-        <div class="pane-header">
+        <div
+          class="pane-header"
+          :class="{ 'pane-header-drop': headerDropActive }"
+          draggable="true"
+          @dragstart="handleHeaderDragStart"
+          @dragover.prevent="handleHeaderDragOver"
+          @dragleave="handleHeaderDragLeave"
+          @drop="handleHeaderDrop"
+          @dragend="headerDropActive = false"
+        >
           <div class="pane-header-info">
             <span v-if="activeSession.icon" class="session-icon">{{ activeSession.icon }}</span>
             <span v-else class="type-badge" :class="activeSession.type">{{ activeSession.type === 'claude' ? 'C' : activeSession.type === 'codex' ? 'X' : 'O' }}</span>
@@ -118,28 +131,44 @@
               </div>
             </div>
             <button
-              v-if="activeSession.status !== 'running'"
+              v-if="canStartSession && activeSession.status !== 'running' && activeSessionRef"
               class="btn btn-primary btn-sm"
-              @click="emit('start-session', activeSession.id)"
+              @click="emit('start-session', activeSessionRef)"
             >
               {{ $t('session.start') }}
             </button>
-            <button v-else class="btn btn-sm" @click="emit('pause-session', activeSession.id)">
+            <button
+              v-else-if="canPauseSession && activeSessionRef"
+              class="btn btn-sm"
+              @click="emit('pause-session', activeSessionRef)"
+            >
               {{ $t('session.pause') }}
             </button>
-            <button class="btn btn-sm" @click="emit('restart-session', activeSession.id)">{{ $t('session.restart') }}</button>
-            <button class="btn btn-danger btn-sm" @click="emit('destroy-session', activeSession.id)">{{ $t('session.destroy') }}</button>
+            <button
+              v-if="canRestartSession && activeSessionRef"
+              class="btn btn-sm"
+              @click="emit('restart-session', activeSessionRef)"
+            >
+              {{ $t('session.restart') }}
+            </button>
+            <button
+              v-if="canDestroySession && activeSessionRef"
+              class="btn btn-danger btn-sm"
+              @click="emit('destroy-session', activeSessionRef)"
+            >
+              {{ $t('session.destroy') }}
+            </button>
           </div>
         </div>
 
         <TerminalOutput
-          :session-id="activeSession.id"
+          :session-ref="activeSessionRef"
           :process-key="activeSession.processId"
           :pane-id="node.paneId"
-          @clear="emit('clear-output', activeSession.id)"
+          @clear="activeSessionRef && emit('clear-output', activeSessionRef)"
         />
       </template>
-      <div v-else class="pane-empty">{{ $t('session.noActive') }}</div>
+      <div v-else class="pane-empty">{{ emptyPaneText }}</div>
     </div>
 
     <div v-if="paneMenu.visible" class="context-overlay" @click="closeMenus"></div>
@@ -161,7 +190,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Session } from '@/api/session'
 import type {
   WorkspaceLayoutNode,
   WorkspaceSplitDirection,
@@ -169,6 +197,9 @@ import type {
 } from '@/api/workspace'
 import TerminalOutput from '@/components/TerminalOutput.vue'
 import SessionRuntimeInfo from '@/components/SessionRuntimeInfo.vue'
+import { useInstancesStore } from '@/stores/instances'
+import type { SessionRef, UnifiedSession } from '@/models/unified-resource'
+import type { WorkspaceResolvedTabState } from '@/stores/workspace'
 
 defineOptions({ name: 'WorkspacePaneTree' })
 const { t } = useI18n()
@@ -177,7 +208,8 @@ const props = defineProps<{
   nodePath: string
   node: WorkspaceLayoutNode
   tabsIndex: Record<string, WorkspaceTabState>
-  sessionsById: Record<string, Session>
+  resolvedTabsIndex: Record<string, WorkspaceResolvedTabState>
+  sessionsByGlobalKey: Record<string, UnifiedSession>
   paneZoomPercentById: Record<string, number>
   activePaneId: string
   canClosePanes: boolean
@@ -197,24 +229,27 @@ const emit = defineEmits<{
   'toggle-tab-pin': [tabId: string]
   'resize-split': [payload: { path: string; ratio: number }]
   'even-split-pane': [paneId: string]
-  'open-session-drop': [payload: { sessionId: string; targetPaneId: string; direction?: WorkspaceSplitDirection }]
+  'open-session-drop': [payload: { sessionRef: SessionRef; targetPaneId: string; direction?: WorkspaceSplitDirection }]
   'undo-layout': []
   'reset-layout': []
-  'start-session': [sessionId: string]
-  'pause-session': [sessionId: string]
-  'restart-session': [sessionId: string]
-  'destroy-session': [sessionId: string]
-  'clear-output': [sessionId: string]
+  'start-session': [sessionRef: SessionRef]
+  'pause-session': [sessionRef: SessionRef]
+  'restart-session': [sessionRef: SessionRef]
+  'destroy-session': [sessionRef: SessionRef]
+  'clear-output': [sessionRef: SessionRef]
   'set-pane-zoom': [payload: { paneId: string; percent: number }]
   'reset-pane-zoom': [paneId: string]
+  'swap-pane-tabs': [payload: { fromPaneId: string; toPaneId: string }]
 }>()
 
 const edgeDropDirection = ref<WorkspaceSplitDirection | null>(null)
 const paneMenu = ref({ visible: false, x: 0, y: 0 })
 const isResizingSplit = ref(false)
+const headerDropActive = ref(false)
 const zoomMenuOpen = ref(false)
 const zoomControlRef = ref<HTMLElement | null>(null)
 const ZOOM_PRESET_PERCENTS = [80, 90, 100, 110, 125, 150] as const
+const instancesStore = useInstancesStore()
 
 const firstChildStyle = computed(() => {
   if (props.node.type !== 'split') return {}
@@ -226,13 +261,46 @@ const secondChildStyle = computed(() => {
   return { flex: `${1 - props.node.ratio} 1 0%` }
 })
 
-const activeSession = computed<Session | null>(() => {
+const activeSession = computed<UnifiedSession | null>(() => {
   if (props.node.type !== 'leaf') return null
   const tabId = props.node.activeTabId
   if (!tabId) return null
-  const sessionId = props.tabsIndex[tabId]?.sessionId
-  if (!sessionId) return null
-  return props.sessionsById[sessionId] ?? null
+  const globalSessionKey = props.tabsIndex[tabId]?.globalSessionKey
+  if (!globalSessionKey) return null
+  return props.sessionsByGlobalKey[globalSessionKey] ?? null
+})
+const activeResolvedTab = computed<WorkspaceResolvedTabState | null>(() => {
+  if (props.node.type !== 'leaf') return null
+  const tabId = props.node.activeTabId
+  if (!tabId) return null
+  return props.resolvedTabsIndex[tabId] ?? null
+})
+const activeSessionRef = computed<SessionRef | null>(() => {
+  const session = activeSession.value
+  if (!session) return null
+  return {
+    instanceId: session.instanceId,
+    sessionId: session.sessionId,
+    globalSessionKey: session.globalSessionKey
+  }
+})
+const activeInstanceCapabilities = computed(() => {
+  const session = activeSession.value
+  if (!session) return null
+  return instancesStore.getInstance(session.instanceId)?.capabilities ?? null
+})
+const canStartSession = computed(() => !!activeInstanceCapabilities.value?.sessionStart)
+const canPauseSession = computed(() => !!activeInstanceCapabilities.value?.sessionPause)
+const canRestartSession = computed(() => !!activeInstanceCapabilities.value?.sessionRestart)
+const canDestroySession = computed(() => !!activeInstanceCapabilities.value?.sessionDestroy)
+const emptyPaneText = computed(() => {
+  if (activeResolvedTab.value?.availability === 'offline') {
+    return 'Remote offline'
+  }
+  if (activeResolvedTab.value?.availability === 'missing') {
+    return 'Session missing'
+  }
+  return t('session.noActive')
 })
 const activePaneZoomPercent = computed<number>(() => {
   if (props.node.type !== 'leaf') return 100
@@ -259,6 +327,54 @@ function handleSetPaneZoom(percent: number): void {
   if (props.node.type !== 'leaf') return
   zoomMenuOpen.value = false
   emit('set-pane-zoom', { paneId: props.node.paneId, percent })
+}
+
+function readHeaderDragPaneId(e: DragEvent): string | null {
+  const raw = e.dataTransfer?.getData('application/x-easysession-pane-header')
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as { paneId?: string }
+    return typeof parsed.paneId === 'string' && parsed.paneId ? parsed.paneId : null
+  } catch {
+    return null
+  }
+}
+
+function handleHeaderDragStart(e: DragEvent): void {
+  if (props.node.type !== 'leaf') return
+  if (!e.dataTransfer) return
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData(
+    'application/x-easysession-pane-header',
+    JSON.stringify({ paneId: props.node.paneId })
+  )
+}
+
+function handleHeaderDragOver(e: DragEvent): void {
+  if (props.node.type !== 'leaf') return
+  const sourcePaneId = readHeaderDragPaneId(e)
+  if (!sourcePaneId || sourcePaneId === props.node.paneId) return
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = 'move'
+  }
+  headerDropActive.value = true
+}
+
+function handleHeaderDragLeave(e: DragEvent): void {
+  const current = e.currentTarget as HTMLElement | null
+  const related = e.relatedTarget as Node | null
+  if (current && related && current.contains(related)) return
+  headerDropActive.value = false
+}
+
+function handleHeaderDrop(e: DragEvent): void {
+  if (props.node.type !== 'leaf') return
+  e.preventDefault()
+  e.stopPropagation()
+  const sourcePaneId = readHeaderDragPaneId(e)
+  headerDropActive.value = false
+  if (!sourcePaneId || sourcePaneId === props.node.paneId) return
+  emit('swap-pane-tabs', { fromPaneId: sourcePaneId, toPaneId: props.node.paneId })
 }
 
 let detachResizeListeners: (() => void) | null = null
@@ -344,7 +460,7 @@ function startSplitResize(e: MouseEvent): void {
 
 type WorkspaceDragPayload =
   | { type: 'tab'; paneId: string; tabId: string }
-  | { type: 'session'; sessionId: string }
+  | { type: 'session'; sessionRef: SessionRef }
 
 function readWorkspaceDragPayload(e: DragEvent): WorkspaceDragPayload | null {
   const raw = e.dataTransfer?.getData('application/x-easysession-tab')
@@ -362,9 +478,20 @@ function readWorkspaceDragPayload(e: DragEvent): WorkspaceDragPayload | null {
   const sessionRaw = e.dataTransfer?.getData('application/x-easysession-session')
   if (sessionRaw) {
     try {
-      const parsed = JSON.parse(sessionRaw) as { sessionId?: string }
+      const parsed = JSON.parse(sessionRaw) as Partial<SessionRef> & { sessionId?: string }
       if (parsed.sessionId) {
-        return { type: 'session', sessionId: parsed.sessionId }
+        const instanceId = typeof parsed.instanceId === 'string' && parsed.instanceId ? parsed.instanceId : 'local'
+        return {
+          type: 'session',
+          sessionRef: {
+            instanceId,
+            sessionId: parsed.sessionId,
+            globalSessionKey:
+              typeof parsed.globalSessionKey === 'string' && parsed.globalSessionKey
+                ? parsed.globalSessionKey
+                : `${instanceId}:${parsed.sessionId}`
+          }
+        }
       }
     } catch {
       // ignore invalid payload
@@ -446,7 +573,7 @@ function handlePaneEdgeDrop(e: DragEvent): void {
       })
     } else {
       emit('open-session-drop', {
-        sessionId: payload.sessionId,
+        sessionRef: payload.sessionRef,
         targetPaneId: props.node.paneId,
         direction: edgeDropDirection.value
       })
@@ -460,7 +587,7 @@ function handlePaneEdgeDrop(e: DragEvent): void {
       })
     } else {
       emit('open-session-drop', {
-        sessionId: payload.sessionId,
+        sessionRef: payload.sessionRef,
         targetPaneId: props.node.paneId
       })
     }
@@ -701,6 +828,16 @@ watch(
   padding: 8px var(--spacing-sm);
   border-bottom: 1px solid var(--border-color);
   min-height: 44px;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &.pane-header-drop {
+    background: rgba(108, 158, 255, 0.1);
+    box-shadow: inset 0 0 0 1px rgba(108, 158, 255, 0.45);
+  }
 }
 
 .pane-header-info {

@@ -3,6 +3,15 @@
     <section v-if="isTopLayout" class="session-top-panel" :class="{ collapsed: isListCollapsed }">
       <div class="top-inline-row">
         <button class="tool-btn" :title="$t('session.create')" @click="openCreateDialog()">+</button>
+        <button
+          v-if="settingsStore.settings.desktopRemoteMountEnabled"
+          class="tool-btn"
+          :title="$t('session.refreshRemote')"
+          :disabled="refreshingRemoteData"
+          @click="handleRefreshRemoteData"
+        >
+          {{ refreshingRemoteData ? '…' : 'R' }}
+        </button>
         <select v-model="filterType" class="filter-select top-filter" :class="{ compact: isListCollapsed }">
           <option value="">{{ $t('session.filter') }}</option>
           <option value="claude">Claude</option>
@@ -25,11 +34,12 @@
             @dragend="handleTopProjectDragEnd"
           >
               <span class="top-group-label" :title="group.projectPath">{{ group.projectName }}</span>
+              <span v-if="group.instanceId !== 'local'" class="top-group-label" :title="group.instanceName">{{ group.instanceName }}</span>
               <button
                 v-for="s in group.sessions"
                 :key="s.id"
                 class="session-top-item"
-                :class="{ active: sessionsStore.activeSessionId === s.id }"
+                :class="{ active: sessionsStore.activeGlobalSessionKey === s.id }"
                 draggable="true"
                 @click="handleSessionClick(s)"
                 @dragstart="handleSessionDragStart($event, s)"
@@ -61,6 +71,15 @@
     <aside v-else class="session-list-panel" :class="{ collapsed: isListCollapsed }">
       <div v-if="!isListCollapsed" class="list-toolbar">
         <button class="btn btn-primary btn-sm" @click="openCreateDialog()">+ {{ $t('session.create') }}</button>
+        <button
+          v-if="settingsStore.settings.desktopRemoteMountEnabled"
+          class="btn btn-sm"
+          type="button"
+          :disabled="refreshingRemoteData"
+          @click="handleRefreshRemoteData"
+        >
+          {{ refreshingRemoteData ? $t('session.refreshingRemote') : $t('session.refreshRemote') }}
+        </button>
         <select v-model="filterType" class="filter-select">
           <option value="">{{ $t('session.filter') }}</option>
           <option value="claude">Claude</option>
@@ -70,6 +89,15 @@
       </div>
       <div v-else class="collapsed-toolbar">
         <button class="collapsed-create-btn" :title="$t('session.create')" @click="openCreateDialog()">+</button>
+        <button
+          v-if="settingsStore.settings.desktopRemoteMountEnabled"
+          class="collapsed-create-btn"
+          :title="$t('session.refreshRemote')"
+          :disabled="refreshingRemoteData"
+          @click="handleRefreshRemoteData"
+        >
+          {{ refreshingRemoteData ? '…' : 'R' }}
+        </button>
         <select v-model="filterType" class="collapsed-filter" :title="$t('session.filter')">
           <option value="">*</option>
           <option value="claude">C</option>
@@ -79,56 +107,126 @@
       </div>
 
       <template v-if="!isListCollapsed">
-        <div v-if="projectSessionTree.length === 0" class="empty-list">
-          {{ $t('session.noSessions') }}
-        </div>
-        <div v-else class="session-tree">
-          <div v-for="group in projectSessionTree" :key="group.key" class="tree-group" draggable="true" @dragstart="handleProjectDragStart($event, group)" @dragover.prevent="handleProjectDragOver($event)" @drop="handleProjectDrop($event, group.key)" @dragend="handleProjectDragEnd">
-            <div class="project-node" @click="toggleProjectExpand(group.key)">
-              <span class="project-caret">{{ isProjectExpanded(group.key) ? 'v' : '>' }}</span>
-              <span class="project-name">{{ group.projectName }}</span>
-              <span class="project-count">{{ group.sessions.length }}</span>
-              <div class="project-actions" @click.stop>
-                <button
-                  class="project-action-btn"
-                  :title="$t('session.create')"
-                  @click="openCreateDialog(group.projectPath, !!group.projectId)"
-                >
-                  +
-                </button>
-                <button
-                  v-if="group.projectId"
-                  class="project-action-btn"
-                  :title="$t('project.settings')"
-                  @click="openProject(group)"
-                >
-                  P
-                </button>
+        <div class="session-tree">
+          <div v-for="instanceGroup in instanceTree" :key="instanceGroup.key" class="instance-group">
+            <div
+              class="instance-node"
+              :title="formatInstanceTooltip(instanceGroup)"
+              @click="toggleInstanceExpand(instanceGroup.key)"
+            >
+              <span class="project-caret">{{ isInstanceExpanded(instanceGroup.key) ? 'v' : '>' }}</span>
+              <div class="instance-body">
+                <div class="instance-header">
+                  <div class="instance-title-row">
+                    <span class="instance-name" :title="instanceGroup.instanceName">{{ instanceGroup.instanceName }}</span>
+                    <span
+                      v-if="instanceGroup.instanceType === 'remote'"
+                      class="instance-type-badge remote"
+                    >
+                      {{ formatInstanceType(instanceGroup.instanceType) }}
+                    </span>
+                    <span
+                      v-if="instanceGroup.instanceType === 'remote'"
+                      class="instance-status-badge"
+                      :class="`status-${instanceGroup.instanceStatus}`"
+                    >
+                      {{ formatInstanceStatus(instanceGroup.instanceStatus) }}
+                    </span>
+                  </div>
+                  <div class="instance-facts">
+                    <span class="instance-count">{{ formatInstanceCounts(instanceGroup) }}</span>
+                  </div>
+                </div>
+                <div v-if="showInstanceMeta(instanceGroup)" class="instance-meta">
+                  <span
+                    v-if="instanceGroup.instanceType === 'remote'"
+                    class="instance-meta-pill"
+                    :title="`${t('settings.remoteLatency')}: ${formatInstanceLatency(instanceGroup.instanceLatencyMs)}`"
+                  >
+                    {{ formatInstanceLatency(instanceGroup.instanceLatencyMs) }}
+                  </span>
+                  <span
+                    v-if="instanceGroup.instanceLastError"
+                    class="instance-meta-error"
+                    :title="`${t('settings.remoteLastError')}: ${instanceGroup.instanceLastError}`"
+                  >
+                    {{ instanceGroup.instanceLastError }}
+                  </span>
+                </div>
               </div>
             </div>
-            <div v-if="isProjectExpanded(group.key)" class="project-children">
-              <div v-if="group.sessions.length === 0" class="project-empty">{{ $t('session.noSessionsInProject') }}</div>
-              <button
-                v-for="s in group.sessions"
-                :key="s.id"
-                class="session-item tree-child"
-                :class="{ active: sessionsStore.activeSessionId === s.id }"
+            <div v-if="isInstanceExpanded(instanceGroup.key)" class="instance-projects">
+              <div v-if="instanceGroup.projects.length === 0" class="project-empty">{{ $t('session.instanceEmpty') }}</div>
+              <div
+                v-for="group in instanceGroup.projects"
+                :key="group.key"
+                class="tree-group"
                 draggable="true"
-                @click="handleSessionClick(s)"
-                @dragstart="handleSessionDragStart($event, s)"
-                @dragover.prevent="handleSessionDragOver($event, group.key)"
-                @drop="handleSessionDrop($event, group.key, s.id)"
-                @dragend="handleSessionDragEnd"
-                @contextmenu.prevent="openContextMenu($event, s)"
+                @dragstart="handleProjectDragStart($event, group)"
+                @dragover.prevent="handleProjectDragOver($event)"
+                @drop="handleProjectDrop($event, group.key)"
+                @dragend="handleProjectDragEnd"
               >
-                <span v-if="s.icon" class="session-icon">{{ s.icon }}</span>
-                <span v-else class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : s.type === 'codex' ? 'X' : 'O' }}</span>
-                <div class="item-info">
-                  <span class="item-name">{{ s.name }}</span>
-                  <span class="item-time">{{ formatTime(s.createdAt) }}</span>
+                <div class="project-node" @click="toggleProjectExpand(group.key)">
+                  <span class="project-caret">{{ isProjectExpanded(group.key) ? 'v' : '>' }}</span>
+                  <div class="project-body">
+                    <div class="project-title-row">
+                      <span class="project-name" :title="group.projectName">{{ group.projectName }}</span>
+                      <span class="project-count">{{ group.sessions.length }}</span>
+                    </div>
+                    <span class="project-subtitle" :title="group.projectPath || group.instanceName">
+                      {{ formatProjectSubtitle(group) }}
+                    </span>
+                  </div>
+                  <div class="project-actions" @click.stop>
+                    <button
+                      v-if="group.canCreateSession"
+                      class="project-action-btn"
+                      :title="$t('session.create')"
+                      @click="openCreateDialog({
+                        instanceId: group.instanceId,
+                        projectId: group.projectId || undefined,
+                        projectPath: group.projectPath,
+                        lockProjectPath: true
+                      })"
+                    >
+                      +
+                    </button>
+                    <button
+                      v-if="group.canOpenProjectDetail"
+                      class="project-action-btn"
+                      :title="$t('project.settings')"
+                      @click="openProject(group)"
+                    >
+                      P
+                    </button>
+                  </div>
                 </div>
-                <span class="status-dot" :class="s.status"></span>
-              </button>
+                <div v-if="isProjectExpanded(group.key)" class="project-children">
+                  <div v-if="group.sessions.length === 0" class="project-empty">{{ $t('session.noSessionsInProject') }}</div>
+                  <button
+                    v-for="s in group.sessions"
+                    :key="s.id"
+                    class="session-item tree-child"
+                    :class="{ active: sessionsStore.activeGlobalSessionKey === s.id }"
+                    draggable="true"
+                    @click="handleSessionClick(s)"
+                    @dragstart="handleSessionDragStart($event, s)"
+                    @dragover.prevent="handleSessionDragOver($event, group.key)"
+                    @drop="handleSessionDrop($event, group.key, s.id)"
+                    @dragend="handleSessionDragEnd"
+                    @contextmenu.prevent="openContextMenu($event, s)"
+                  >
+                    <span v-if="s.icon" class="session-icon">{{ s.icon }}</span>
+                    <span v-else class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : s.type === 'codex' ? 'X' : 'O' }}</span>
+                    <div class="item-info">
+                      <span class="item-name">{{ s.name }}</span>
+                      <span class="item-time">{{ formatTime(s.createdAt) }}</span>
+                    </div>
+                    <span class="status-dot" :class="s.status"></span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -142,7 +240,7 @@
             v-for="s in group.sessions"
             :key="s.id"
             class="session-item compact"
-            :class="{ active: sessionsStore.activeSessionId === s.id }"
+            :class="{ active: sessionsStore.activeGlobalSessionKey === s.id }"
             draggable="true"
             @click="handleSessionClick(s)"
             @dragstart="handleSessionDragStart($event, s)"
@@ -174,7 +272,8 @@
         node-path="root"
         :node="workspaceLayout.root"
         :tabs-index="workspaceLayout.tabs"
-        :sessions-by-id="sessionsById"
+        :resolved-tabs-index="workspaceStore.resolvedTabs"
+        :sessions-by-global-key="sessionsByGlobalKey"
         :pane-zoom-percent-by-id="paneZoomPercentById"
         :active-pane-id="workspaceLayout.activePaneId"
         :can-close-panes="workspaceStore.paneCount > 1"
@@ -198,9 +297,10 @@
         @pause-session="handlePause"
         @restart-session="handleRestart"
         @destroy-session="handleDestroy"
-        @clear-output="sessionsStore.clearSessionOutput($event)"
+        @clear-output="sessionsStore.clearSessionOutputRef($event)"
         @set-pane-zoom="handleSetPaneZoom"
         @reset-pane-zoom="handleResetPaneZoom"
+        @swap-pane-tabs="handleSwapPaneTabs"
       />
     </main>
 
@@ -209,29 +309,32 @@
       <button class="context-item" @click="handleSplitOpenContext('horizontal')">{{ $t('session.splitRightOpen') }}</button>
       <button class="context-item" @click="handleSplitOpenContext('vertical')">{{ $t('session.splitDownOpen') }}</button>
       <button
-        v-if="contextMenu.session?.status !== 'running'"
+        v-if="contextSessionCapabilities?.sessionStart && contextMenu.session?.status !== 'running'"
         class="context-item"
         @click="handleStartContext"
       >
         {{ $t('session.start') }}
       </button>
       <button
-        v-if="contextMenu.session?.status === 'running'"
+        v-if="contextSessionCapabilities?.sessionPause && contextMenu.session?.status === 'running'"
         class="context-item"
         @click="handlePauseContext"
       >
         {{ $t('session.pause') }}
       </button>
-      <button class="context-item" @click="handleRestartContext">{{ $t('session.restart') }}</button>
-      <button class="context-item" @click="handleRename">{{ $t('session.rename') }}</button>
-      <button class="context-item" @click="handleChangeIcon">{{ $t('session.changeIcon') }}</button>
-      <button class="context-item danger" @click="handleDestroyContext">{{ $t('session.destroy') }}</button>
+      <button v-if="contextSessionCapabilities?.sessionRestart" class="context-item" @click="handleRestartContext">{{ $t('session.restart') }}</button>
+      <button v-if="contextMenu.session?.instanceId === 'local'" class="context-item" @click="handleRename">{{ $t('session.rename') }}</button>
+      <button v-if="contextMenu.session?.instanceId === 'local'" class="context-item" @click="handleChangeIcon">{{ $t('session.changeIcon') }}</button>
+      <button v-if="contextSessionCapabilities?.sessionDestroy" class="context-item danger" @click="handleDestroyContext">{{ $t('session.destroy') }}</button>
     </div>
     <div v-if="contextMenu.visible" class="context-overlay" @click="contextMenu.visible = false"></div>
 
     <CreateSessionDialog
       :visible="showCreateDialog"
       :default-project-path="createDialogProjectPath"
+      :target-instance-id="createDialogTargetInstanceId"
+      :target-project-id="createDialogTargetProjectId"
+      :target-project-path="createDialogTargetProjectPath"
       :lock-project-path="createDialogLockProjectPath"
       :activate-on-create="false"
       @cancel="closeCreateDialog"
@@ -292,15 +395,30 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { useSessionsStore, type Session } from '@/stores/sessions'
+import { useSessionsStore } from '@/stores/sessions'
 import { useProjectsStore } from '@/stores/projects'
 import { useSettingsStore, type AppSettings } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useInstancesStore } from '@/stores/instances'
 import { useToast } from '@/composables/useToast'
 import CreateSessionDialog from '@/components/CreateSessionDialog.vue'
 import WorkspacePaneTree from '@/components/WorkspacePaneTree.vue'
 import type { WorkspaceSplitDirection } from '@/api/workspace'
-import { projectPriorityScore, sessionPriorityScore } from '@/utils/smart-priority'
+import {
+  buildInstanceTree,
+  buildProjectGroupKey,
+  buildProjectSessionTree,
+  type InstanceTreeGroup,
+  type ProjectMeta,
+  type ProjectSessionGroup,
+  type SessionTreeSessionItem
+} from '@/features/sessions/session-tree'
+import {
+  LOCAL_INSTANCE_ID,
+  type SessionRef,
+  type UnifiedSession
+} from '@/models/unified-resource'
+import { buildProjectRouteLocation } from '@/utils/project-routing'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -309,17 +427,23 @@ const sessionsStore = useSessionsStore()
 const projectsStore = useProjectsStore()
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
+const instancesStore = useInstancesStore()
 const toast = useToast()
+
+type SessionListItem = SessionTreeSessionItem
 
 const showCreateDialog = ref(false)
 const createDialogProjectPath = ref('')
+const createDialogTargetInstanceId = ref<string>(LOCAL_INSTANCE_ID)
+const createDialogTargetProjectId = ref<string | undefined>(undefined)
+const createDialogTargetProjectPath = ref('')
 const createDialogLockProjectPath = ref(false)
 const showRenameDialog = ref(false)
 const renameSessionId = ref<string | null>(null)
 const renameInput = ref('')
 
 const showWakeDialog = ref(false)
-const pendingWakeSession = ref<Session | null>(null)
+const pendingWakeSession = ref<SessionListItem | null>(null)
 const wakeSkipReminder = ref(false)
 
 const showIconPicker = ref(false)
@@ -333,10 +457,36 @@ const iconEmojiList = [
 ]
 const iconPickerSessionIcon = computed(() => {
   if (!iconPickerSessionId.value) return null
-  return sessionsStore.sessions.find((s) => s.id === iconPickerSessionId.value)?.icon ?? null
+  return sessionsStore.getUnifiedSession(iconPickerSessionId.value)?.icon ?? null
 })
 
+function toSessionRef(session: Pick<UnifiedSession, 'instanceId' | 'sessionId' | 'globalSessionKey'>): SessionRef {
+  return {
+    instanceId: session.instanceId,
+    sessionId: session.sessionId,
+    globalSessionKey: session.globalSessionKey
+  }
+}
+
+function toSessionListItem(session: UnifiedSession): SessionListItem {
+  return {
+    ...session,
+    id: session.globalSessionKey
+  }
+}
+
 function applyRouteSessionSelection() {
+  const queryGlobalSessionKey =
+    typeof route.query.globalSessionKey === 'string' ? route.query.globalSessionKey : ''
+  if (queryGlobalSessionKey) {
+    const sessionRef = sessionsStore.getSessionRefByGlobalKey(queryGlobalSessionKey)
+    if (sessionRef) {
+      sessionsStore.setActiveSessionRef(sessionRef)
+      workspaceStore.openSessionRefInActivePane(sessionRef)
+      return
+    }
+  }
+
   const querySessionId = typeof route.query.sessionId === 'string' ? route.query.sessionId : ''
   if (querySessionId) {
     const exists = sessionsStore.sessions.some((session) => session.id === querySessionId)
@@ -347,19 +497,42 @@ function applyRouteSessionSelection() {
     }
   }
 
-  if (sessionsStore.sessions.length === 0) return
+  const fallbackSessionRef =
+    workspaceStore.activeSessionRef ??
+    sessionsStore.activeSessionRef ??
+    (sessionsStore.unifiedSessions[0] ? toSessionRef(sessionsStore.unifiedSessions[0]) : null)
+  if (!fallbackSessionRef) return
 
-  const fallbackSessionId = workspaceStore.activeSessionId || sessionsStore.activeSessionId || sessionsStore.sessions[0].id
-  sessionsStore.setActiveSession(fallbackSessionId)
-  workspaceStore.openSessionInActivePane(fallbackSessionId)
+  sessionsStore.setActiveSessionRef(fallbackSessionRef)
+  workspaceStore.openSessionRefInActivePane(fallbackSessionRef)
 }
 
 function reconcileWorkspaceSessions() {
-  const validIds = sessionsStore.sessions.map((session) => session.id)
-  const fallback = sessionsStore.activeSessionId || validIds[0]
-  workspaceStore.reconcileSessions(validIds, fallback)
-  if (workspaceStore.activeSessionId) {
-    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  const validGlobalSessionKeys = sessionsStore.unifiedSessions.map((session) => session.globalSessionKey)
+  const fallbackSessionRef =
+    sessionsStore.activeSessionRef ??
+    (sessionsStore.unifiedSessions[0] ? toSessionRef(sessionsStore.unifiedSessions[0]) : undefined)
+  const preserveInstanceIds = new Set(
+    instancesStore.remoteInstances
+      .filter((instance) => instance.status !== 'online')
+      .map((instance) => instance.id)
+  )
+
+  if (!settingsStore.settings.desktopRemoteMountEnabled) {
+    for (const tab of Object.values(workspaceStore.layout.tabs)) {
+      if (tab.instanceId !== LOCAL_INSTANCE_ID) {
+        preserveInstanceIds.add(tab.instanceId)
+      }
+    }
+  }
+
+  workspaceStore.reconcileSessionRefs(validGlobalSessionKeys, {
+    fallbackSessionRef,
+    preserveInstanceIds: [...preserveInstanceIds]
+  })
+
+  if (workspaceStore.activeSessionRef) {
+    sessionsStore.setActiveSessionRef(workspaceStore.activeSessionRef)
   }
 }
 
@@ -375,188 +548,86 @@ watch(
 )
 
 const filterType = ref('')
-const contextMenu = ref({ visible: false, x: 0, y: 0, session: null as Session | null })
+const contextMenu = ref({ visible: false, x: 0, y: 0, session: null as SessionListItem | null })
 const expandedProjectMap = ref<Record<string, boolean>>({})
+const expandedInstanceMap = ref<Record<string, boolean>>({})
+const refreshingRemoteData = ref(false)
 
 const sessionDragState = ref<{ sessionId: string; projectKey: string } | null>(null)
 const projectDragState = ref<{ group: ProjectSessionGroup } | null>(null)
 const topProjectDragState = ref<{ group: ProjectSessionGroup } | null>(null)
 
-interface ProjectSessionGroup {
-  key: string
-  projectId: string | null
-  projectName: string
-  projectPath: string
-  sessions: Session[]
-}
-
-interface ProjectMeta {
-  id: string
-  name: string
-  path: string
-  lastOpenedAt: number
-}
-
-function normalizePathKey(path: string): string {
-  const safePath = path || ''
-  if (window.electronAPI?.platform === 'win32') return safePath.toLowerCase()
-  return safePath
-}
-
-function getPathLeaf(path: string): string {
-  const trimmed = path.replace(/[\\/]+$/, '')
-  const parts = trimmed.split(/[\\/]/).filter(Boolean)
-  return parts[parts.length - 1] || path || '-'
-}
-
 const filteredSessions = computed(() => {
-  if (!filterType.value) return sessionsStore.sessions
-  return sessionsStore.sessions.filter((s) => s.type === filterType.value)
+  const items = sessionsStore.unifiedSessions.map((session) => toSessionListItem(session))
+  if (!filterType.value) return items
+  return items.filter((s) => s.type === filterType.value)
 })
 
 const projectMetaIndex = computed(() => {
-  const sorted: ProjectMeta[] = [...projectsStore.projects]
+  const sorted: ProjectMeta[] = [...projectsStore.unifiedProjects]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((project) => ({
-      id: project.id,
+      globalProjectKey: project.globalProjectKey,
+      projectId: project.projectId,
+      instanceId: project.instanceId,
       name: project.name,
       path: project.path,
-      lastOpenedAt: project.lastOpenedAt
+      lastOpenedAt: project.lastOpenedAt,
+      source: project.source
     }))
 
   const byKey = new Map<string, ProjectMeta>()
   for (const project of sorted) {
-    byKey.set(normalizePathKey(project.path), project)
+    byKey.set(buildProjectGroupKey(project.instanceId, project.path), project)
   }
 
   return { sorted, byKey }
 })
 
 const projectSessionTree = computed<ProjectSessionGroup[]>(() => {
-  const groupMap = new Map<string, ProjectSessionGroup>()
-  const includeEmptyProjects = !filterType.value
-  const { sorted: sortedProjects, byKey: projectByKey } = projectMetaIndex.value
-  const smartSessionsEnabled =
-    settingsStore.settings.smartPriorityEnabled &&
-    (settingsStore.settings.smartPriorityScope === 'sessions' || settingsStore.settings.smartPriorityScope === 'both')
-  const smartProjectsEnabled =
-    settingsStore.settings.smartPriorityEnabled &&
-    (settingsStore.settings.smartPriorityScope === 'projects' || settingsStore.settings.smartPriorityScope === 'both')
-  const mode = settingsStore.settings.smartPriorityMode
-  const now = Date.now()
+  return buildProjectSessionTree({
+    filteredSessions: filteredSessions.value,
+    sortedProjects: projectMetaIndex.value.sorted,
+    projectByKey: projectMetaIndex.value.byKey,
+    instancesById: instancesStore.instanceIndex,
+    includeEmptyProjects: !filterType.value,
+    smartSessionsEnabled:
+      settingsStore.settings.smartPriorityEnabled &&
+      (settingsStore.settings.smartPriorityScope === 'sessions' ||
+        settingsStore.settings.smartPriorityScope === 'both'),
+    smartProjectsEnabled:
+      settingsStore.settings.smartPriorityEnabled &&
+      (settingsStore.settings.smartPriorityScope === 'projects' ||
+        settingsStore.settings.smartPriorityScope === 'both'),
+    mode: settingsStore.settings.smartPriorityMode,
+    now: Date.now(),
+    manualSessionOrder: settingsStore.settings.manualSessionOrder || {},
+    manualProjectOrder: settingsStore.settings.manualProjectOrder || [],
+    unmanagedProjectLabel: t('session.unmanagedProject')
+  })
+})
 
-  if (includeEmptyProjects) {
-    for (const project of sortedProjects) {
-      const key = normalizePathKey(project.path)
-      groupMap.set(key, {
-        key,
-        projectId: project.id,
-        projectName: project.name,
-        projectPath: project.path,
-        sessions: []
-      })
-    }
-  }
-
-  for (const session of filteredSessions.value) {
-    const path = session.projectPath || ''
-    const key = normalizePathKey(path)
-
-    if (!groupMap.has(key)) {
-      const project = projectByKey.get(key)
-      groupMap.set(key, {
-        key,
-        projectId: project ? project.id : null,
-        projectName: project ? project.name : (path ? getPathLeaf(path) : t('session.unmanagedProject')),
-        projectPath: path,
-        sessions: []
-      })
-    }
-
-    groupMap.get(key)!.sessions.push(session)
-  }
-
-  const groups = Array.from(groupMap.values())
-    .filter((group) => group.sessions.length > 0 || includeEmptyProjects)
-
-  const manualSessionOrder = settingsStore.settings.manualSessionOrder || {}
-
-  for (const group of groups) {
-    if (smartSessionsEnabled) {
-      const sessionScores = new Map<string, number>()
-      for (const session of group.sessions) {
-        sessionScores.set(session.id, sessionPriorityScore(session, mode, now))
-      }
-      group.sessions.sort((a, b) => (sessionScores.get(b.id) ?? 0) - (sessionScores.get(a.id) ?? 0))
-      continue
-    }
-
-    const manualOrder = manualSessionOrder[group.key]
-    if (manualOrder && manualOrder.length > 0) {
-      const orderMap = new Map<string, number>()
-      manualOrder.forEach((id, index) => orderMap.set(id, index))
-      group.sessions.sort((a, b) => {
-        const aIndex = orderMap.get(a.id) ?? 999999
-        const bIndex = orderMap.get(b.id) ?? 999999
-        if (aIndex !== bIndex) return aIndex - bIndex
-        if (a.status === 'running' && b.status !== 'running') return -1
-        if (b.status === 'running' && a.status !== 'running') return 1
-        return b.createdAt - a.createdAt
-      })
-    } else {
-      group.sessions.sort((a, b) => {
-        if (a.status === 'running' && b.status !== 'running') return -1
-        if (b.status === 'running' && a.status !== 'running') return 1
-        return b.createdAt - a.createdAt
-      })
-    }
-  }
-
-  const manualProjectOrder = settingsStore.settings.manualProjectOrder || []
-  if (smartProjectsEnabled) {
-    const groupScores = new Map<string, number>()
-    for (const group of groups) {
-      const meta = projectByKey.get(group.key)
-      groupScores.set(
-        group.key,
-        projectPriorityScore(
-          { lastOpenedAt: meta?.lastOpenedAt ?? 0 },
-          group.sessions,
-          mode,
-          now
-        )
-      )
-    }
-    groups.sort((a, b) => {
-      return (groupScores.get(b.key) ?? 0) - (groupScores.get(a.key) ?? 0)
-    })
-  } else if (manualProjectOrder && manualProjectOrder.length > 0) {
-    const orderMap = new Map<string, number>()
-    manualProjectOrder.forEach((key, index) => orderMap.set(key, index))
-    groups.sort((a, b) => {
-      const aIndex = orderMap.get(a.key) ?? 999999
-      const bIndex = orderMap.get(b.key) ?? 999999
-      return aIndex - bIndex
-    })
-  } else {
-    groups.sort((a, b) => a.projectName.localeCompare(b.projectName))
-  }
-  return groups
+const instanceTree = computed<InstanceTreeGroup[]>(() => {
+  return buildInstanceTree(instancesStore.instances, projectSessionTree.value)
 })
 
 const workspaceLayout = computed(() => workspaceStore.layout)
-const sessionsById = computed(() => {
-  const index: Record<string, Session> = {}
-  for (const session of sessionsStore.sessions) {
-    index[session.id] = session
-  }
-  return index
+const sessionsByGlobalKey = computed(() => {
+  return sessionsStore.sessionIndexByGlobalKey
 })
 
 const activeSessionForDialog = computed(() => {
-  const activeId = workspaceStore.activeSessionId || sessionsStore.activeSessionId
-  if (!activeId) return null
-  return sessionsStore.sessions.find((session) => session.id === activeId) || null
+  const activeSession = workspaceStore.activeSessionRef
+    ? sessionsStore.getUnifiedSession(workspaceStore.activeSessionRef.globalSessionKey)
+    : sessionsStore.activeUnifiedSession
+  if (!activeSession || activeSession.instanceId !== LOCAL_INSTANCE_ID) return null
+  return activeSession
+})
+
+const contextSessionCapabilities = computed(() => {
+  const session = contextMenu.value.session
+  if (!session) return null
+  return instancesStore.getInstance(session.instanceId)?.capabilities ?? null
 })
 
 const isTopLayout = computed(() => settingsStore.settings.sessionsListPosition === 'top')
@@ -621,6 +692,24 @@ watch(
 )
 
 watch(
+  instanceTree,
+  (groups) => {
+    const next: Record<string, boolean> = { ...expandedInstanceMap.value }
+    const keys = new Set(groups.map((group) => group.key))
+    for (const group of groups) {
+      if (!(group.key in next)) {
+        next[group.key] = true
+      }
+    }
+    for (const key of Object.keys(next)) {
+      if (!keys.has(key)) delete next[key]
+    }
+    expandedInstanceMap.value = next
+  },
+  { immediate: true }
+)
+
+watch(
   [() => settingsStore.loaded, () => workspaceStore.loaded, () => workspaceStore.paneIds.join('|')],
   ([settingsLoaded, workspaceLoaded]) => {
     if (!settingsLoaded || !workspaceLoaded) return
@@ -633,40 +722,144 @@ function isProjectExpanded(key: string): boolean {
   return expandedProjectMap.value[key] ?? true
 }
 
+function isInstanceExpanded(key: string): boolean {
+  return expandedInstanceMap.value[key] ?? true
+}
+
+function toggleInstanceExpand(key: string): void {
+  expandedInstanceMap.value[key] = !isInstanceExpanded(key)
+}
+
 function toggleProjectExpand(key: string) {
   expandedProjectMap.value[key] = !isProjectExpanded(key)
 }
 
-function openProject(group: ProjectSessionGroup) {
-  if (!group.projectId) return
-  void router.push(`/projects/${group.projectId}`)
+function formatInstanceType(type: InstanceTreeGroup['instanceType']): string {
+  return type === 'local' ? t('session.instanceLocal') : t('session.instanceRemote')
 }
 
-function openCreateDialog(projectPath = activeSessionForDialog.value?.projectPath || '', lockProjectPath = false) {
+function formatInstanceStatus(status: InstanceTreeGroup['instanceStatus']): string {
+  return t(`settings.remoteStatus.${status}`)
+}
+
+function formatInstanceLatency(latencyMs: number | null): string {
+  if (latencyMs === null || !Number.isFinite(latencyMs)) {
+    return t('settings.remoteLatencyUnknown')
+  }
+
+  if (latencyMs <= 200) {
+    return t('settings.remoteLatencyFast')
+  }
+
+  if (latencyMs <= 800) {
+    return t('settings.remoteLatencyNormal')
+  }
+
+  return t('settings.remoteLatencySlow')
+}
+
+function formatInstanceCounts(group: InstanceTreeGroup): string {
+  return t('session.instanceCounts', {
+    projects: group.projects.length,
+    sessions: group.sessionCount
+  })
+}
+
+function formatProjectSubtitle(group: ProjectSessionGroup): string {
+  const path = group.projectPath?.trim()
+  if (path) return path
+  return group.instanceType === 'local' ? t('session.instanceLocal') : t('session.instanceRemote')
+}
+
+function showInstanceMeta(group: InstanceTreeGroup): boolean {
+  if (group.instanceType !== 'remote') return false
+  return Number.isFinite(group.instanceLatencyMs) || !!group.instanceLastError
+}
+
+function formatInstanceTooltip(group: InstanceTreeGroup): string {
+  const lines = [group.instanceName, formatInstanceCounts(group)]
+
+  if (group.instanceType === 'remote') {
+    lines.splice(1, 0, `${formatInstanceType(group.instanceType)} · ${formatInstanceStatus(group.instanceStatus)}`)
+    if (Number.isFinite(group.instanceLatencyMs)) {
+      lines.push(`${t('settings.remoteLatency')}: ${formatInstanceLatency(group.instanceLatencyMs)}`)
+    }
+    if (group.instanceLastError) {
+      lines.push(`${t('settings.remoteLastError')}: ${group.instanceLastError}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+function openProject(group: ProjectSessionGroup) {
+  if (!group.canOpenProjectDetail || !group.projectId) return
+  void router.push(
+    buildProjectRouteLocation({
+      instanceId: group.instanceId,
+      projectId: group.projectId,
+      globalProjectKey: `${group.instanceId}:${group.projectId}`
+    })
+  )
+}
+
+type CreateDialogOptions = {
+  instanceId?: string
+  projectId?: string
+  projectPath?: string
+  lockProjectPath?: boolean
+}
+
+function openCreateDialog(options: CreateDialogOptions = {}) {
+  const instanceId = options.instanceId ?? LOCAL_INSTANCE_ID
+  const projectPath =
+    options.projectPath ??
+    (instanceId === LOCAL_INSTANCE_ID ? activeSessionForDialog.value?.projectPath || '' : '')
+
+  createDialogTargetInstanceId.value = instanceId
+  createDialogTargetProjectId.value = options.projectId
+  createDialogTargetProjectPath.value = projectPath
   createDialogProjectPath.value = projectPath
-  createDialogLockProjectPath.value = lockProjectPath
+  createDialogLockProjectPath.value = options.lockProjectPath ?? false
   showCreateDialog.value = true
 }
 
 function closeCreateDialog() {
   showCreateDialog.value = false
   createDialogProjectPath.value = ''
+  createDialogTargetInstanceId.value = LOCAL_INSTANCE_ID
+  createDialogTargetProjectId.value = undefined
+  createDialogTargetProjectPath.value = ''
   createDialogLockProjectPath.value = false
 }
 
-async function handleCreateDialogCreated(sessionId?: string) {
+async function handleCreateDialogCreated(payload?: {
+  instanceId: string
+  sessionId: string
+  globalSessionKey: string
+}) {
   closeCreateDialog()
-  await nextTick()
-  if (sessionId) {
-    workspaceStore.openSessionInActivePane(sessionId)
-    sessionsStore.setActiveSession(sessionId)
+  if (payload) {
+    await sessionsStore.fetchSessionsForInstance(payload.instanceId)
+    await projectsStore.fetchProjectsForInstance(payload.instanceId)
+  } else {
+    await sessionsStore.fetchSessions()
+    await projectsStore.fetchProjects()
   }
-  await sessionsStore.fetchSessions()
+
   reconcileWorkspaceSessions()
-  if (sessionId && sessionsStore.sessions.some((session) => session.id === sessionId)) {
-    workspaceStore.openSessionInActivePane(sessionId)
-    sessionsStore.setActiveSession(sessionId)
+
+  await nextTick()
+
+  if (payload) {
+    const createdSessionRef = sessionsStore.getSessionRefByGlobalKey(payload.globalSessionKey)
+    if (createdSessionRef) {
+      workspaceStore.openSessionRefInActivePane(createdSessionRef)
+      sessionsStore.setActiveSessionRef(createdSessionRef)
+      return
+    }
   }
+
   applyRouteSessionSelection()
 }
 
@@ -674,8 +867,14 @@ function formatTime(ts: number) {
   return new Date(ts).toLocaleTimeString()
 }
 
-function isDormantSession(session: Session): boolean {
+function isDormantSession(session: UnifiedSession): boolean {
   return session.status === 'idle' || session.status === 'stopped'
+}
+
+function syncActiveSessionWithWorkspace(): void {
+  if (workspaceStore.activeSessionRef) {
+    sessionsStore.setActiveSessionRef(workspaceStore.activeSessionRef)
+  }
 }
 
 async function updateSessionUiSettings(partial: Partial<AppSettings>) {
@@ -727,16 +926,18 @@ async function handleSetPaneZoom(payload: { paneId: string; percent: number }) {
 
 function handleFocusPane(paneId: string) {
   workspaceStore.focusPane(paneId)
-  if (workspaceStore.activeSessionId) {
-    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
-  }
+  syncActiveSessionWithWorkspace()
 }
 
 function handleSetPaneTab(payload: { paneId: string; tabId: string }) {
   workspaceStore.setActiveTab(payload.paneId, payload.tabId)
-  const sessionId = workspaceLayout.value.tabs[payload.tabId]?.sessionId
-  if (sessionId) {
-    sessionsStore.setActiveSession(sessionId)
+  const tab = workspaceLayout.value.tabs[payload.tabId]
+  if (tab) {
+    sessionsStore.setActiveSessionRef({
+      instanceId: tab.instanceId,
+      sessionId: tab.sessionId,
+      globalSessionKey: tab.globalSessionKey
+    })
   }
 }
 
@@ -746,23 +947,17 @@ function handleSplitPane(payload: { paneId: string; direction: WorkspaceSplitDir
 
 function handleClosePane(paneId: string) {
   workspaceStore.closePane(paneId)
-  if (workspaceStore.activeSessionId) {
-    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
-  }
+  syncActiveSessionWithWorkspace()
 }
 
 function handleClosePaneTab(payload: { paneId: string; tabId: string }) {
   workspaceStore.closeTab(payload.paneId, payload.tabId)
-  if (workspaceStore.activeSessionId) {
-    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
-  }
+  syncActiveSessionWithWorkspace()
 }
 
 function handleMoveTab(payload: { fromPaneId: string; toPaneId: string; tabId: string; toIndex?: number }) {
   workspaceStore.moveTabToPane(payload)
-  if (workspaceStore.activeSessionId) {
-    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
-  }
+  syncActiveSessionWithWorkspace()
 }
 
 function handleSplitAndMoveTab(payload: {
@@ -772,23 +967,17 @@ function handleSplitAndMoveTab(payload: {
   direction: WorkspaceSplitDirection
 }) {
   workspaceStore.splitPaneAndMoveTab(payload)
-  if (workspaceStore.activeSessionId) {
-    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
-  }
+  syncActiveSessionWithWorkspace()
 }
 
 function handleCloseOtherTabs(payload: { paneId: string; tabId: string }) {
   workspaceStore.closeOtherTabs(payload.paneId, payload.tabId)
-  if (workspaceStore.activeSessionId) {
-    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
-  }
+  syncActiveSessionWithWorkspace()
 }
 
 function handleCloseTabsRight(payload: { paneId: string; tabId: string }) {
   workspaceStore.closeTabsToRight(payload.paneId, payload.tabId)
-  if (workspaceStore.activeSessionId) {
-    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
-  }
+  syncActiveSessionWithWorkspace()
 }
 
 function handleToggleTabPin(tabId: string) {
@@ -804,32 +993,33 @@ function handleEvenSplitPane(paneId: string) {
 }
 
 function handleOpenSessionDrop(payload: {
-  sessionId: string
+  sessionRef: SessionRef
   targetPaneId: string
   direction?: WorkspaceSplitDirection
 }) {
-  const exists = sessionsStore.sessions.some((session) => session.id === payload.sessionId)
+  const exists = !!sessionsStore.getUnifiedSession(payload.sessionRef.globalSessionKey)
   if (!exists) return
 
   if (payload.direction) {
     workspaceStore.splitPane(payload.targetPaneId, payload.direction)
     const targetPaneId = workspaceStore.layout.activePaneId
-    workspaceStore.openSessionInPane(payload.sessionId, targetPaneId)
+    workspaceStore.openSessionRefInPane(payload.sessionRef, targetPaneId)
   } else {
-    workspaceStore.openSessionInPane(payload.sessionId, payload.targetPaneId)
+    workspaceStore.openSessionRefInPane(payload.sessionRef, payload.targetPaneId)
   }
 
-  if (workspaceStore.activeSessionId) {
-    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
-  } else {
-    sessionsStore.setActiveSession(payload.sessionId)
-  }
+  syncActiveSessionWithWorkspace()
+}
+
+function handleSwapPaneTabs(payload: { fromPaneId: string; toPaneId: string }) {
+  workspaceStore.swapPaneTabs(payload.fromPaneId, payload.toPaneId)
+  syncActiveSessionWithWorkspace()
 }
 
 function handleUndoLayout() {
   const undone = workspaceStore.undoLayoutChange()
-  if (undone && workspaceStore.activeSessionId) {
-    sessionsStore.setActiveSession(workspaceStore.activeSessionId)
+  if (undone) {
+    syncActiveSessionWithWorkspace()
   }
 }
 
@@ -840,48 +1030,52 @@ async function handleResetWorkspace() {
   toast.success(t('toast.layoutReset'))
 }
 
-async function restartSessionById(id: string, showSuccess = true) {
+async function restartSessionByRef(sessionRef: SessionRef, showSuccess = true) {
   try {
-    await sessionsStore.restartSession(id)
+    await sessionsStore.restartSessionRef(sessionRef)
     if (showSuccess) toast.success(t('toast.sessionRestarted'))
   } catch (e: unknown) {
     toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
   }
 }
 
-async function startSessionById(id: string, showSuccess = true) {
+async function startSessionByRef(sessionRef: SessionRef, showSuccess = true) {
   try {
-    await sessionsStore.startSession(id)
+    await sessionsStore.startSessionRef(sessionRef)
     if (showSuccess) toast.success(t('toast.sessionStarted'))
   } catch (e: unknown) {
     toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
   }
 }
 
-async function pauseSessionById(id: string, showSuccess = true) {
+async function pauseSessionByRef(sessionRef: SessionRef, showSuccess = true) {
   try {
-    await sessionsStore.pauseSession(id)
+    await sessionsStore.pauseSessionRef(sessionRef)
     if (showSuccess) toast.success(t('toast.sessionPaused'))
   } catch (e: unknown) {
     toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
   }
 }
 
-function handleSessionDragStart(e: DragEvent, session: Session) {
+function handleSessionDragStart(e: DragEvent, session: SessionListItem) {
   if (!e.dataTransfer) return
-  const sessionData = { sessionId: session.id }
+  const sessionData = {
+    sessionId: session.sessionId,
+    instanceId: session.instanceId,
+    globalSessionKey: session.globalSessionKey
+  }
   e.dataTransfer.setData(
     'application/x-easysession-session',
     JSON.stringify(sessionData)
   )
   e.dataTransfer.setData(
     'application/x-easysession-session-reorder',
-    JSON.stringify(sessionData)
+    JSON.stringify({ globalSessionKey: session.globalSessionKey })
   )
   e.dataTransfer.effectAllowed = 'move'
   
   const path = session.projectPath || ''
-  const key = normalizePathKey(path)
+  const key = buildProjectGroupKey(session.instanceId, path)
   sessionDragState.value = { sessionId: session.id, projectKey: key }
 }
 
@@ -891,11 +1085,13 @@ function handleSessionDragOver(e: DragEvent, projectKey: string) {
   if (!sessionReorderRaw) return
   
   try {
-    const sessionData = JSON.parse(sessionReorderRaw) as { sessionId: string }
-    const session = sessionsStore.sessions.find(s => s.id === sessionData.sessionId)
+    const sessionData = JSON.parse(sessionReorderRaw) as { globalSessionKey?: string }
+    const session = sessionData.globalSessionKey
+      ? sessionsStore.getUnifiedSession(sessionData.globalSessionKey)
+      : null
     if (!session) return
     
-    const sessionPath = normalizePathKey(session.projectPath || '')
+    const sessionPath = buildProjectGroupKey(session.instanceId, session.projectPath || '')
     if (sessionPath !== projectKey) {
       e.dataTransfer.dropEffect = 'none'
       return
@@ -915,15 +1111,15 @@ function handleSessionDrop(e: DragEvent, projectKey: string, targetSessionId: st
   if (!sessionReorderRaw) return
   
   try {
-    const sessionData = JSON.parse(sessionReorderRaw) as { sessionId: string }
-    const draggedSessionId = sessionData.sessionId
+    const sessionData = JSON.parse(sessionReorderRaw) as { globalSessionKey?: string }
+    const draggedSessionId = sessionData.globalSessionKey
     
-    if (draggedSessionId === targetSessionId) return
+    if (!draggedSessionId || draggedSessionId === targetSessionId) return
     
-    const session = sessionsStore.sessions.find(s => s.id === draggedSessionId)
+    const session = sessionsStore.getUnifiedSession(draggedSessionId)
     if (!session) return
     
-    const sessionPath = normalizePathKey(session.projectPath || '')
+    const sessionPath = buildProjectGroupKey(session.instanceId, session.projectPath || '')
     if (sessionPath !== projectKey) return
     
     const currentOrder = settingsStore.settings.manualSessionOrder[projectKey] || []
@@ -949,11 +1145,13 @@ function handleSessionDragEnd() {
   sessionDragState.value = null
 }
 
-async function handleSessionClick(session: Session) {
-  workspaceStore.openSessionInActivePane(session.id)
-  sessionsStore.setActiveSession(session.id)
+async function handleSessionClick(session: SessionListItem) {
+  const sessionRef = toSessionRef(session)
+  workspaceStore.openSessionRefInActivePane(sessionRef)
+  sessionsStore.setActiveSessionRef(sessionRef)
 
   if (!isDormantSession(session)) return
+  if (session.instanceId !== LOCAL_INSTANCE_ID) return
 
   if (settingsStore.settings.sessionWakeConfirm) {
     pendingWakeSession.value = session
@@ -962,26 +1160,28 @@ async function handleSessionClick(session: Session) {
     return
   }
 
-  await startSessionById(session.id)
+  await startSessionByRef(sessionRef)
 }
 
 function handleOpenInPaneContext() {
   const session = contextMenu.value.session
   contextMenu.value.visible = false
   if (!session) return
-  workspaceStore.openSessionInActivePane(session.id)
-  sessionsStore.setActiveSession(session.id)
+  const sessionRef = toSessionRef(session)
+  workspaceStore.openSessionRefInActivePane(sessionRef)
+  sessionsStore.setActiveSessionRef(sessionRef)
 }
 
 function handleSplitOpenContext(direction: WorkspaceSplitDirection) {
   const session = contextMenu.value.session
   contextMenu.value.visible = false
   if (!session) return
+  const sessionRef = toSessionRef(session)
   const activePaneId = workspaceStore.layout.activePaneId
   workspaceStore.splitPane(activePaneId, direction)
   const targetPaneId = workspaceStore.layout.activePaneId
-  workspaceStore.openSessionInPane(session.id, targetPaneId)
-  sessionsStore.setActiveSession(session.id)
+  workspaceStore.openSessionRefInPane(sessionRef, targetPaneId)
+  sessionsStore.setActiveSessionRef(sessionRef)
 }
 
 function closeWakeDialog() {
@@ -1000,25 +1200,25 @@ async function confirmWakeSession() {
     await updateSessionUiSettings({ sessionWakeConfirm: false })
   }
 
-  await startSessionById(session.id)
+  await startSessionByRef(toSessionRef(session))
 }
 
-async function handleStart(id: string) {
-  await startSessionById(id)
+async function handleStart(sessionRef: SessionRef) {
+  await startSessionByRef(sessionRef)
 }
 
-async function handlePause(id: string) {
-  await pauseSessionById(id)
+async function handlePause(sessionRef: SessionRef) {
+  await pauseSessionByRef(sessionRef)
 }
 
-async function handleRestart(id: string) {
-  await restartSessionById(id)
+async function handleRestart(sessionRef: SessionRef) {
+  await restartSessionByRef(sessionRef)
 }
 
-async function handleDestroy(id: string) {
+async function handleDestroy(sessionRef: SessionRef) {
   if (confirm(t('session.confirmDestroy'))) {
     try {
-      await sessionsStore.destroySession(id)
+      await sessionsStore.destroySessionRef(sessionRef)
       toast.success(t('toast.sessionDestroyed'))
     } catch (e: unknown) {
       toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
@@ -1130,7 +1330,7 @@ function handleTopProjectDragEnd() {
   topProjectDragState.value = null
 }
 
-function openContextMenu(e: MouseEvent, session: Session) {
+function openContextMenu(e: MouseEvent, session: SessionListItem) {
   contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, session }
 }
 
@@ -1163,7 +1363,9 @@ async function confirmIconPick(emoji: string | null) {
   iconPickerSessionId.value = null
   if (!id) return
   try {
-    await sessionsStore.updateSessionIcon(id, emoji)
+    const sessionRef = sessionsStore.getSessionRefByGlobalKey(id)
+    if (!sessionRef) return
+    await sessionsStore.updateSessionIconRef(sessionRef, emoji)
   } catch (e: unknown) {
     toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
   }
@@ -1174,14 +1376,16 @@ async function confirmRename() {
   const name = renameInput.value.trim()
   if (!id || !name) return
 
-  const current = sessionsStore.sessions.find((session) => session.id === id)
+  const current = sessionsStore.getUnifiedSession(id)
   if (current && current.name === name) {
     closeRenameDialog()
     return
   }
 
   try {
-    await sessionsStore.renameSession(id, name)
+    const sessionRef = sessionsStore.getSessionRefByGlobalKey(id)
+    if (!sessionRef) return
+    await sessionsStore.renameSessionRef(sessionRef, name)
     toast.success(t('toast.sessionRenamed'))
     closeRenameDialog()
   } catch (e: unknown) {
@@ -1192,50 +1396,80 @@ async function confirmRename() {
 async function handleDestroyContext() {
   const s = contextMenu.value.session
   contextMenu.value.visible = false
-  if (s) await handleDestroy(s.id)
+  if (s) await handleDestroy(toSessionRef(s))
 }
 
 async function handleStartContext() {
   const s = contextMenu.value.session
   contextMenu.value.visible = false
-  if (s) await handleStart(s.id)
+  if (s) await handleStart(toSessionRef(s))
 }
 
 async function handlePauseContext() {
   const s = contextMenu.value.session
   contextMenu.value.visible = false
-  if (s) await handlePause(s.id)
+  if (s) await handlePause(toSessionRef(s))
 }
 
 async function handleRestartContext() {
   const s = contextMenu.value.session
   contextMenu.value.visible = false
-  if (s) await handleRestart(s.id)
+  if (s) await handleRestart(toSessionRef(s))
+}
+
+async function reloadSessionTree(options?: { showToast?: boolean }): Promise<void> {
+  const showToast = options?.showToast ?? false
+  const wasRefreshing = refreshingRemoteData.value
+  refreshingRemoteData.value = true
+  try {
+    await instancesStore.fetchInstances()
+    await Promise.all([sessionsStore.fetchAllSessions(), projectsStore.fetchAllProjects()])
+    reconcileWorkspaceSessions()
+    applyRouteSessionSelection()
+    if (showToast) {
+      toast.success(t('toast.remoteRefreshed'))
+    }
+  } catch (e: unknown) {
+    if (showToast) {
+      toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
+    }
+  } finally {
+    if (!wasRefreshing) {
+      refreshingRemoteData.value = false
+    }
+  }
+}
+
+async function handleRefreshRemoteData() {
+  if (refreshingRemoteData.value) return
+  await reloadSessionTree({ showToast: true })
 }
 
 onMounted(async () => {
   if (!settingsStore.loaded) await settingsStore.load()
-  await Promise.all([sessionsStore.fetchSessions(), projectsStore.fetchProjects(), workspaceStore.load()])
-  reconcileWorkspaceSessions()
-  applyRouteSessionSelection()
+  await workspaceStore.load()
+  await reloadSessionTree()
 })
 
-watch(() => route.query.sessionId, () => {
+watch(() => [route.query.sessionId, route.query.globalSessionKey], () => {
   applyRouteSessionSelection()
 })
 
 watch(
-  () => sessionsStore.sessions.map((session) => session.id).join('|'),
+  () => [
+    sessionsStore.unifiedSessions.map((session) => session.globalSessionKey).join('|'),
+    instancesStore.remoteInstances.map((instance) => `${instance.id}:${instance.status}`).join('|')
+  ],
   () => {
     reconcileWorkspaceSessions()
   }
 )
 
 watch(
-  () => workspaceStore.activeSessionId,
-  (sessionId) => {
-    if (sessionId) {
-      sessionsStore.setActiveSession(sessionId)
+  () => workspaceStore.activeSessionRef,
+  (sessionRef) => {
+    if (sessionRef) {
+      sessionsStore.setActiveSessionRef(sessionRef)
     }
   }
 )
@@ -1505,6 +1739,194 @@ watch(
   background: var(--text-muted);
 }
 
+.instance-group {
+  margin-bottom: 12px;
+}
+
+.instance-group:last-child {
+  margin-bottom: 0;
+}
+
+.instance-node {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(108, 158, 255, 0.12), rgba(108, 158, 255, 0.04));
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--transition-fast);
+  overflow: hidden;
+
+  &:hover {
+    border-color: var(--accent-primary);
+    background: linear-gradient(135deg, rgba(108, 158, 255, 0.18), rgba(108, 158, 255, 0.06));
+  }
+}
+
+.instance-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.instance-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.instance-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.instance-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.instance-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.instance-type-badge,
+.instance-status-badge {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.instance-type-badge {
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--text-secondary);
+}
+
+.instance-type-badge.remote {
+  background: rgba(245, 158, 11, 0.16);
+  color: #f59e0b;
+}
+
+.instance-status-badge {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text-secondary);
+}
+
+.instance-status-badge.status-online {
+  background: rgba(34, 197, 94, 0.14);
+  color: #22c55e;
+}
+
+.instance-status-badge.status-offline,
+.instance-status-badge.status-error {
+  background: rgba(239, 68, 68, 0.14);
+  color: #ef4444;
+}
+
+.instance-status-badge.status-connecting {
+  background: rgba(59, 130, 246, 0.14);
+  color: #3b82f6;
+}
+
+.instance-count {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.instance-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.instance-meta-pill,
+.instance-meta-error {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.instance-meta-pill {
+  align-self: flex-start;
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.instance-meta-error {
+  display: -webkit-box;
+  max-width: 100%;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.project-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.project-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.project-subtitle {
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.instance-projects {
+  padding: 8px 0 0 12px;
+}
+
 .tree-group {
   border-radius: var(--radius-sm);
   background: var(--bg-tertiary);
@@ -1519,7 +1941,7 @@ watch(
 
 .project-node {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 8px 10px;
   background: rgba(108, 158, 255, 0.08);
@@ -1527,6 +1949,7 @@ watch(
   user-select: none;
   border-bottom: 1px solid var(--border-color);
   transition: all var(--transition-fast);
+  overflow: hidden;
 
   &:hover {
     background: rgba(108, 158, 255, 0.15);
@@ -1548,6 +1971,7 @@ watch(
   font-size: var(--font-size-sm);
   color: var(--text-primary);
   font-weight: 600;
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1566,7 +1990,8 @@ watch(
 
 .project-actions {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  flex-shrink: 0;
   gap: 2px;
   opacity: 0;
   transition: opacity var(--transition-fast);

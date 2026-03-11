@@ -10,6 +10,11 @@ import type { ISessionLifecycle } from './session-lifecycle'
 import type { CliType } from './types'
 import type { Session, CodexSession, OpenCodeSession, CreateSessionParams, SessionFilter } from './session-types'
 
+export interface SessionStatusChangeEvent {
+  sessionId: string
+  status: string
+}
+
 export class SessionManager {
   private static readonly PERSIST_DEBOUNCE_MS = 200
   private static readonly ACTIVITY_PERSIST_THROTTLE_MS = 5_000
@@ -25,6 +30,7 @@ export class SessionManager {
   private persistTimer: ReturnType<typeof setTimeout> | null = null
   private persistDirty = false
   private lifecycles: Record<CliType, ISessionLifecycle>
+  private statusListeners = new Set<(event: SessionStatusChangeEvent) => void>()
 
   constructor(
     private cliManager: CliManager,
@@ -541,9 +547,22 @@ export class SessionManager {
   }
 
   private pushStatusChange(sessionId: string, status: string): void {
+    const payload = { sessionId, status }
+
+    for (const listener of this.statusListeners) {
+      listener(payload)
+    }
+
     BrowserWindow.getAllWindows().forEach((win) => {
-      win.webContents.send('session:status', { sessionId, status })
+      win.webContents.send('session:status', payload)
     })
+  }
+
+  subscribeStatus(listener: (event: SessionStatusChangeEvent) => void): () => void {
+    this.statusListeners.add(listener)
+    return () => {
+      this.statusListeners.delete(listener)
+    }
   }
 
   private markSessionActivity(session: Session, now: number, forcePersist: boolean): void {

@@ -20,10 +20,13 @@
             <span v-if="!sidebarCollapsed && SHORTCUT_LABELS[item.path]" class="shortcut-hint">{{ SHORTCUT_LABELS[item.path] }}</span>
           </router-link>
           <div v-if="!sidebarCollapsed && item.path === '/projects' && recentProjects.length" class="nav-sub">
+            <div v-if="projectsStore.unavailableRemoteProjectCount > 0" class="nav-sub-note">
+              {{ $t('dashboard.remoteUnavailableHint') }}
+            </div>
             <router-link
               v-for="p in recentProjects"
-              :key="p.id"
-              :to="`/projects/${p.id}`"
+              :key="p.globalProjectKey"
+              :to="buildProjectRouteLocation(p)"
               class="nav-sub-item"
             >
               {{ p.name }}
@@ -89,16 +92,19 @@ import { useI18n } from 'vue-i18n'
 import { useProjectsStore } from '@/stores/projects'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
+import { useInstancesStore } from '@/stores/instances'
 import { useSettingsStore } from '@/stores/settings'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import { SHORTCUT_LABELS } from '@/composables/useShortcuts'
 import logoSrc from '@/assets/logo-easy-session-light.png'
+import { buildProjectRouteLocation, resolveProjectRouteRef } from '@/utils/project-routing'
 
 const route = useRoute()
 const { t } = useI18n()
 const projectsStore = useProjectsStore()
 const appStore = useAppStore()
 const sessionsStore = useSessionsStore()
+const instancesStore = useInstancesStore()
 const settingsStore = useSettingsStore()
 const navItems = [
   { path: "/dashboard", icon: "D", label: "nav.dashboard" },
@@ -107,21 +113,22 @@ const navItems = [
   { path: "/skills", icon: "K", label: "nav.skills" }
 ]
 
-const recentProjects = computed(() => projectsStore.recentProjects.slice(0, 3))
+const recentProjects = computed(() => projectsStore.quickAccessRecentProjects.slice(0, 3))
 const sidebarCollapsed = computed(() => settingsStore.settings.sidebarCollapsed)
 
 const activeSessionCount = computed(() =>
-  sessionsStore.sessions.filter((s) => s.status === 'running').length
+  sessionsStore.unifiedSessions.filter((session) => session.status === 'running').length
 )
 
 const breadcrumbs = computed(() => {
   const crumbs: { label: string; path?: string }[] = []
   if (route.path === '/settings') {
     crumbs.push({ label: t('settings.title') })
-  } else if (route.name === 'projectDetail') {
+  } else if (route.name === 'projectDetail' || route.name === 'instanceProjectDetail') {
     crumbs.push({ label: t('nav.projects'), path: '/projects' })
-    const proj = projectsStore.projects.find((p) => p.id === route.params.id)
-    crumbs.push({ label: proj?.name || String(route.params.id) })
+    const projectRef = resolveProjectRouteRef(route)
+    const project = projectRef ? projectsStore.getUnifiedProject(projectRef.globalProjectKey) : null
+    crumbs.push({ label: project?.name || String(projectRef?.projectId || route.params.id || route.params.projectId) })
   } else {
     const item = navItems.find((n) => route.path.startsWith(n.path))
     if (item) crumbs.push({ label: t(item.label) })
@@ -139,7 +146,9 @@ function toggleMaximize() { api.invoke('window:maximize') }
 function closeWindow() { api.invoke('window:close') }
 
 onMounted(() => {
-  if (!projectsStore.projects.length) projectsStore.fetchProjects()
+  if (!projectsStore.unifiedProjects.length) {
+    void instancesStore.fetchInstances().then(() => projectsStore.fetchAllProjects())
+  }
 })
 </script>
 
@@ -329,6 +338,13 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+.nav-sub-note {
+  padding: 4px var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 .nav-sub-item {

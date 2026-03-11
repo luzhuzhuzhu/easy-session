@@ -6,9 +6,14 @@ import {
   updateWorkspaceLayout,
   type WorkspaceLayoutNode,
   type WorkspaceLayoutState,
+  type WorkspaceTabState,
   type WorkspaceLeafNode,
   type WorkspaceSplitDirection
 } from '@/api/workspace'
+import { buildGlobalSessionKey, LOCAL_INSTANCE_ID, type SessionRef } from '../models/unified-resource'
+import { useInstancesStore } from './instances'
+import { useSessionsStore } from './sessions'
+import { useSettingsStore } from './settings'
 
 const PERSIST_DEBOUNCE_MS = 200
 const HISTORY_LIMIT = 20
@@ -24,7 +29,7 @@ function layoutEquals(a: WorkspaceLayoutState, b: WorkspaceLayoutState): boolean
 
 function createDefaultLayout(): WorkspaceLayoutState {
   return {
-    version: 1,
+    version: 2,
     root: {
       type: 'leaf',
       paneId: 'pane-1',
@@ -62,6 +67,11 @@ interface LeafLocation {
   isFirst: boolean
 }
 
+export interface WorkspaceResolvedTabState extends WorkspaceTabState {
+  availability: 'ready' | 'offline' | 'missing'
+  sessionRef: SessionRef
+}
+
 function findLeafByPaneId(
   node: WorkspaceLayoutNode,
   paneId: string,
@@ -97,9 +107,39 @@ function findParentOfNode(
   )
 }
 
+function toLocalSessionRef(sessionId: string): SessionRef {
+  return {
+    instanceId: LOCAL_INSTANCE_ID,
+    sessionId,
+    globalSessionKey: buildGlobalSessionKey(LOCAL_INSTANCE_ID, sessionId)
+  }
+}
+
+function normalizeWorkspaceTab(tabId: string, tab: WorkspaceTabState): WorkspaceTabState | null {
+  if (!tab || typeof tab !== 'object' || typeof tab.sessionId !== 'string' || !tab.sessionId) {
+    return null
+  }
+
+  const instanceId = typeof tab.instanceId === 'string' && tab.instanceId ? tab.instanceId : LOCAL_INSTANCE_ID
+  const globalSessionKey =
+    typeof tab.globalSessionKey === 'string' && tab.globalSessionKey
+      ? tab.globalSessionKey
+      : buildGlobalSessionKey(instanceId, tab.sessionId)
+
+  return {
+    id: tabId,
+    resourceType: 'session',
+    instanceId,
+    sessionId: tab.sessionId,
+    globalSessionKey,
+    pinned: !!tab.pinned,
+    createdAt: typeof tab.createdAt === 'number' && Number.isFinite(tab.createdAt) ? tab.createdAt : Date.now()
+  }
+}
+
 function normalizeLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
   const next = cloneLayout(layout)
-  next.version = 1
+  next.version = 2
 
   const leaves: WorkspaceLeafNode[] = []
   visitLeaves(next.root, leaves)
@@ -115,6 +155,15 @@ function normalizeLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
   }
 
   const usedTabs = new Set<string>()
+  const normalizedTabs: Record<string, WorkspaceTabState> = {}
+  for (const [tabId, tab] of Object.entries(next.tabs || {})) {
+    const normalized = normalizeWorkspaceTab(tabId, tab)
+    if (normalized) {
+      normalizedTabs[tabId] = normalized
+    }
+  }
+  next.tabs = normalizedTabs
+
   for (const leaf of leaves) {
     const tabs = leaf.tabs.filter((tabId) => !!next.tabs[tabId])
     leaf.tabs = tabs
@@ -172,6 +221,57 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const pane = activePane.value
     if (!pane?.activeTabId) return null
     return layout.value.tabs[pane.activeTabId]?.sessionId ?? null
+  })
+  const activeGlobalSessionKey = computed(() => {
+    const pane = activePane.value
+    if (!pane?.activeTabId) return null
+    return layout.value.tabs[pane.activeTabId]?.globalSessionKey ?? null
+  })
+  const activeSessionRef = computed<SessionRef | null>(() => {
+    const pane = activePane.value
+    if (!pane?.activeTabId) return null
+    const tab = layout.value.tabs[pane.activeTabId]
+    if (!tab) return null
+    return {
+      instanceId: tab.instanceId,
+      sessionId: tab.sessionId,
+      globalSessionKey: tab.globalSessionKey
+    }
+  })
+  const resolvedTabs = computed<Record<string, WorkspaceResolvedTabState>>(() => {
+    const sessionIndex = useSessionsStore().sessionIndexByGlobalKey
+    const instanceIndex = useInstancesStore().instanceIndex
+    const settingsStore = useSettingsStore()
+    const remoteMountEnabled = settingsStore.settings.desktopRemoteMountEnabled
+    const next: Record<string, WorkspaceResolvedTabState> = {}
+
+    for (const [tabId, tab] of Object.entries(layout.value.tabs)) {
+      const sessionRef: SessionRef = {
+        instanceId: tab.instanceId,
+        sessionId: tab.sessionId,
+        globalSessionKey: tab.globalSessionKey
+      }
+
+      let availability: WorkspaceResolvedTabState['availability'] = 'ready'
+      if (!sessionIndex[tab.globalSessionKey]) {
+        const instance = instanceIndex[tab.instanceId]
+        if (tab.instanceId !== LOCAL_INSTANCE_ID && !remoteMountEnabled) {
+          availability = 'offline'
+        } else if (instance?.type === 'remote' && instance.status !== 'online') {
+          availability = 'offline'
+        } else {
+          availability = 'missing'
+        }
+      }
+
+      next[tabId] = {
+        ...tab,
+        availability,
+        sessionRef
+      }
+    }
+
+    return next
   })
   const canUndo = computed(() => history.value.length > 0)
   const undoDepth = computed(() => history.value.length)
@@ -233,14 +333,17 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return leaves[0]?.paneId ?? 'pane-1'
   }
 
-  function ensureTabForSession(draft: WorkspaceLayoutState, sessionId: string): string {
+  function ensureTabForSessionRef(draft: WorkspaceLayoutState, sessionRef: SessionRef): string {
     for (const [tabId, tab] of Object.entries(draft.tabs)) {
-      if (tab.sessionId === sessionId) return tabId
+      if (tab.globalSessionKey === sessionRef.globalSessionKey) return tabId
     }
     const tabId = genId('tab')
     draft.tabs[tabId] = {
       id: tabId,
-      sessionId,
+      resourceType: 'session',
+      instanceId: sessionRef.instanceId,
+      sessionId: sessionRef.sessionId,
+      globalSessionKey: sessionRef.globalSessionKey,
       pinned: false,
       createdAt: Date.now()
     }
@@ -263,11 +366,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }, { trackHistory: false })
   }
 
-  function openSessionInPane(sessionId: string, paneId: string): void {
+  function openSessionRefInPane(sessionRef: SessionRef, paneId: string): void {
     mutate((draft) => {
       const found = findLeafByPaneId(draft.root, paneId)
       if (!found) return
-      const tabId = ensureTabForSession(draft, sessionId)
+      const tabId = ensureTabForSessionRef(draft, sessionRef)
       const previousTabsInTarget = [...found.leaf.tabs]
 
       // Keep one physical tab instance for one session across panes.
@@ -296,8 +399,16 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }, { trackHistory: false })
   }
 
+  function openSessionInPane(sessionId: string, paneId: string): void {
+    openSessionRefInPane(toLocalSessionRef(sessionId), paneId)
+  }
+
+  function openSessionRefInActivePane(sessionRef: SessionRef): void {
+    openSessionRefInPane(sessionRef, getOrCreatePaneId())
+  }
+
   function openSessionInActivePane(sessionId: string): void {
-    openSessionInPane(sessionId, getOrCreatePaneId())
+    openSessionRefInActivePane(toLocalSessionRef(sessionId))
   }
 
   function detachTabFromPane(leaf: WorkspaceLeafNode, tabId: string): void {
@@ -456,6 +567,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
   }
 
+  function swapPaneTabs(fromPaneId: string, toPaneId: string): void {
+    mutate((draft) => {
+      if (!fromPaneId || !toPaneId || fromPaneId === toPaneId) return
+      const from = findLeafByPaneId(draft.root, fromPaneId)?.leaf
+      const to = findLeafByPaneId(draft.root, toPaneId)?.leaf
+      if (!from || !to) return
+
+      const fromTabs = [...from.tabs]
+      const toTabs = [...to.tabs]
+      const fromActive = from.activeTabId
+      const toActive = to.activeTabId
+
+      from.tabs = toTabs
+      from.activeTabId = toActive
+      to.tabs = fromTabs
+      to.activeTabId = fromActive
+      draft.activePaneId = to.paneId
+    })
+  }
+
   function evenSplitForPane(paneId: string): void {
     mutate((draft) => {
       const found = findLeafByPaneId(draft.root, paneId)
@@ -552,12 +683,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
   }
 
-  function reconcileSessions(validSessionIds: string[], fallbackSessionId?: string): void {
+  function reconcileSessionRefs(
+    validGlobalSessionKeys: string[],
+    options: {
+      fallbackSessionRef?: SessionRef
+      preserveInstanceIds?: string[]
+    } = {}
+  ): void {
     mutate((draft) => {
-      const valid = new Set(validSessionIds)
+      const valid = new Set(validGlobalSessionKeys)
+      const preserveInstanceIds = new Set(options.preserveInstanceIds ?? [])
 
       for (const [tabId, tab] of Object.entries(draft.tabs)) {
-        if (!valid.has(tab.sessionId)) {
+        if (!valid.has(tab.globalSessionKey) && !preserveInstanceIds.has(tab.instanceId)) {
           delete draft.tabs[tabId]
         }
       }
@@ -572,17 +710,26 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
 
       const hasAnyTab = leaves.some((leaf) => leaf.tabs.length > 0)
-      if (!hasAnyTab && fallbackSessionId && valid.has(fallbackSessionId)) {
-      const paneId = draft.activePaneId || leaves[0]?.paneId || 'pane-1'
+      if (!hasAnyTab && options.fallbackSessionRef && valid.has(options.fallbackSessionRef.globalSessionKey)) {
+        const paneId = draft.activePaneId || leaves[0]?.paneId || 'pane-1'
         const leaf = findLeafByPaneId(draft.root, paneId)?.leaf ?? leaves[0]
         if (leaf) {
-          const tabId = ensureTabForSession(draft, fallbackSessionId)
+          const tabId = ensureTabForSessionRef(draft, options.fallbackSessionRef)
           leaf.tabs.push(tabId)
           leaf.activeTabId = tabId
           draft.activePaneId = leaf.paneId
         }
       }
     }, { trackHistory: false })
+  }
+
+  function reconcileSessions(validSessionIds: string[], fallbackSessionId?: string): void {
+    reconcileSessionRefs(
+      validSessionIds.map((sessionId) => buildGlobalSessionKey(LOCAL_INSTANCE_ID, sessionId)),
+      {
+        fallbackSessionRef: fallbackSessionId ? toLocalSessionRef(fallbackSessionId) : undefined
+      }
+    )
   }
 
   function undoLayoutChange(): boolean {
@@ -617,16 +764,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     paneIds,
     activePane,
     activeSessionId,
+    activeGlobalSessionKey,
+    activeSessionRef,
+    resolvedTabs,
     canUndo,
     undoDepth,
     load,
     focusPane,
     setActiveTab,
+    openSessionRefInPane,
     openSessionInPane,
+    openSessionRefInActivePane,
     openSessionInActivePane,
     moveTabToPane,
     splitPane,
     splitPaneAndMoveTab,
+    swapPaneTabs,
     closePane,
     evenSplitForPane,
     closeTab,
@@ -634,6 +787,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     closeTabsToRight,
     toggleTabPinned,
     updateSplitRatio,
+    reconcileSessionRefs,
     reconcileSessions,
     undoLayoutChange,
     hardReset,

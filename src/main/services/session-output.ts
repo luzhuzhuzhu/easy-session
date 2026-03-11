@@ -8,6 +8,14 @@ export interface OutputLine {
   seq: number
 }
 
+export interface SessionOutputEvent {
+  sessionId: string
+  data: string
+  stream: 'stdout' | 'stderr'
+  timestamp: number
+  seq: number
+}
+
 const MAX_BUFFER_LINES = 50000
 
 interface SessionBufferState {
@@ -28,6 +36,7 @@ function createBufferState(): SessionBufferState {
 
 export class SessionOutputManager {
   private buffers = new Map<string, SessionBufferState>()
+  private listeners = new Set<(event: SessionOutputEvent) => void>()
 
   private ensureBuffer(sessionId: string): SessionBufferState {
     let state = this.buffers.get(sessionId)
@@ -100,6 +109,10 @@ export class SessionOutputManager {
       seq: state.nextSeq
     }
 
+    for (const listener of this.listeners) {
+      listener(outputPayload)
+    }
+
     const windows = BrowserWindow.getAllWindows()
     if (windows.length === 0) return
 
@@ -124,5 +137,12 @@ export class SessionOutputManager {
 
   removeSession(sessionId: string): void {
     this.buffers.delete(sessionId)
+  }
+
+  subscribe(listener: (event: SessionOutputEvent) => void): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
   }
 }

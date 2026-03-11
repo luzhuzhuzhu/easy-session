@@ -2,13 +2,26 @@ import { app } from 'electron'
 import { join } from 'path'
 import { DataStore } from './data-store'
 
+const LOCAL_INSTANCE_ID = 'local'
+const CURRENT_WORKSPACE_LAYOUT_VERSION = 2 as const
+
 export type WorkspaceSplitDirection = 'horizontal' | 'vertical'
 
 export interface WorkspaceTabState {
   id: string
+  resourceType: 'session'
+  instanceId: string
   sessionId: string
+  globalSessionKey: string
   pinned: boolean
   createdAt: number
+}
+
+interface LegacyWorkspaceTabState {
+  id?: string
+  sessionId: string
+  pinned?: boolean
+  createdAt?: number
 }
 
 export interface WorkspaceLeafNode {
@@ -29,11 +42,27 @@ export interface WorkspaceSplitNode {
 export type WorkspaceLayoutNode = WorkspaceLeafNode | WorkspaceSplitNode
 
 export interface WorkspaceLayoutState {
-  version: 1
+  version: typeof CURRENT_WORKSPACE_LAYOUT_VERSION
   root: WorkspaceLayoutNode
   tabs: Record<string, WorkspaceTabState>
   activePaneId: string
 }
+
+interface LegacyWorkspaceLayoutState {
+  version?: 1
+  root: WorkspaceLayoutNode
+  tabs: Record<string, LegacyWorkspaceTabState>
+  activePaneId: string
+}
+
+type StoredWorkspaceLayoutState = WorkspaceLayoutState | LegacyWorkspaceLayoutState
+type WorkspaceLayoutMigrationState = {
+  version?: 1 | typeof CURRENT_WORKSPACE_LAYOUT_VERSION
+  root?: unknown
+  tabs?: Record<string, unknown>
+  activePaneId?: string
+}
+type WorkspaceLayoutMigrationHandler = (state: WorkspaceLayoutMigrationState) => WorkspaceLayoutMigrationState
 
 function cloneLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
   if (typeof structuredClone === 'function') {
@@ -47,9 +76,13 @@ function clampRatio(value: unknown): number {
   return Math.max(0.15, Math.min(0.85, value))
 }
 
+function buildGlobalSessionKey(instanceId: string, sessionId: string): string {
+  return `${instanceId}:${sessionId}`
+}
+
 function createDefaultLayout(): WorkspaceLayoutState {
   return {
-    version: 1,
+    version: CURRENT_WORKSPACE_LAYOUT_VERSION,
     root: {
       type: 'leaf',
       paneId: 'pane-1',
@@ -61,6 +94,58 @@ function createDefaultLayout(): WorkspaceLayoutState {
   }
 }
 
+function detectStoredVersion(input: unknown): 1 | typeof CURRENT_WORKSPACE_LAYOUT_VERSION | null {
+  if (!input || typeof input !== 'object') {
+    return null
+  }
+
+  const raw = input as WorkspaceLayoutMigrationState
+  if (raw.version === CURRENT_WORKSPACE_LAYOUT_VERSION) {
+    return CURRENT_WORKSPACE_LAYOUT_VERSION
+  }
+
+  if (raw.version === 1 || 'root' in raw || 'tabs' in raw || 'activePaneId' in raw) {
+    return 1
+  }
+
+  return null
+}
+
+function migrateV1ToV2(state: WorkspaceLayoutMigrationState): WorkspaceLayoutMigrationState {
+  return {
+    ...state,
+    version: CURRENT_WORKSPACE_LAYOUT_VERSION
+  }
+}
+
+const WORKSPACE_LAYOUT_MIGRATIONS: Record<number, WorkspaceLayoutMigrationHandler> = {
+  1: migrateV1ToV2
+}
+
+function migrateToCurrentLayout(input: unknown): { state: WorkspaceLayoutMigrationState | null; migrated: boolean } {
+  let state = input as WorkspaceLayoutMigrationState | null
+  let version = detectStoredVersion(state)
+  if (!state || version === null) {
+    return { state: null, migrated: true }
+  }
+
+  let migrated = false
+  while (version < CURRENT_WORKSPACE_LAYOUT_VERSION) {
+    const migration = WORKSPACE_LAYOUT_MIGRATIONS[version]
+    if (!migration) {
+      break
+    }
+    state = migration(state)
+    version = detectStoredVersion(state)
+    migrated = true
+    if (version === null) {
+      return { state: null, migrated: true }
+    }
+  }
+
+  return { state, migrated }
+}
+
 function visitLeaves(node: WorkspaceLayoutNode, leaves: WorkspaceLeafNode[]): void {
   if (node.type === 'leaf') {
     leaves.push(node)
@@ -70,7 +155,7 @@ function visitLeaves(node: WorkspaceLayoutNode, leaves: WorkspaceLeafNode[]): vo
   visitLeaves(node.second, leaves)
 }
 
-function normalizeNode(node: WorkspaceLayoutNode): WorkspaceLayoutNode {
+function normalizeNode(node: unknown): WorkspaceLayoutNode {
   if (!node || typeof node !== 'object') {
     return {
       type: 'leaf',
@@ -81,9 +166,9 @@ function normalizeNode(node: WorkspaceLayoutNode): WorkspaceLayoutNode {
   }
 
   if ((node as WorkspaceLeafNode).type === 'leaf') {
-    const leaf = node as WorkspaceLeafNode
+    const leaf = node as Partial<WorkspaceLeafNode>
     const paneId = typeof leaf.paneId === 'string' && leaf.paneId ? leaf.paneId : 'pane-1'
-    const tabs = Array.isArray(leaf.tabs) ? leaf.tabs.filter((tabId) => typeof tabId === 'string') : []
+    const tabs = Array.isArray(leaf.tabs) ? leaf.tabs.filter((tabId): tabId is string => typeof tabId === 'string') : []
     const activeTabId =
       typeof leaf.activeTabId === 'string' && tabs.includes(leaf.activeTabId) ? leaf.activeTabId : tabs[0] ?? null
 
@@ -95,7 +180,7 @@ function normalizeNode(node: WorkspaceLayoutNode): WorkspaceLayoutNode {
     }
   }
 
-  const split = node as WorkspaceSplitNode
+  const split = node as Partial<WorkspaceSplitNode>
   return {
     type: 'split',
     direction: split.direction === 'vertical' ? 'vertical' : 'horizontal',
@@ -105,25 +190,69 @@ function normalizeNode(node: WorkspaceLayoutNode): WorkspaceLayoutNode {
   }
 }
 
-function normalizeLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
-  const normalized: WorkspaceLayoutState = {
-    version: 1,
-    root: normalizeNode(layout.root),
-    tabs: {},
-    activePaneId: layout.activePaneId
+function normalizeTab(tabId: string, tab: unknown): { tab: WorkspaceTabState | null; migrated: boolean } {
+  if (!tab || typeof tab !== 'object') {
+    return { tab: null, migrated: true }
   }
 
-  if (layout.tabs && typeof layout.tabs === 'object') {
-    for (const [tabId, tab] of Object.entries(layout.tabs)) {
-      if (!tab || typeof tab !== 'object') continue
-      if (typeof tab.sessionId !== 'string' || !tab.sessionId) continue
-      normalized.tabs[tabId] = {
-        id: tabId,
-        sessionId: tab.sessionId,
-        pinned: !!tab.pinned,
-        createdAt: typeof tab.createdAt === 'number' && Number.isFinite(tab.createdAt) ? tab.createdAt : Date.now()
-      }
+  const raw = tab as Partial<WorkspaceTabState & LegacyWorkspaceTabState>
+  if (typeof raw.sessionId !== 'string' || !raw.sessionId) {
+    return { tab: null, migrated: true }
+  }
+
+  const instanceId =
+    typeof raw.instanceId === 'string' && raw.instanceId.trim() ? raw.instanceId.trim() : LOCAL_INSTANCE_ID
+  const globalSessionKey =
+    typeof raw.globalSessionKey === 'string' && raw.globalSessionKey.trim()
+      ? raw.globalSessionKey.trim()
+      : buildGlobalSessionKey(instanceId, raw.sessionId)
+
+  return {
+    migrated:
+      raw.resourceType !== 'session' ||
+      raw.instanceId !== instanceId ||
+      raw.globalSessionKey !== globalSessionKey ||
+      raw.id !== tabId,
+    tab: {
+      id: tabId,
+      resourceType: 'session',
+      instanceId,
+      sessionId: raw.sessionId,
+      globalSessionKey,
+      pinned: !!raw.pinned,
+      createdAt: typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : Date.now()
     }
+  }
+}
+
+function normalizeLayout(input: unknown): { layout: WorkspaceLayoutState; migrated: boolean } {
+  const migration = migrateToCurrentLayout(input)
+  const raw = migration.state
+  if (!raw || typeof raw !== 'object') {
+    return { layout: createDefaultLayout(), migrated: true }
+  }
+
+  const normalized: WorkspaceLayoutState = {
+    version: CURRENT_WORKSPACE_LAYOUT_VERSION,
+    root: normalizeNode(raw.root),
+    tabs: {},
+    activePaneId: typeof raw.activePaneId === 'string' && raw.activePaneId ? raw.activePaneId : 'pane-1'
+  }
+
+  let migrated = migration.migrated || raw.version !== CURRENT_WORKSPACE_LAYOUT_VERSION
+
+  if (raw.tabs && typeof raw.tabs === 'object') {
+    for (const [tabId, tab] of Object.entries(raw.tabs)) {
+      const normalizedTab = normalizeTab(tabId, tab)
+      if (!normalizedTab.tab) {
+        migrated = true
+        continue
+      }
+      migrated = migrated || normalizedTab.migrated
+      normalized.tabs[tabId] = normalizedTab.tab
+    }
+  } else {
+    migrated = true
   }
 
   const leaves: WorkspaceLeafNode[] = []
@@ -134,6 +263,10 @@ function normalizeLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
     let paneId = typeof leaf.paneId === 'string' && leaf.paneId ? leaf.paneId : `pane-${i + 1}`
     while (usedPaneIds.has(paneId)) {
       paneId = `${paneId}-dup`
+      migrated = true
+    }
+    if (paneId !== leaf.paneId) {
+      migrated = true
     }
     leaf.paneId = paneId
     usedPaneIds.add(paneId)
@@ -142,12 +275,17 @@ function normalizeLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
   const usedTabs = new Set<string>()
   for (const leaf of leaves) {
     const filtered = leaf.tabs.filter((tabId) => !!normalized.tabs[tabId])
+    if (filtered.length !== leaf.tabs.length) {
+      migrated = true
+    }
     leaf.tabs = filtered
     if (leaf.activeTabId && !filtered.includes(leaf.activeTabId)) {
       leaf.activeTabId = filtered[0] ?? null
+      migrated = true
     }
     if (!leaf.activeTabId && filtered.length > 0) {
       leaf.activeTabId = filtered[0]
+      migrated = true
     }
     for (const tabId of filtered) {
       usedTabs.add(tabId)
@@ -157,34 +295,41 @@ function normalizeLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
   for (const tabId of Object.keys(normalized.tabs)) {
     if (!usedTabs.has(tabId)) {
       delete normalized.tabs[tabId]
+      migrated = true
     }
   }
 
   if (!leaves.some((leaf) => leaf.paneId === normalized.activePaneId)) {
     normalized.activePaneId = leaves[0]?.paneId ?? 'pane-1'
+    migrated = true
   }
 
-  return normalized
+  return { layout: normalized, migrated }
 }
 
 export class WorkspaceLayoutManager {
-  private readonly store: DataStore<WorkspaceLayoutState>
+  private readonly store: DataStore<StoredWorkspaceLayoutState>
   private layout: WorkspaceLayoutState = createDefaultLayout()
 
   constructor() {
-    this.store = new DataStore<WorkspaceLayoutState>(join(app.getPath('userData'), 'workspace-layout.json'))
+    this.store = new DataStore<StoredWorkspaceLayoutState>(join(app.getPath('userData'), 'workspace-layout.json'))
   }
 
   async init(): Promise<void> {
     const result = await this.store.load()
     if (!result.data) {
-      // 首次启动或数据丢失，保存默认布局到磁盘
+      // Keep the corrupted legacy file in place so users can recover it manually,
+      // while still booting the app with a safe in-memory default layout.
+      if (result.error === 'corrupted' || result.error === 'read_error') {
+        return
+      }
       await this.store.save(this.layout)
       return
     }
 
-    this.layout = normalizeLayout(result.data)
-    if (result.restoredFromBackup) {
+    const normalized = normalizeLayout(result.data)
+    this.layout = normalized.layout
+    if (result.restoredFromBackup || normalized.migrated) {
       await this.store.save(this.layout)
     }
   }
@@ -195,7 +340,7 @@ export class WorkspaceLayoutManager {
 
   async updateLayout(nextLayout: WorkspaceLayoutState): Promise<WorkspaceLayoutState> {
     const normalized = normalizeLayout(nextLayout)
-    this.layout = normalized
+    this.layout = normalized.layout
     await this.store.save(this.layout)
     return this.getLayout()
   }

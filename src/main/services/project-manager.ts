@@ -59,8 +59,8 @@ export class ProjectManager {
   }
 
   async init(): Promise<void> {
-    const { projects: list, restoredFromBackup } = await this.store.load()
-    let changed = restoredFromBackup
+    const { projects: list, restoredFromBackup, normalized } = await this.store.load()
+    let changed = restoredFromBackup || normalized
 
     for (const p of list) {
       const normalizedPath = this.normalizeProjectPath(p.path)

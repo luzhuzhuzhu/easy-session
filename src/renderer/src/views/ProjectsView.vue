@@ -1,16 +1,34 @@
-﻿<template>
+<template>
   <div class="projects-page">
-    <!-- Top toolbar -->
     <div class="toolbar">
       <button class="btn btn-primary btn-sm" @click="handleAddProject">
         + {{ $t('project.add') }}
       </button>
+      <select v-model="createTargetInstanceId" class="sort-select" :title="$t('project.createTarget')">
+        <option
+          v-for="option in createTargetOptions"
+          :key="option.value"
+          :value="option.value"
+        >
+          {{ option.label }}
+        </option>
+      </select>
       <input
         v-model="searchQuery"
         class="search-input"
         type="text"
         :placeholder="$t('project.search')"
       />
+      <select v-model="instanceFilter" class="sort-select">
+        <option value="all">{{ $t('project.instanceAll') }}</option>
+        <option
+          v-for="option in instanceFilterOptions"
+          :key="option.value"
+          :value="option.value"
+        >
+          {{ option.label }}
+        </option>
+      </select>
       <select v-model="sortBy" class="sort-select">
         <option value="name">{{ $t('project.sortName') }}</option>
         <option value="recent">{{ $t('project.sortRecent') }}</option>
@@ -18,7 +36,6 @@
       </select>
     </div>
 
-    <!-- 空状态 -->
     <div v-if="!projectsStore.loading && sortedProjects.length === 0" class="empty-state">
       <div class="empty-icon">P</div>
       <p class="empty-title">{{ $t('project.noProjects') }}</p>
@@ -26,67 +43,169 @@
       <button class="btn btn-primary" @click="handleAddProject">+ {{ $t('project.add') }}</button>
     </div>
 
-    <!-- 项目卡片网格 -->
     <div v-else class="project-grid">
       <div
-        v-for="p in sortedProjects"
-        :key="p.id"
+        v-for="project in sortedProjects"
+        :key="project.globalProjectKey"
         class="project-card"
-        @click="$router.push(`/projects/${p.id}`)"
-        @contextmenu.prevent="openContextMenu($event, p)"
+        @click="openProjectDetail(project)"
+        @contextmenu.prevent="openContextMenu($event, project)"
       >
         <div class="card-header">
-          <span class="card-name">{{ p.name }}</span>
+          <div class="card-title-wrap">
+            <span class="card-name">{{ project.name }}</span>
+            <span class="card-instance-badge" :class="{ local: project.instanceId === LOCAL_INSTANCE_ID }">
+              {{ projectInstanceLabel(project) }}
+            </span>
+            <span
+              v-if="shouldShowProjectStatus(project)"
+              class="card-status-badge"
+              :class="`status-${projectInstanceStatus(project)}`"
+            >
+              {{ projectInstanceStatusLabel(project) }}
+            </span>
+          </div>
           <div class="card-actions" @click.stop>
-            <button class="icon-btn" :title="$t('project.settings')" @click="$router.push(`/projects/${p.id}`)">S</button>
-            <button class="icon-btn" :title="$t('project.openInExplorer')" @click="openInExplorer(p.path)">O</button>
-            <button class="icon-btn danger" :title="$t('project.remove')" @click="handleRemove(p.id)">X</button>
+            <button class="icon-btn" :title="$t('project.settings')" @click="openProjectDetail(project)">S</button>
+            <button
+              v-if="canCreateSession(project)"
+              class="icon-btn"
+              :title="$t('projectDetail.newSession')"
+              @click="openCreateSessionDialog(project)"
+            >
+              +
+            </button>
+            <button
+              v-if="canRenameProject(project)"
+              class="icon-btn"
+              :title="$t('project.rename')"
+              @click="handleRename(project)"
+            >
+              R
+            </button>
+            <button
+              v-if="canOpenInExplorer(project)"
+              class="icon-btn"
+              :title="$t('project.openInExplorer')"
+              @click="openInExplorer(project.path)"
+            >
+              O
+            </button>
+            <button
+              v-if="canRemoveProject(project)"
+              class="icon-btn danger"
+              :title="$t('project.remove')"
+              @click="handleRemove(project)"
+            >
+              X
+            </button>
           </div>
         </div>
-        <div class="card-path">{{ p.path }}</div>
+        <div class="card-path">{{ project.path }}</div>
         <div class="card-footer">
-          <span class="card-meta">{{ $t('project.lastOpened') }}: {{ formatDate(p.lastOpenedAt) }}</span>
+          <span class="card-meta">{{ $t('project.lastOpened') }}: {{ formatDate(project.lastOpenedAt) }}</span>
         </div>
       </div>
     </div>
 
-    <!-- 右键菜单 -->
     <div v-if="contextMenu.visible" class="context-overlay" @click="contextMenu.visible = false"></div>
     <div v-if="contextMenu.visible" class="context-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
       <button class="context-item" @click="handleContextSettings">{{ $t('project.settings') }}</button>
-      <button class="context-item" @click="handleContextExplorer">{{ $t('project.openInExplorer') }}</button>
-      <button class="context-item danger" @click="handleContextRemove">{{ $t('project.remove') }}</button>
+      <button
+        v-if="contextProject && canCreateSession(contextProject)"
+        class="context-item"
+        @click="handleContextCreateSession"
+      >
+        {{ $t('projectDetail.newSession') }}
+      </button>
+      <button v-if="contextProject && canRenameProject(contextProject)" class="context-item" @click="handleContextRename">
+        {{ $t('project.rename') }}
+      </button>
+      <button v-if="contextProject && canOpenInExplorer(contextProject)" class="context-item" @click="handleContextExplorer">
+        {{ $t('project.openInExplorer') }}
+      </button>
+      <button
+        v-if="contextProject && canRemoveProject(contextProject)"
+        class="context-item danger"
+        @click="handleContextRemove"
+      >
+        {{ $t('project.remove') }}
+      </button>
     </div>
+
+    <CreateSessionDialog
+      :visible="showCreateSessionDialog"
+      :target-instance-id="sessionTargetProject?.instanceId || LOCAL_INSTANCE_ID"
+      :target-project-id="sessionTargetProject?.projectId"
+      :target-project-path="sessionTargetProject?.path || ''"
+      :default-project-path="sessionTargetProject?.path || ''"
+      :lock-project-path="true"
+      :start-paused="true"
+      :activate-on-create="false"
+      @cancel="closeCreateSessionDialog"
+      @created="handleCreateSessionCreated"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useProjectsStore, type Project } from '@/stores/projects'
-import { useSessionsStore, type Session } from '@/stores/sessions'
+import { useProjectsStore, type UnifiedProject } from '@/stores/projects'
+import { useSessionsStore } from '@/stores/sessions'
 import { useSettingsStore } from '@/stores/settings'
+import { useInstancesStore } from '@/stores/instances'
 import { useToast } from '@/composables/useToast'
-import { selectFolder } from '@/api/project'
 import { projectPriorityScore } from '@/utils/smart-priority'
+import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
+import { buildProjectRouteLocation } from '@/utils/project-routing'
+import CreateSessionDialog from '@/components/CreateSessionDialog.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const projectsStore = useProjectsStore()
 const sessionsStore = useSessionsStore()
 const settingsStore = useSettingsStore()
+const instancesStore = useInstancesStore()
 const toast = useToast()
 
 const searchQuery = ref('')
+const instanceFilter = ref<'all' | string>('all')
+const createTargetInstanceId = ref<string>(LOCAL_INSTANCE_ID)
 const sortBy = ref<'name' | 'recent' | 'created'>('recent')
-const contextMenu = ref({ visible: false, x: 0, y: 0, project: null as Project | null })
+const contextMenu = ref({ visible: false, x: 0, y: 0, project: null as UnifiedProject | null })
+const showCreateSessionDialog = ref(false)
+const sessionTargetProject = ref<UnifiedProject | null>(null)
+
+const contextProject = computed(() => contextMenu.value.project)
+const createTargetOptions = computed(() =>
+  instancesStore.instances
+    .filter((instance) => instance.type === 'local' || instance.enabled)
+    .filter((instance) => instance.capabilities.projectCreate)
+    .map((instance) => ({
+      value: instance.id,
+      label: instance.id === LOCAL_INSTANCE_ID ? t('session.instanceLocal') : instance.name
+    }))
+)
+const instanceFilterOptions = computed(() =>
+  instancesStore.instances
+    .filter((instance) => instance.type === 'local' || instance.enabled)
+    .map((instance) => ({
+      value: instance.id,
+      label: instance.id === LOCAL_INSTANCE_ID ? t('session.instanceLocal') : instance.name
+    }))
+)
 
 const filteredProjects = computed(() => {
+  const byInstance =
+    instanceFilter.value === 'all'
+      ? projectsStore.unifiedProjects
+      : projectsStore.unifiedProjects.filter((project) => project.instanceId === instanceFilter.value)
   const q = searchQuery.value.toLowerCase()
-  if (!q) return projectsStore.projects
-  return projectsStore.projects.filter(
-    (p) => p.name.toLowerCase().includes(q) || p.path.toLowerCase().includes(q)
+  if (!q) return byInstance
+  return byInstance.filter(
+    (project) => project.name.toLowerCase().includes(q) || project.path.toLowerCase().includes(q)
   )
 })
 
@@ -99,36 +218,41 @@ const sortedProjects = computed(() => {
   if (smartEnabled) {
     const mode = settingsStore.settings.smartPriorityMode
     const now = Date.now()
-    const normalizePath = (path: string) =>
-      window.electronAPI?.platform === 'win32' ? path.toLowerCase() : path
-    const sessionsByProjectKey = new Map<string, Session[]>()
+    const sessionsByProjectKey = new Map<string, typeof sessionsStore.unifiedSessions>()
 
-    for (const session of sessionsStore.sessions) {
-      const key = normalizePath(session.projectPath || '')
-      const current = sessionsByProjectKey.get(key)
-      if (current) {
-        current.push(session)
-      } else {
-        sessionsByProjectKey.set(key, [session])
+    for (const session of sessionsStore.unifiedSessions) {
+      if (session.projectId) {
+        const key = `${session.instanceId}:${session.projectId}`
+        const current = sessionsByProjectKey.get(key)
+        if (current) {
+          current.push(session)
+        } else {
+          sessionsByProjectKey.set(key, [session])
+        }
       }
     }
 
     const projectScores = new Map<string, number>()
     for (const project of list) {
-      const key = normalizePath(project.path)
-      const sessions = sessionsByProjectKey.get(key) ?? []
+      const sessions = (sessionsByProjectKey.get(project.globalProjectKey) ?? []).map((session) => ({
+        ...session,
+        id: session.sessionId
+      }))
       projectScores.set(
-        project.id,
+        project.globalProjectKey,
         projectPriorityScore({ lastOpenedAt: project.lastOpenedAt }, sessions, mode, now)
       )
     }
 
-    return list.sort((a, b) => (projectScores.get(b.id) ?? 0) - (projectScores.get(a.id) ?? 0))
+    return list.sort(
+      (left, right) =>
+        (projectScores.get(right.globalProjectKey) ?? 0) - (projectScores.get(left.globalProjectKey) ?? 0)
+    )
   }
 
   switch (sortBy.value) {
     case 'name':
-      return list.sort((a, b) => a.name.localeCompare(b.name))
+      return list.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
     case 'recent':
       return list.sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)
     case 'created':
@@ -142,63 +266,242 @@ function formatDate(ts: number) {
   return new Date(ts).toLocaleString()
 }
 
+function projectInstanceLabel(project: UnifiedProject): string {
+  if (project.instanceId === LOCAL_INSTANCE_ID) {
+    return t('session.instanceLocal')
+  }
+  const instance = instancesStore.getInstance(project.instanceId)
+  return instance?.name || t('session.instanceRemote')
+}
+
+function projectInstanceStatus(project: UnifiedProject): string {
+  return instancesStore.getInstance(project.instanceId)?.status ?? 'unknown'
+}
+
+function projectInstanceStatusLabel(project: UnifiedProject): string {
+  return t(`settings.remoteStatus.${projectInstanceStatus(project)}`)
+}
+
+function shouldShowProjectStatus(project: UnifiedProject): boolean {
+  return project.instanceId !== LOCAL_INSTANCE_ID
+}
+
+function getProjectCapabilities(project: UnifiedProject) {
+  return instancesStore.getInstance(project.instanceId)?.capabilities ?? null
+}
+
+function canCreateSession(project: UnifiedProject): boolean {
+  return !!getProjectCapabilities(project)?.sessionCreate
+}
+
+function canOpenInExplorer(project: UnifiedProject): boolean {
+  return project.instanceId === LOCAL_INSTANCE_ID && !!getProjectCapabilities(project)?.localPathOpen
+}
+
+function canRemoveProject(project: UnifiedProject): boolean {
+  return !!getProjectCapabilities(project)?.projectRemove
+}
+
+function canRenameProject(project: UnifiedProject): boolean {
+  return !!getProjectCapabilities(project)?.projectUpdate
+}
+
+function getDefaultCreateTargetId(): string {
+  return createTargetOptions.value[0]?.value ?? LOCAL_INSTANCE_ID
+}
+
 async function handleAddProject() {
   try {
-    const path = await selectFolder()
-    if (path) {
-      await projectsStore.addProject(path)
-      toast.success(t('toast.projectAdded'))
+    const targetInstanceId = createTargetInstanceId.value || getDefaultCreateTargetId()
+    const instance = instancesStore.getInstance(targetInstanceId)
+    if (!instance || !instance.capabilities.projectCreate) {
+      toast.warning(t('project.createTargetUnavailable'))
+      return
     }
+
+    if (targetInstanceId === LOCAL_INSTANCE_ID) {
+      const path = await projectsStore.selectFolder()
+      if (!path) return
+      const project = await projectsStore.addProject(path)
+      toast.success(t('toast.projectAdded'))
+      openProjectDetail({
+        instanceId: LOCAL_INSTANCE_ID,
+        projectId: project.id,
+        globalProjectKey: `${LOCAL_INSTANCE_ID}:${project.id}`,
+        name: project.name,
+        path: project.path,
+        createdAt: project.createdAt,
+        lastOpenedAt: project.lastOpenedAt,
+        pathExists: project.pathExists,
+        source: 'local'
+      })
+      return
+    }
+
+    const rawPath = window.prompt(t('project.remotePathPrompt'), '') ?? ''
+    if (!rawPath.trim()) return
+    const rawName = window.prompt(t('project.remoteNamePrompt'), '') ?? ''
+    const created = await projectsStore.createProjectRef(targetInstanceId, {
+      path: rawPath.trim(),
+      name: rawName.trim() || undefined
+    })
+    toast.success(t('toast.projectAdded'))
+    openProjectDetail(created)
   } catch (e: unknown) {
     toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
   }
 }
 
-async function handleRemove(id: string) {
-  if (confirm(t('project.confirmRemove'))) {
-    try {
-      await projectsStore.removeProject(id)
-      toast.success(t('toast.projectRemoved'))
-    } catch (e: unknown) {
-      toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
-    }
+async function handleRemove(project: UnifiedProject) {
+  if (!confirm(t('project.confirmRemove'))) return
+
+  try {
+    await projectsStore.removeProjectRef({
+      instanceId: project.instanceId,
+      projectId: project.projectId,
+      globalProjectKey: project.globalProjectKey
+    })
+    toast.success(t('toast.projectRemoved'))
+  } catch (e: unknown) {
+    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
   }
+}
+
+async function openProjectDetail(project: UnifiedProject) {
+  const projectRef = {
+    instanceId: project.instanceId,
+    projectId: project.projectId,
+    globalProjectKey: project.globalProjectKey
+  }
+
+  const capabilities = getProjectCapabilities(project)
+  let targetProject = project
+
+  if (capabilities?.projectOpen) {
+    try {
+      targetProject = (await projectsStore.openProjectRef(projectRef)) ?? project
+    } catch {
+      projectsStore.setActiveProjectRef(projectRef)
+    }
+  } else {
+    projectsStore.setActiveProjectRef(projectRef)
+  }
+
+  void router.push(buildProjectRouteLocation(targetProject))
+}
+
+function openCreateSessionDialog(project: UnifiedProject): void {
+  sessionTargetProject.value = project
+  showCreateSessionDialog.value = true
+}
+
+function closeCreateSessionDialog(): void {
+  showCreateSessionDialog.value = false
+  sessionTargetProject.value = null
+}
+
+async function handleCreateSessionCreated(payload?: {
+  instanceId: string
+  sessionId: string
+  globalSessionKey: string
+}): Promise<void> {
+  closeCreateSessionDialog()
+  if (!payload) return
+  await sessionsStore.fetchSessionsForInstance(payload.instanceId)
 }
 
 function openInExplorer(path: string) {
   window.electronAPI?.invoke('shell:openPath', path)
 }
 
-function openContextMenu(e: MouseEvent, p: Project) {
-  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, project: p }
+function openContextMenu(e: MouseEvent, project: UnifiedProject) {
+  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, project }
 }
 
-// 右键菜单处理
 function handleContextSettings() {
-  const p = contextMenu.value.project
+  const project = contextMenu.value.project
   contextMenu.value.visible = false
-  if (p) router.push(`/projects/${p.id}`)
+  if (project) openProjectDetail(project)
+}
+
+function handleContextCreateSession() {
+  const project = contextMenu.value.project
+  contextMenu.value.visible = false
+  if (project && canCreateSession(project)) {
+    openCreateSessionDialog(project)
+  }
 }
 
 function handleContextExplorer() {
-  const p = contextMenu.value.project
+  const project = contextMenu.value.project
   contextMenu.value.visible = false
-  if (p) openInExplorer(p.path)
+  if (project && canOpenInExplorer(project)) {
+    openInExplorer(project.path)
+  }
 }
 
 async function handleContextRemove() {
-  const p = contextMenu.value.project
+  const project = contextMenu.value.project
   contextMenu.value.visible = false
-  if (p) await handleRemove(p.id)
+  if (project && canRemoveProject(project)) {
+    await handleRemove(project)
+  }
+}
+
+async function handleRename(project: UnifiedProject) {
+  const nextName = window.prompt(t('project.renamePrompt'), project.name)?.trim() || ''
+  if (!nextName || nextName === project.name) return
+
+  try {
+    await projectsStore.updateProjectRef(
+      {
+        instanceId: project.instanceId,
+        projectId: project.projectId,
+        globalProjectKey: project.globalProjectKey
+      },
+      { name: nextName }
+    )
+    toast.success(t('toast.projectUpdated'))
+  } catch (e: unknown) {
+    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
+  }
+}
+
+async function handleContextRename() {
+  const project = contextMenu.value.project
+  contextMenu.value.visible = false
+  if (project && canRenameProject(project)) {
+    await handleRename(project)
+  }
 }
 
 onMounted(() => {
   if (!settingsStore.loaded) {
     void settingsStore.load()
   }
-  projectsStore.fetchProjects()
-  sessionsStore.fetchSessions()
+  void instancesStore.fetchInstances()
+  void projectsStore.fetchAllProjects()
+  void sessionsStore.fetchAllSessions()
 })
+
+watch(
+  createTargetOptions,
+  (options) => {
+    if (options.some((option) => option.value === createTargetInstanceId.value)) return
+    createTargetInstanceId.value = options[0]?.value ?? LOCAL_INSTANCE_ID
+  },
+  { immediate: true }
+)
+
+watch(
+  instanceFilterOptions,
+  (options) => {
+    if (instanceFilter.value === 'all') return
+    if (options.some((option) => option.value === instanceFilter.value)) return
+    instanceFilter.value = 'all'
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped lang="scss">
@@ -210,6 +513,7 @@ onMounted(() => {
 .toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-lg);
 }
@@ -224,7 +528,10 @@ onMounted(() => {
   font-size: var(--font-size-sm);
   outline: none;
   transition: border-color var(--transition-fast);
-  &:focus { border-color: var(--accent-primary); }
+
+  &:focus {
+    border-color: var(--accent-primary);
+  }
 }
 
 .sort-select {
@@ -234,6 +541,7 @@ onMounted(() => {
   border-radius: var(--radius-sm);
   padding: 4px 8px;
   font-size: var(--font-size-xs);
+  min-width: 120px;
 }
 
 .empty-state {
@@ -259,24 +567,84 @@ onMounted(() => {
   padding: var(--spacing-lg);
   cursor: pointer;
   transition: all var(--transition-fast);
+
   &:hover {
     border-color: var(--border-light);
     box-shadow: var(--shadow-md);
-    .card-actions { opacity: 1; }
+
+    .card-actions {
+      opacity: 1;
+    }
+  }
+}
+
+@media (max-width: 960px) {
+  .toolbar {
+    align-items: stretch;
+  }
+
+  .search-input {
+    min-width: 220px;
   }
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
   margin-bottom: var(--spacing-sm);
+}
+
+.card-title-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
 
 .card-name {
   font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--text-primary);
+  min-width: 0;
+}
+
+.card-instance-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(96, 165, 250, 0.12);
+  color: var(--accent-primary);
+  font-size: var(--font-size-xs);
+
+  &.local {
+    background: rgba(148, 163, 184, 0.14);
+    color: var(--text-secondary);
+  }
+}
+
+.card-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+
+  &.status-online {
+    color: var(--status-success);
+    background: rgba(52, 211, 153, 0.12);
+  }
+
+  &.status-offline,
+  &.status-error {
+    color: var(--status-error);
+    background: rgba(248, 113, 113, 0.12);
+  }
 }
 
 .card-actions {
@@ -295,8 +663,16 @@ onMounted(() => {
   font-size: var(--font-size-sm);
   color: var(--text-muted);
   transition: all var(--transition-fast);
-  &:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-  &.danger:hover { background: rgba(248, 113, 113, 0.15); color: var(--status-error); }
+
+  &:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  &.danger:hover {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--status-error);
+  }
 }
 
 .card-path {
@@ -321,6 +697,39 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
-// btn, btn-sm, btn-primary 已在 global.scss 中定义
-// context-overlay, context-menu, context-item 已在 global.scss 中定义
+.context-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 110;
+  min-width: 180px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+}
+
+.context-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+
+  &.danger {
+    color: var(--status-error);
+  }
+}
 </style>

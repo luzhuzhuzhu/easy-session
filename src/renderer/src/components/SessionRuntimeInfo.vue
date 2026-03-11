@@ -18,11 +18,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import type { Session } from '@/stores/sessions'
+import type { UnifiedSession } from '@/models/unified-resource'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
-  session: Session | null
+  session: UnifiedSession | null
 }>()
 
 const { t } = useI18n()

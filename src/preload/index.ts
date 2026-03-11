@@ -34,6 +34,21 @@ const ALLOWED_INVOKE_CHANNELS = [
   'project:add', 'project:remove', 'project:list', 'project:get',
   'project:update', 'project:open', 'project:selectFolder',
   'project:sessions', 'project:detect', 'project:prompt:read',
+  // remote instances
+  'remote-instance:list', 'remote-instance:add', 'remote-instance:update',
+  'remote-instance:remove', 'remote-instance:test', 'remote-instance:getToken',
+  // remote gateway bridge
+  'remote-gateway:invoke', 'remote-gateway:subscribeOutput',
+  'remote-gateway:unsubscribeOutput', 'remote-gateway:subscribeStatus',
+  'remote-gateway:unsubscribeStatus',
+  // local remote service
+  'remote-service:getState', 'remote-service:update', 'remote-service:getToken',
+  'remote-service:regenerateDefaultToken',
+  // cloudflare quick tunnel
+  'cloudflare-tunnel:getState', 'cloudflare-tunnel:updateConfig',
+  'cloudflare-tunnel:start', 'cloudflare-tunnel:stop',
+  // remote network strategy
+  'remote-network:getState', 'remote-network:update',
   // settings
   'settings:read', 'settings:write',
   // cli
@@ -44,6 +59,8 @@ const ALLOWED_INVOKE_CHANNELS = [
 const ALLOWED_RECEIVE_CHANNELS = [
   'session:output',
   'session:status',
+  'remote-session:output',
+  'remote-session:status',
   'config:changed',
   'cli:output',
   'cli:exit',
