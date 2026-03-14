@@ -163,6 +163,26 @@
             <button
               class="btn btn-sm"
               type="button"
+              :disabled="savingRemoteService || !remoteServiceState"
+              @click="handleResetRemoteServiceForm"
+            >
+              {{ $t('settings.remoteServiceResetForm') }}
+            </button>
+            <button
+              class="btn btn-sm"
+              type="button"
+              :disabled="savingRemoteService || resettingRemoteServiceToken || !remoteServiceState?.customTokenConfigured"
+              @click="handleResetRemoteServiceToken"
+            >
+              {{
+                resettingRemoteServiceToken
+                  ? $t('settings.remoteServiceResettingToken')
+                  : $t('settings.remoteServiceResetToDefaultToken')
+              }}
+            </button>
+            <button
+              class="btn btn-sm"
+              type="button"
               :disabled="copyingRemoteServiceToken || !remoteServiceState"
               @click="handleCopyRemoteServiceToken"
             >
@@ -547,6 +567,7 @@ const copyingCloudflareTunnelUrl = ref(false)
 const cloudflareTunnelLoading = ref(false)
 const copyingRemoteServiceToken = ref(false)
 const regeneratingRemoteServiceToken = ref(false)
+const resettingRemoteServiceToken = ref(false)
 const remoteServiceLoading = ref(false)
 const deletingId = ref<string | null>(null)
 const remoteServiceState = ref<RemoteServiceState | null>(null)
@@ -625,6 +646,11 @@ function syncRemoteServiceForm(state: RemoteServiceState): void {
   remoteServiceForm.passthroughOnly = state.passthroughOnly
   remoteServiceForm.tokenMode = state.tokenMode
   remoteServiceForm.customToken = ''
+}
+
+function handleResetRemoteServiceForm(): void {
+  if (!remoteServiceState.value) return
+  syncRemoteServiceForm(remoteServiceState.value)
 }
 
 function formatStatusText(status: RemoteInstance['status']): string {
@@ -778,6 +804,29 @@ async function handleRegenerateRemoteServiceToken(): Promise<void> {
     toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
   } finally {
     regeneratingRemoteServiceToken.value = false
+  }
+}
+
+async function handleResetRemoteServiceToken(): Promise<void> {
+  if (!remoteServiceState.value?.customTokenConfigured) return
+  resettingRemoteServiceToken.value = true
+  try {
+    const state = await updateRemoteServiceSettings({
+      enabled: remoteServiceForm.enabled,
+      host: remoteServiceForm.host.trim(),
+      port: remoteServiceForm.port,
+      passthroughOnly: remoteServiceForm.passthroughOnly,
+      tokenMode: 'default',
+      customToken: null
+    })
+    remoteServiceState.value = state
+    syncRemoteServiceForm(state)
+    await loadCloudflareTunnelState()
+    toast.success(t('settings.remoteServiceTokenResetToDefaultSuccess'))
+  } catch (error) {
+    toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
+  } finally {
+    resettingRemoteServiceToken.value = false
   }
 }
 

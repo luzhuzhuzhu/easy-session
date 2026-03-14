@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from 'express'
 import { existsSync } from 'fs'
 import { access } from 'fs/promises'
+import { createRequire } from 'module'
 import { join } from 'path'
 import type {
   RemoteCapabilitiesResponse,
@@ -18,6 +19,8 @@ import type {
 } from './types'
 import { buildRemoteCapabilityMap } from './capabilities'
 import { renderLoginPage, renderSessionsPage } from './web'
+
+const moduleRequire = createRequire(import.meta.url)
 
 class HttpError extends Error {
   constructor(
@@ -298,6 +301,38 @@ function resolveRequestBaseUrl(req: Request, fallbackBaseUrl: string): string {
   }
 }
 
+export function resolveRemoteAssetPath(pathSegments: string[]): string | null {
+  const moduleSpecifier = pathSegments.join('/')
+  const candidates: string[] = []
+
+  try {
+    candidates.push(moduleRequire.resolve(moduleSpecifier))
+  } catch {
+    // Fall through to packaged and cwd-based lookups.
+  }
+
+  candidates.push(join(process.cwd(), 'node_modules', ...pathSegments))
+
+  const resourcesPath =
+    typeof process.resourcesPath === 'string' && process.resourcesPath.trim()
+      ? process.resourcesPath.trim()
+      : ''
+
+  if (resourcesPath) {
+    candidates.push(join(resourcesPath, 'app.asar', 'node_modules', ...pathSegments))
+    candidates.push(join(resourcesPath, 'app.asar.unpacked', 'node_modules', ...pathSegments))
+    candidates.push(join(resourcesPath, 'node_modules', ...pathSegments))
+  }
+
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) {
+      return candidate
+    }
+  }
+
+  return null
+}
+
 export function registerRemoteRoutes(
   app: Express,
   deps: RemoteDependencies,
@@ -305,12 +340,12 @@ export function registerRemoteRoutes(
 ): void {
   const { defaultBaseUrl, passthroughOnly, machineName, platform, serverName, serverVersion } = options
   const capabilities = buildRemoteCapabilityMap(passthroughOnly)
-  const xtermJsPath = join(process.cwd(), 'node_modules', '@xterm', 'xterm', 'lib', 'xterm.js')
-  const xtermCssPath = join(process.cwd(), 'node_modules', '@xterm', 'xterm', 'css', 'xterm.css')
-  const xtermFitPath = join(process.cwd(), 'node_modules', '@xterm', 'addon-fit', 'lib', 'addon-fit.js')
+  const xtermJsPath = resolveRemoteAssetPath(['@xterm', 'xterm', 'lib', 'xterm.js'])
+  const xtermCssPath = resolveRemoteAssetPath(['@xterm', 'xterm', 'css', 'xterm.css'])
+  const xtermFitPath = resolveRemoteAssetPath(['@xterm', 'addon-fit', 'lib', 'addon-fit.js'])
 
   app.get('/remote-assets/xterm.js', (_req, res) => {
-    if (!existsSync(xtermJsPath)) {
+    if (!xtermJsPath || !existsSync(xtermJsPath)) {
       res.status(404).send('xterm.js not found')
       return
     }
@@ -318,7 +353,7 @@ export function registerRemoteRoutes(
   })
 
   app.get('/remote-assets/xterm.css', (_req, res) => {
-    if (!existsSync(xtermCssPath)) {
+    if (!xtermCssPath || !existsSync(xtermCssPath)) {
       res.status(404).send('xterm.css not found')
       return
     }
@@ -326,7 +361,7 @@ export function registerRemoteRoutes(
   })
 
   const sendXtermFit = (_req: Request, res: Response): void => {
-    if (!existsSync(xtermFitPath)) {
+    if (!xtermFitPath || !existsSync(xtermFitPath)) {
       res.status(404).send('xterm-fit.js not found')
       return
     }

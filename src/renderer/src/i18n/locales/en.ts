@@ -306,6 +306,9 @@ settings: {
     remoteServiceCustomTokenKeepHint: 'Leave blank to keep the currently saved custom token.',
     remoteServiceApply: 'Save and apply',
     remoteServiceApplying: 'Applying...',
+    remoteServiceResetForm: 'Reset form',
+    remoteServiceResetToDefaultToken: 'Use default token',
+    remoteServiceResettingToken: 'Resetting...',
     remoteServiceCopyToken: 'Copy current token',
     remoteServiceCopyingToken: 'Copying...',
     remoteServiceRegenerateDefaultToken: 'Regenerate default token',
@@ -323,6 +326,7 @@ settings: {
     remoteServiceFieldPassthroughOnly: 'passthrough-only',
     remoteServiceFieldToken: 'token',
     remoteServiceTokenCopied: 'Current token copied to clipboard',
+    remoteServiceTokenResetToDefaultSuccess: 'Switched back to the default token and applied it',
     remoteServiceDefaultTokenRegenerated: 'Default token regenerated and applied',
     remoteServiceTokenSourceValue: {
       env: 'Environment variable',

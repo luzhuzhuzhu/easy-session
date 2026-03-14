@@ -306,6 +306,9 @@ settings: {
     remoteServiceCustomTokenKeepHint: '留空表示继续使用当前已保存的自定义 token。',
     remoteServiceApply: '保存并应用',
     remoteServiceApplying: '应用中...',
+    remoteServiceResetForm: '还原表单',
+    remoteServiceResetToDefaultToken: '恢复默认 token',
+    remoteServiceResettingToken: '恢复中...',
     remoteServiceCopyToken: '复制当前 token',
     remoteServiceCopyingToken: '复制中...',
     remoteServiceRegenerateDefaultToken: '重新随机生成默认 token',
@@ -323,6 +326,7 @@ settings: {
     remoteServiceFieldPassthroughOnly: '仅透传',
     remoteServiceFieldToken: 'Token',
     remoteServiceTokenCopied: '当前 token 已复制到剪贴板',
+    remoteServiceTokenResetToDefaultSuccess: '已恢复为默认 token 并立即应用',
     remoteServiceDefaultTokenRegenerated: '默认 token 已重新随机生成并应用',
     remoteServiceTokenSourceValue: {
       env: '环境变量',

@@ -7,26 +7,26 @@ import type {
 
 function assertObject(value: unknown, name: string): asserts value is Record<string, unknown> {
   if (!value || typeof value !== 'object') {
-    throw new Error(`参数 ${name} 必须为对象`)
+    throw new Error(`参数 ${name} 必须是对象`)
   }
 }
 
 function assertBoolean(value: unknown, name: string): asserts value is boolean {
   if (typeof value !== 'boolean') {
-    throw new Error(`参数 ${name} 必须为布尔值`)
+    throw new Error(`参数 ${name} 必须是布尔值`)
   }
 }
 
 function assertString(value: unknown, name: string): asserts value is string {
   if (typeof value !== 'string' || !value.trim()) {
-    throw new Error(`参数 ${name} 必须为非空字符串`)
+    throw new Error(`参数 ${name} 必须是非空字符串`)
   }
 }
 
 function parsePort(value: unknown): number {
   const port = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10)
   if (!Number.isFinite(port) || port < 1 || port > 65535) {
-    throw new Error('参数 port 必须是 1-65535 之间的整数')
+    throw new Error('参数 port 必须是 1 到 65535 之间的整数')
   }
   return Math.floor(port)
 }

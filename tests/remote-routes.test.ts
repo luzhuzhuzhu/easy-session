@@ -3,7 +3,7 @@ import express from 'express'
 import { createServer } from 'http'
 import cors from 'cors'
 import { createRestAuthMiddleware } from '../src/main/remote/auth'
-import { registerRemoteRoutes } from '../src/main/remote/routes'
+import { registerRemoteRoutes, resolveRemoteAssetPath } from '../src/main/remote/routes'
 import type { RemoteDependencies, RemoteRouteRegistrationOptions } from '../src/main/remote/types'
 
 const routeOptions: RemoteRouteRegistrationOptions = {
@@ -297,6 +297,18 @@ describe('remote routes', () => {
       expect(addonResp.headers.get('content-type')).toContain('application/javascript')
     } finally {
       await server.close()
+    }
+  })
+
+  it('resolves remote xterm assets without depending on the current working directory', () => {
+    const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('Z:/missing-easysession-root')
+
+    try {
+      expect(resolveRemoteAssetPath(['@xterm', 'xterm', 'lib', 'xterm.js'])).toMatch(/xterm\.js$/)
+      expect(resolveRemoteAssetPath(['@xterm', 'xterm', 'css', 'xterm.css'])).toMatch(/xterm\.css$/)
+      expect(resolveRemoteAssetPath(['@xterm', 'addon-fit', 'lib', 'addon-fit.js'])).toMatch(/addon-fit\.js$/)
+    } finally {
+      cwdSpy.mockRestore()
     }
   })
 
