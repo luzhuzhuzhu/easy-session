@@ -7,10 +7,12 @@ describe('remote web templates', () => {
     const loginHtml = renderLoginPage('http://127.0.0.1:18765')
     const sessionsHtml = renderSessionsPage('http://127.0.0.1:18765', true)
 
-    expect(loginHtml).toContain('<h1 class="page-title">浏览器远程入口</h1>')
+    expect(loginHtml).toContain('<h1 class="page-title">远程登录</h1>')
     expect(loginHtml).toContain('data-theme-toggle')
     expect(loginHtml).toContain('id="loginForm"')
-    expect(sessionsHtml).toContain('<h1 class="page-title">远程会话</h1>')
+    expect(sessionsHtml).toContain('class="card topbar"')
+    expect(sessionsHtml).toContain('EasySession')
+    expect(sessionsHtml).toContain('会话列表')
     expect(sessionsHtml).toContain('id="desktopSessionList"')
     expect(sessionsHtml).toContain('id="mobileSessionList"')
     expect(sessionsHtml).toContain('id="terminalHost"')
@@ -24,7 +26,7 @@ describe('remote web templates', () => {
     const loginHtml = renderLoginPage('http://127.0.0.1:18765')
 
     expect(loginHtml).toContain('id="rememberDevice"')
-    expect(loginHtml).toContain('默认只保存在当前标签页')
+    expect(loginHtml).toContain('勾选后凭据将持久保存，否则仅在当前会话有效。')
     expect(loginHtml).toContain("sessionStorage.setItem(keyToken, token);")
     expect(loginHtml).toContain("sessionStorage.setItem(keyBase, base);")
     expect(loginHtml).toContain("localStorage.setItem(keyRemember, '1');")
@@ -64,20 +66,30 @@ describe('remote web templates', () => {
     expect(html).toContain("location.href = 'login';")
   })
 
-  it('streams terminal input as raw writes and exposes function-key controls in the new web UI', () => {
+  it('streams terminal input as raw writes, keeps a local draft and trims the unusable soft keys', () => {
     const html = renderSessionsPage('http://127.0.0.1:18765', true)
 
-    expect(html).toContain('placeholder="实时输入：键入即发送，回车执行"')
+    expect(html).toContain('键入即发送，回车执行')
     expect(html).toContain('data-terminal-key="arrow-up"')
     expect(html).toContain('data-terminal-key="arrow-down"')
     expect(html).toContain('data-terminal-key="escape"')
-    expect(html).toContain('data-terminal-key="ctrl-c"')
-    expect(html).toContain('data-terminal-key="ctrl-d"')
+    expect(html).toContain('data-terminal-key="backspace"')
+    expect(html).not.toContain('data-terminal-key="home"')
+    expect(html).not.toContain('data-terminal-key="end"')
+    expect(html).not.toContain('data-terminal-key="delete"')
+    expect(html).not.toContain('data-terminal-key="tab"')
+    expect(html).not.toContain('data-terminal-key="ctrl-c"')
+    expect(html).not.toContain('data-terminal-key="ctrl-d"')
     expect(html).toContain('function bindTerminalKeyButtons()')
+    expect(html).toContain('inputDraftBySession')
+    expect(html).toContain('function syncActiveInputDraft()')
+    expect(html).toContain('function setActiveInputDraft(nextDraft)')
+    expect(html).toContain('function clearActiveInputDraft()')
     expect(html).toContain('function handleLiveInputBeforeInput(event, inputEl)')
     expect(html).toContain('function handleLiveInputKeydown(event, inputEl)')
     expect(html).toContain('function handleLiveInputPaste(event, inputEl)')
     expect(html).toContain('function canWriteToSession(session)')
+    expect(html).toContain("if (keyId === 'enter' || keyId === 'ctrl-u') {")
     expect(html).toContain("state.socket.emit('session:write', {")
     expect(html).toContain('data: raw')
     expect(html).not.toContain("state.socket.emit('session:input', {")
@@ -93,6 +105,17 @@ describe('remote web templates', () => {
     expect(html).toContain("await api('/api/sessions/' + session.id + '/pause', { method: 'POST' });")
     expect(html).toContain("await api('/api/sessions/' + session.id + '/restart', { method: 'POST' });")
     expect(html).toContain("await api('/api/sessions/' + session.id, { method: 'DELETE' });")
+  })
+
+  it('renders the sessions list as a project-level tree in the new remote web', () => {
+    const html = renderSessionsPage('http://127.0.0.1:18765', true)
+
+    expect(html).toContain("state.capabilities.projectsList ? api('/api/projects') : Promise.resolve([])")
+    expect(html).toContain('function buildSessionGroups(list, keyword)')
+    expect(html).toContain('function renderProjectGroup(target, group)')
+    expect(html).toContain("className = 'session-project-toggle'")
+    expect(html).toContain("className = 'session-project-body'")
+    expect(html).toContain("group.sessions.length + ' 个会话 · ' + getProjectDescription(group.project)")
   })
 
   it('falls back to a plain-text terminal when xterm assets are unavailable', () => {

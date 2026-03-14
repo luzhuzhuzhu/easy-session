@@ -321,31 +321,6 @@
             <span class="meta-label">{{ $t('settings.cloudflareTunnelPathSource') }}</span>
             <span class="meta-value">{{ formatCloudflarePathSource(cloudflareTunnelState.pathSource) }}</span>
           </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelConfiguredTransport') }}</span>
-            <span class="meta-value">{{ formatTransportMode(cloudflareTunnelState.transportMode) }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelConfiguredProxy') }}</span>
-            <span class="meta-value">{{ formatProxyMode(cloudflareTunnelState.proxyMode) }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelEffectiveTransport') }}</span>
-            <span class="meta-value">{{ formatTransportMode(cloudflareTunnelState.effectiveTransport) }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelEffectiveProxy') }}</span>
-            <span class="meta-value">{{ formatProxyMode(cloudflareTunnelState.effectiveProxyMode) }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelFallbackUsed') }}</span>
-            <span class="meta-value">
-              {{ cloudflareTunnelState.effectiveFallbackUsed ? $t('settings.remoteYes') : $t('settings.remoteNo') }}
-              <template v-if="cloudflareTunnelState.effectiveAttemptIndex">
-                · #{{ cloudflareTunnelState.effectiveAttemptIndex }}
-              </template>
-            </span>
-          </div>
           <div class="meta-item meta-item-full">
             <span class="meta-label">{{ $t('settings.cloudflareTunnelEffectiveBinaryPath') }}</span>
             <span class="meta-value mono">{{ cloudflareTunnelState.effectiveBinaryPath || '-' }}</span>
@@ -357,164 +332,6 @@
           <div class="meta-item meta-item-full">
             <span class="meta-label">{{ $t('settings.cloudflareTunnelPublicUrl') }}</span>
             <span class="meta-value mono">{{ cloudflareTunnelState.publicUrl || '-' }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelLastError') }}</span>
-            <span class="meta-value error-text">{{ cloudflareTunnelState.lastError || $t('settings.remoteNoError') }}</span>
-          </div>
-        </div>
-      </template>
-    </section>
-
-    <section class="settings-section settings-section-remote">
-      <div class="section-head">
-        <div>
-          <h2>{{ $t('settings.remoteNetworkStrategy') }}</h2>
-          <p class="setting-hint section-hint">{{ $t('settings.remoteNetworkStrategyHint') }}</p>
-        </div>
-        <div class="instance-summary">
-          <span class="summary-pill">{{ formatStrategySummary(remoteNetworkState?.cloudflareRecommended || null) }}</span>
-          <span class="summary-pill">{{ formatCliResolvedSummary(remoteNetworkState?.cliResolved || null) }}</span>
-        </div>
-      </div>
-
-      <div v-if="remoteNetworkLoading" class="remote-disabled-state">
-        {{ $t('settings.remoteNetworkLoading') }}
-      </div>
-
-      <template v-else-if="remoteNetworkState">
-        <div class="remote-form-panel">
-          <div class="remote-form-grid">
-            <div class="field-block">
-              <label>{{ $t('settings.remoteNetworkCloudflareTransport') }}</label>
-              <select v-model="remoteNetworkForm.cloudflareTransportMode">
-                <option value="auto">{{ $t('settings.remoteTransportModeValue.auto') }}</option>
-                <option value="http2">{{ $t('settings.remoteTransportModeValue.http2') }}</option>
-                <option value="quic">{{ $t('settings.remoteTransportModeValue.quic') }}</option>
-              </select>
-            </div>
-            <div class="field-block">
-              <label>{{ $t('settings.remoteNetworkCloudflareProxyMode') }}</label>
-              <select v-model="remoteNetworkForm.cloudflareProxyMode">
-                <option value="auto">{{ $t('settings.remoteProxyModeValue.auto') }}</option>
-                <option value="off">{{ $t('settings.remoteProxyModeValue.off') }}</option>
-                <option value="inherit">{{ $t('settings.remoteProxyModeValue.inherit') }}</option>
-                <option value="custom">{{ $t('settings.remoteProxyModeValue.custom') }}</option>
-              </select>
-            </div>
-            <div class="field-block field-block-wide">
-              <label>{{ $t('settings.remoteNetworkCloudflareCustomProxy') }}</label>
-              <input
-                v-model.trim="remoteNetworkForm.cloudflareCustomProxyUrl"
-                type="text"
-                :disabled="remoteNetworkForm.cloudflareProxyMode !== 'custom'"
-                :placeholder="$t('settings.remoteNetworkCloudflareCustomProxyPlaceholder')"
-              />
-            </div>
-            <label class="checkbox-row field-block field-block-inline-start">
-              <input v-model="remoteNetworkForm.cloudflareRememberLastSuccess" type="checkbox" />
-              <span>{{ $t('settings.remoteNetworkRememberLastSuccess') }}</span>
-            </label>
-            <label class="checkbox-row field-block field-block-inline-start">
-              <input v-model="remoteNetworkForm.cloudflareAutoFallback" type="checkbox" />
-              <span>{{ $t('settings.remoteNetworkAutoFallback') }}</span>
-            </label>
-            <div class="field-block">
-              <label>{{ $t('settings.remoteNetworkCliProxyMode') }}</label>
-              <select v-model="remoteNetworkForm.cliProxyMode">
-                <option value="auto">{{ $t('settings.remoteProxyModeValue.auto') }}</option>
-                <option value="off">{{ $t('settings.remoteProxyModeValue.off') }}</option>
-                <option value="inherit">{{ $t('settings.remoteProxyModeValue.inherit') }}</option>
-                <option value="custom">{{ $t('settings.remoteProxyModeValue.custom') }}</option>
-              </select>
-            </div>
-            <div class="field-block field-block-wide">
-              <label>{{ $t('settings.remoteNetworkCliCustomProxy') }}</label>
-              <input
-                v-model.trim="remoteNetworkForm.cliCustomProxyUrl"
-                type="text"
-                :disabled="remoteNetworkForm.cliProxyMode !== 'custom'"
-                :placeholder="$t('settings.remoteNetworkCliCustomProxyPlaceholder')"
-              />
-            </div>
-            <label class="checkbox-row field-block field-block-inline-start">
-              <input v-model="remoteNetworkForm.cliEnableNoProxyLocalhost" type="checkbox" />
-              <span>{{ $t('settings.remoteNetworkCliNoProxyLocalhost') }}</span>
-            </label>
-          </div>
-
-          <div class="remote-form-actions">
-            <button
-              class="btn btn-primary btn-sm"
-              type="button"
-              :disabled="savingRemoteNetwork || !canSubmitRemoteNetworkForm"
-              @click="handleSaveRemoteNetworkSettings"
-            >
-              {{ savingRemoteNetwork ? $t('settings.remoteNetworkApplying') : $t('settings.remoteNetworkApply') }}
-            </button>
-          </div>
-        </div>
-
-        <div class="remote-card-grid">
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteNetworkDetectedInheritedProxy') }}</span>
-            <span class="meta-value mono">{{ remoteNetworkState.detected.inheritedProxyUrl || '-' }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteNetworkDetectedHttpProxy') }}</span>
-            <span class="meta-value mono">{{ remoteNetworkState.detected.httpProxyUrl || '-' }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteNetworkDetectedSocksProxy') }}</span>
-            <span class="meta-value mono">{{ remoteNetworkState.detected.socksProxyUrl || '-' }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteNetworkDetectedUpdatedAt') }}</span>
-            <span class="meta-value">{{ formatLastChecked(remoteNetworkState.detected.updatedAt) }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.remoteNetworkCloudflareRecommended') }}</span>
-            <span class="meta-value">{{ formatStrategySummary(remoteNetworkState.cloudflareRecommended) }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.remoteNetworkCloudflareCandidates') }}</span>
-            <span class="meta-value">{{ formatStrategyList(remoteNetworkState.cloudflareCandidates) }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.remoteNetworkCloudflareLastSuccessful') }}</span>
-            <span class="meta-value">{{ formatLastSuccessfulStrategy() }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.remoteNetworkCliResolved') }}</span>
-            <span class="meta-value">{{ formatCliResolvedSummary(remoteNetworkState.cliResolved) }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.remoteNetworkLastFailureCategory') }}</span>
-            <span class="meta-value">{{ formatFailureCategory(remoteNetworkState.runtime.cloudflare.lastFailureCategory) }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.remoteNetworkLastFailureReason') }}</span>
-            <span class="meta-value error-text">{{ remoteNetworkState.runtime.cloudflare.lastFailureReason || $t('settings.remoteNoError') }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.remoteNetworkCloudflareAdvice') }}</span>
-            <span class="meta-value">{{ formatCloudflareFailureAdvice(remoteNetworkState.runtime.cloudflare.lastFailureCategory) }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteNetworkCliLastFailureSource') }}</span>
-            <span class="meta-value">{{ formatCliFailureSource(remoteNetworkState.runtime.cli.lastFailureCli) }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteNetworkCliLastFailureCategory') }}</span>
-            <span class="meta-value">{{ formatCliFailureCategory(remoteNetworkState.runtime.cli.lastFailureCategory) }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.remoteNetworkCliLastFailureReason') }}</span>
-            <span class="meta-value error-text">{{ remoteNetworkState.runtime.cli.lastFailureReason || $t('settings.remoteNoError') }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.remoteNetworkCliAdvice') }}</span>
-            <span class="meta-value">{{ formatCliFailureAdvice(remoteNetworkState.runtime.cli.lastFailureCategory) }}</span>
           </div>
         </div>
       </template>
@@ -570,24 +387,12 @@
         </div>
 
         <div class="remote-form-actions">
-          <button class="btn btn-sm" type="button" :disabled="draftBusy || !canSubmitRemoteForm" @click="handleTestDraft">
-            {{ draftBusy ? $t('settings.remoteTesting') : $t('settings.remoteTest') }}
-          </button>
           <button class="btn btn-primary btn-sm" type="button" :disabled="savingRemote || !canSubmitRemoteForm" @click="handleSaveRemoteInstance">
             {{ savingRemote ? $t('settings.remoteSaving') : (isEditingRemote ? $t('settings.remoteUpdate') : $t('settings.remoteAdd')) }}
           </button>
           <button v-if="isEditingRemote" class="btn btn-sm" type="button" :disabled="savingRemote" @click="resetRemoteForm">
             {{ $t('settings.remoteCancelEdit') }}
           </button>
-        </div>
-
-        <div v-if="draftTestResult" class="draft-result" :class="draftTestResult.ok ? 'ok' : 'error'">
-          <strong>{{ draftTestResult.ok ? $t('settings.remoteTestSuccess') : $t('settings.remoteTestFail') }}</strong>
-          <span>
-            {{ formatStatusText(draftTestResult.status) }} · {{ formatLatencyLabel(draftTestResult.latencyMs, draftTestResult.status) }}
-            <template v-if="draftTestResult.serverInfo"> · {{ draftTestResult.serverInfo.name }}</template>
-          </span>
-          <span v-if="draftTestResult.error" class="draft-result-error">{{ draftTestResult.error }}</span>
         </div>
       </div>
 
@@ -615,9 +420,6 @@
               <button class="btn btn-sm" type="button" :disabled="busyInstanceIds.includes(instance.id)" @click="handleEditRemoteInstance(instance)">
                 {{ $t('settings.remoteEdit') }}
               </button>
-              <button class="btn btn-sm" type="button" :disabled="busyInstanceIds.includes(instance.id)" @click="handleTestRemoteInstance(instance.id)">
-                {{ busyInstanceIds.includes(instance.id) ? $t('settings.remoteTesting') : $t('settings.remoteRetest') }}
-              </button>
               <button class="btn btn-danger btn-sm" type="button" :disabled="busyInstanceIds.includes(instance.id)" @click="handleDeleteRemoteInstance(instance.id)">
                 {{ $t('settings.remoteDelete') }}
               </button>
@@ -640,10 +442,6 @@
             <div class="meta-item">
               <span class="meta-label">{{ $t('settings.remoteLastChecked') }}</span>
               <span class="meta-value">{{ formatLastChecked(instance.lastCheckedAt) }}</span>
-            </div>
-            <div class="meta-item meta-item-full">
-              <span class="meta-label">{{ $t('settings.remoteLastError') }}</span>
-              <span class="meta-value error-text">{{ instance.lastError || $t('settings.remoteNoError') }}</span>
             </div>
           </div>
         </article>
@@ -696,7 +494,7 @@ import { useProjectsStore } from '@/stores/projects'
 import { useSessionsStore } from '@/stores/sessions'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
-import type { RemoteInstanceConnectionResult, RemoteInstanceDraft } from '@/api/remote-instance'
+import type { RemoteInstanceDraft } from '@/api/remote-instance'
 import {
   getCloudflareTunnelState,
   startCloudflareTunnel,
@@ -704,18 +502,6 @@ import {
   updateCloudflareTunnelConfig,
   type CloudflareTunnelState
 } from '@/api/cloudflare-tunnel'
-import {
-  type CliFailureCategory,
-  type CloudflareFailureCategory,
-  getRemoteNetworkState,
-  updateRemoteNetworkSettings,
-  type CloudflareLaunchStrategyPreview,
-  type CliResolvedProxyState,
-  type ProxyMode,
-  type RemoteNetworkSettingsState,
-  type TunnelResolvedTransport,
-  type TunnelTransportMode
-} from '@/api/remote-network'
 import {
   getRemoteServiceState,
   getRemoteServiceToken,
@@ -743,17 +529,6 @@ interface RemoteServiceFormState {
   customToken: string
 }
 
-interface RemoteNetworkFormState {
-  cloudflareTransportMode: TunnelTransportMode
-  cloudflareProxyMode: ProxyMode
-  cloudflareCustomProxyUrl: string
-  cloudflareRememberLastSuccess: boolean
-  cloudflareAutoFallback: boolean
-  cliProxyMode: ProxyMode
-  cliCustomProxyUrl: string
-  cliEnableNoProxyLocalhost: boolean
-}
-
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
 const appStore = useAppStore()
@@ -773,15 +548,10 @@ const cloudflareTunnelLoading = ref(false)
 const copyingRemoteServiceToken = ref(false)
 const regeneratingRemoteServiceToken = ref(false)
 const remoteServiceLoading = ref(false)
-const draftBusy = ref(false)
 const deletingId = ref<string | null>(null)
-const draftTestResult = ref<RemoteInstanceConnectionResult | null>(null)
 const remoteServiceState = ref<RemoteServiceState | null>(null)
 const cloudflareTunnelState = ref<CloudflareTunnelState | null>(null)
-const remoteNetworkState = ref<RemoteNetworkSettingsState | null>(null)
 const cloudflareBinaryPathInput = ref('')
-const remoteNetworkLoading = ref(false)
-const savingRemoteNetwork = ref(false)
 const remoteForm = reactive<RemoteFormState>({
   id: null,
   name: '',
@@ -796,16 +566,6 @@ const remoteServiceForm = reactive<RemoteServiceFormState>({
   passthroughOnly: true,
   tokenMode: 'default',
   customToken: ''
-})
-const remoteNetworkForm = reactive<RemoteNetworkFormState>({
-  cloudflareTransportMode: 'auto',
-  cloudflareProxyMode: 'auto',
-  cloudflareCustomProxyUrl: '',
-  cloudflareRememberLastSuccess: true,
-  cloudflareAutoFallback: true,
-  cliProxyMode: 'auto',
-  cliCustomProxyUrl: '',
-  cliEnableNoProxyLocalhost: true
 })
 
 const isEditingRemote = computed(() => !!remoteForm.id)
@@ -823,7 +583,7 @@ const canSubmitRemoteServiceForm = computed(() => {
   return remoteServiceState.value?.customTokenConfigured === true
 })
 const busyInstanceIds = computed(() => {
-  const ids = [...instancesStore.testingIds]
+  const ids: string[] = []
   if (deletingId.value) ids.push(deletingId.value)
   return ids
 })
@@ -845,20 +605,6 @@ const remoteServiceEnvOverrideFields = computed(() => {
 const canStartCloudflareTunnel = computed(() => {
   return !!cloudflareTunnelState.value?.available && !!remoteServiceState.value?.running
 })
-const canSubmitRemoteNetworkForm = computed(() => {
-  if (
-    remoteNetworkForm.cloudflareProxyMode === 'custom' &&
-    !remoteNetworkForm.cloudflareCustomProxyUrl.trim()
-  ) {
-    return false
-  }
-
-  if (remoteNetworkForm.cliProxyMode === 'custom' && !remoteNetworkForm.cliCustomProxyUrl.trim()) {
-    return false
-  }
-
-  return true
-})
 
 function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '')
@@ -870,7 +616,6 @@ function resetRemoteForm(): void {
   remoteForm.baseUrl = ''
   remoteForm.token = ''
   remoteForm.enabled = true
-  draftTestResult.value = null
 }
 
 function syncRemoteServiceForm(state: RemoteServiceState): void {
@@ -880,17 +625,6 @@ function syncRemoteServiceForm(state: RemoteServiceState): void {
   remoteServiceForm.passthroughOnly = state.passthroughOnly
   remoteServiceForm.tokenMode = state.tokenMode
   remoteServiceForm.customToken = ''
-}
-
-function syncRemoteNetworkForm(state: RemoteNetworkSettingsState): void {
-  remoteNetworkForm.cloudflareTransportMode = state.config.cloudflare.transportMode
-  remoteNetworkForm.cloudflareProxyMode = state.config.cloudflare.proxyMode
-  remoteNetworkForm.cloudflareCustomProxyUrl = state.config.cloudflare.customProxyUrl || ''
-  remoteNetworkForm.cloudflareRememberLastSuccess = state.config.cloudflare.rememberLastSuccess
-  remoteNetworkForm.cloudflareAutoFallback = state.config.cloudflare.autoFallback
-  remoteNetworkForm.cliProxyMode = state.config.cli.proxyMode
-  remoteNetworkForm.cliCustomProxyUrl = state.config.cli.customProxyUrl || ''
-  remoteNetworkForm.cliEnableNoProxyLocalhost = state.config.cli.enableNoProxyLocalhost
 }
 
 function formatStatusText(status: RemoteInstance['status']): string {
@@ -903,91 +637,6 @@ function formatTokenSource(source: RemoteServiceState['tokenSource']): string {
 
 function formatCloudflarePathSource(source: CloudflareTunnelState['pathSource']): string {
   return t(`settings.cloudflareTunnelPathSourceValue.${source}`)
-}
-
-function formatTransportMode(mode: TunnelTransportMode | TunnelResolvedTransport | null): string {
-  if (!mode) return '-'
-  return t(`settings.remoteTransportModeValue.${mode}`)
-}
-
-function formatProxyMode(mode: ProxyMode | null): string {
-  if (!mode) return '-'
-  return t(`settings.remoteProxyModeValue.${mode}`)
-}
-
-function formatStrategySummary(strategy: CloudflareLaunchStrategyPreview | null): string {
-  if (!strategy) return t('settings.remoteNetworkNone')
-  const suffix = strategy.proxyUrl ? ` · ${strategy.proxyUrl}` : ''
-  return `${formatTransportMode(strategy.transport)} · ${formatProxyMode(strategy.proxyMode)}${suffix}`
-}
-
-function formatStrategyList(strategies: CloudflareLaunchStrategyPreview[]): string {
-  if (strategies.length === 0) return t('settings.remoteNetworkNone')
-  return strategies.map((strategy) => formatStrategySummary(strategy)).join(' | ')
-}
-
-function formatCliResolvedSummary(state: CliResolvedProxyState | null): string {
-  if (!state) return t('settings.remoteNetworkNone')
-  const suffix = state.proxyUrl ? ` · ${state.proxyUrl}` : ''
-  return `${formatProxyMode(state.proxyMode)}${suffix}`
-}
-
-function formatFailureCategory(category: CloudflareFailureCategory | null): string {
-  if (!category) return t('settings.remoteNetworkNone')
-  return t(`settings.remoteNetworkFailureCategoryValue.${category}`)
-}
-
-function formatCloudflareFailureAdvice(category: CloudflareFailureCategory | null): string {
-  if (!category) return t('settings.remoteNetworkNone')
-  return t(`settings.remoteNetworkCloudflareAdviceValue.${category}`)
-}
-
-function formatCliFailureSource(cli: RemoteNetworkSettingsState['runtime']['cli']['lastFailureCli']): string {
-  if (!cli) return t('settings.remoteNetworkNone')
-  return t(`settings.remoteNetworkCliFailureCliValue.${cli}`)
-}
-
-function formatCliFailureCategory(category: CliFailureCategory | null): string {
-  if (!category) return t('settings.remoteNetworkNone')
-  return t(`settings.remoteNetworkCliFailureCategoryValue.${category}`)
-}
-
-function formatCliFailureAdvice(category: CliFailureCategory | null): string {
-  if (!category) return t('settings.remoteNetworkNone')
-  return t(`settings.remoteNetworkCliAdviceValue.${category}`)
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function buildCloudflareStartFailureMessage(error: unknown): string {
-  const category = remoteNetworkState.value?.runtime.cloudflare.lastFailureCategory ?? null
-  const reason =
-    remoteNetworkState.value?.runtime.cloudflare.lastFailureReason ||
-    cloudflareTunnelState.value?.lastError ||
-    toErrorMessage(error)
-  const advice = formatCloudflareFailureAdvice(category)
-  const categoryLabel = formatFailureCategory(category)
-
-  if (category && advice !== t('settings.remoteNetworkNone')) {
-    return `${t('settings.cloudflareTunnelStartFailed')}: ${categoryLabel}。${advice}（${reason}）`
-  }
-
-  return `${t('settings.cloudflareTunnelStartFailed')}: ${reason}`
-}
-
-function formatLastSuccessfulStrategy(): string {
-  const runtime = remoteNetworkState.value?.runtime.cloudflare
-  if (!runtime?.lastSuccessfulTransport || !runtime.lastSuccessfulProxyMode) {
-    return t('settings.remoteNetworkNone')
-  }
-
-  return formatStrategySummary({
-    transport: runtime.lastSuccessfulTransport,
-    proxyMode: runtime.lastSuccessfulProxyMode,
-    proxyUrl: runtime.lastSuccessfulProxyUrl
-  })
 }
 
 function formatLatencyLabel(
@@ -1078,19 +727,6 @@ async function loadCloudflareTunnelState(): Promise<void> {
   }
 }
 
-async function loadRemoteNetworkState(): Promise<void> {
-  remoteNetworkLoading.value = true
-  try {
-    const state = await getRemoteNetworkState()
-    remoteNetworkState.value = state
-    syncRemoteNetworkForm(state)
-  } catch (error) {
-    toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
-  } finally {
-    remoteNetworkLoading.value = false
-  }
-}
-
 async function handleSaveRemoteService(): Promise<void> {
   if (!canSubmitRemoteServiceForm.value) return
   savingRemoteService.value = true
@@ -1165,12 +801,10 @@ async function handleStartCloudflareTunnel(): Promise<void> {
     const state = await startCloudflareTunnel()
     cloudflareTunnelState.value = state
     cloudflareBinaryPathInput.value = state.binaryPath || ''
-    await loadRemoteNetworkState()
     toast.success(t('settings.cloudflareTunnelStarted'))
   } catch (error) {
     await loadCloudflareTunnelState()
-    await loadRemoteNetworkState()
-    toast.error(buildCloudflareStartFailureMessage(error))
+    toast.error(t('settings.cloudflareTunnelStartFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
   } finally {
     startingCloudflareTunnel.value = false
   }
@@ -1202,41 +836,6 @@ async function handleCopyCloudflareTunnelUrl(): Promise<void> {
   }
 }
 
-async function handleSaveRemoteNetworkSettings(): Promise<void> {
-  if (!canSubmitRemoteNetworkForm.value) return
-  savingRemoteNetwork.value = true
-  try {
-    const state = await updateRemoteNetworkSettings({
-      cloudflare: {
-        transportMode: remoteNetworkForm.cloudflareTransportMode,
-        proxyMode: remoteNetworkForm.cloudflareProxyMode,
-        customProxyUrl:
-          remoteNetworkForm.cloudflareProxyMode === 'custom'
-            ? remoteNetworkForm.cloudflareCustomProxyUrl.trim() || null
-            : null,
-        rememberLastSuccess: remoteNetworkForm.cloudflareRememberLastSuccess,
-        autoFallback: remoteNetworkForm.cloudflareAutoFallback
-      },
-      cli: {
-        proxyMode: remoteNetworkForm.cliProxyMode,
-        customProxyUrl:
-          remoteNetworkForm.cliProxyMode === 'custom'
-            ? remoteNetworkForm.cliCustomProxyUrl.trim() || null
-            : null,
-        enableNoProxyLocalhost: remoteNetworkForm.cliEnableNoProxyLocalhost
-      }
-    })
-    remoteNetworkState.value = state
-    syncRemoteNetworkForm(state)
-    await loadCloudflareTunnelState()
-    toast.success(t('toast.settingsSaved'))
-  } catch (error) {
-    toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
-  } finally {
-    savingRemoteNetwork.value = false
-  }
-}
-
 async function handleRemoteFeatureToggle(): Promise<void> {
   const enabled = settingsStore.settings.desktopRemoteMountEnabled
   try {
@@ -1262,28 +861,6 @@ function buildRemoteDraft(): RemoteInstanceDraft {
     baseUrl: normalizeBaseUrl(remoteForm.baseUrl),
     token: remoteForm.token.trim(),
     enabled: remoteForm.enabled
-  }
-}
-
-async function handleTestDraft(): Promise<void> {
-  if (!canSubmitRemoteForm.value) return
-  draftBusy.value = true
-  try {
-    const result = await instancesStore.testRemoteDraft({
-      baseUrl: normalizeBaseUrl(remoteForm.baseUrl),
-      token: remoteForm.token.trim()
-    })
-    draftTestResult.value = result
-    if (result.ok) {
-      toast.success(t('settings.remoteTestSuccess'))
-    } else {
-      toast.warning(result.error || t('settings.remoteTestFail'))
-    }
-  } catch (error) {
-    draftTestResult.value = null
-    toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
-  } finally {
-    draftBusy.value = false
   }
 }
 
@@ -1316,20 +893,6 @@ async function handleEditRemoteInstance(instance: RemoteInstance): Promise<void>
     remoteForm.baseUrl = instance.baseUrl
     remoteForm.token = token
     remoteForm.enabled = instance.enabled
-    draftTestResult.value = null
-  } catch (error) {
-    toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
-  }
-}
-
-async function handleTestRemoteInstance(id: string): Promise<void> {
-  try {
-    const result = await instancesStore.testRemoteInstance(id)
-    if (result.ok) {
-      toast.success(t('settings.remoteTestSuccess'))
-    } else {
-      toast.warning(result.error || t('settings.remoteTestFail'))
-    }
   } catch (error) {
     toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
   }
@@ -1357,7 +920,6 @@ onMounted(async () => {
     loadSystemInfo(),
     loadRemoteServiceState(),
     loadCloudflareTunnelState(),
-    loadRemoteNetworkState(),
     loadRemoteInstances()
   ])
 })
@@ -1366,7 +928,6 @@ onActivated(() => {
   void loadSystemInfo()
   void loadRemoteServiceState()
   void loadCloudflareTunnelState()
-  void loadRemoteNetworkState()
   void loadRemoteInstances()
 })
 </script>
