@@ -644,6 +644,8 @@ settings: {
     claudeOnline: 'Claude Online',
     claudeOffline: 'Claude Offline',
     codexOnline: 'Codex Online',
-    codexOffline: 'Codex Offline'
+    codexOffline: 'Codex Offline',
+    opencodeOnline: 'OpenCode Online',
+    opencodeOffline: 'OpenCode Offline'
   }
 }

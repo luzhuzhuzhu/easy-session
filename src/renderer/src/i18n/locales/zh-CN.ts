@@ -644,6 +644,8 @@ settings: {
     claudeOnline: 'Claude 在线',
     claudeOffline: 'Claude 离线',
     codexOnline: 'Codex 在线',
-    codexOffline: 'Codex 离线'
+    codexOffline: 'Codex 离线',
+    opencodeOnline: 'OpenCode 在线',
+    opencodeOffline: 'OpenCode 离线'
   }
 }

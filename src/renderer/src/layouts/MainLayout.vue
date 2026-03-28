@@ -63,6 +63,8 @@
             <span class="status-label">Claude</span>
             <span class="status-dot" :class="appStore.codexAvailable ? 'online' : 'offline'" :title="$t(appStore.codexAvailable ? 'topbar.codexOnline' : 'topbar.codexOffline')"></span>
             <span class="status-label">Codex</span>
+            <span class="status-dot" :class="appStore.opencodeAvailable ? 'online' : 'offline'" :title="$t(appStore.opencodeAvailable ? 'topbar.opencodeOnline' : 'topbar.opencodeOffline')"></span>
+            <span class="status-label">OpenCode</span>
             <span class="session-count" v-if="activeSessionCount > 0">{{ activeSessionCount }} {{ $t('topbar.activeSessions') }}</span>
           </div>
           <div class="window-controls">

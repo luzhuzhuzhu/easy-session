@@ -74,7 +74,7 @@ export const useInspectorStore = defineStore('inspector', () => {
   const workspaceStore = useWorkspaceStore()
   const projectsStore = useProjectsStore()
 
-  const panelOpen = ref(readStoredBoolean(INSPECTOR_PANEL_OPEN_KEY, true))
+  const panelOpen = ref(readStoredBoolean(INSPECTOR_PANEL_OPEN_KEY, false))
   const autoFollowActivePaneProject = ref(readStoredBoolean(INSPECTOR_AUTO_FOLLOW_KEY, true))
   const sidebarVisible = ref(readStoredBoolean(INSPECTOR_SIDEBAR_VISIBLE_KEY, true))
   const sidebarAutoCollapse = ref(readStoredBoolean(INSPECTOR_SIDEBAR_AUTO_COLLAPSE_KEY, false))
