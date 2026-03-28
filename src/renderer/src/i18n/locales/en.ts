@@ -275,6 +275,106 @@ session: {
     zoomPresets: 'Zoom Presets',
     resetZoom: 'Reset Zoom Size'
   },
+  inspector: {
+    title: 'Inspector',
+    open: 'Inspect',
+    close: 'Close',
+    refresh: 'Refresh',
+    refreshFile: 'Refresh current file',
+    loading: 'Loading...',
+    gitReady: 'Git Ready',
+    noProject: 'No project',
+    noProjectHint: 'The focused pane does not point to a recognizable local project yet, so files and Git changes are unavailable.',
+    followActivePane: 'Follow the active pane project',
+    followShort: 'Follow',
+    manualProjectPlaceholder: 'Choose a project from running sessions',
+    projectShort: 'Project',
+    hideSidebar: 'Hide Sidebar',
+    showSidebar: 'Show Sidebar',
+    sidebarAutoCollapse: 'Enable sidebar auto collapse',
+    emptyChanges: 'No Git changes in the current project scope.',
+    emptyFiles: 'No visible files in the current project.',
+    emptyDiff: 'No textual diff is available for this file.',
+    gitUnavailable: {
+      nonGit: 'Not a Git repo',
+      missing: 'Git not found',
+      error: 'Git status error'
+    },
+    focusPreview: 'Focus Preview',
+    showBrowser: 'Show Browser',
+    viewerTitles: {
+      diff: 'Diff Preview',
+      preview: 'File Preview',
+      stagedDiff: 'Staged Diff',
+      unstagedDiff: 'Unstaged Diff',
+      stagedPreview: 'Staged File Preview',
+      unstagedPreview: 'Unstaged File Preview'
+    },
+    hints: {
+      selectChange: 'Choose a changed file to inspect its diff.',
+      selectFile: 'Choose a file to preview its contents.',
+      binary: 'This file is binary and cannot be previewed here.',
+      tooLarge: 'This file is too large for a full preview.',
+      emptyPreview: 'Nothing to preview yet.'
+    },
+    errors: {
+      loadRootFailed: 'Failed to load inspector data'
+    },
+    tabs: {
+      changes: 'Changes',
+      files: 'Files',
+      history: 'History',
+      preview: 'Preview'
+    },
+    gitStatus: {
+      modified: 'Modified',
+      added: 'Added',
+      deleted: 'Deleted',
+      renamed: 'Renamed',
+      untracked: 'Untracked',
+      copied: 'Copied',
+      conflicted: 'Conflicted',
+      unknown: 'Other'
+    },
+    history: {
+      emptyHistory: 'No commit history',
+      loadMore: 'Load more',
+      nonGit: 'Not a Git repository',
+      gitUnavailable: 'Git is not available',
+      description: 'Description',
+      author: 'Author',
+      date: 'Date',
+      commit: 'Commit message',
+      source: 'Source',
+      when: 'When',
+      hash: 'Hash',
+      refs: 'Refs',
+      currentBranch: 'Current branch',
+      upstreamBranch: 'Upstream branch',
+      syncStatus: 'Sync status',
+      detailTitle: 'Commit details',
+      selectCommitHint: 'Pick a commit from the graph to inspect its files and diff on the right.',
+      selectCommitFileHint: 'Choose a file to inspect its diff in this commit.',
+      stageCaption: '{branch} · {count} entries',
+      incomingPill: 'Incoming',
+      outgoingPill: 'Outgoing',
+      incomingSummary: '{count} commits incoming from {branch}',
+      outgoingSummary: '{count} commits outgoing to {branch}'
+    },
+    branches: {
+      title: 'Branches',
+      remoteBranches: 'Remote branches',
+      currentBranch: 'Current branch',
+      viewing: 'Viewing'
+    },
+    staged: 'Staged',
+    unstaged: 'Unstaged',
+    stageAction: 'Stage',
+    unstageAction: 'Unstage',
+    discardAction: 'Discard changes',
+    commitPlaceholder: 'Commit message (Ctrl+Enter)',
+    commitButton: 'Commit'
+  },
   error: {
     componentCrash: 'A component error occurred',
     retry: 'Retry'

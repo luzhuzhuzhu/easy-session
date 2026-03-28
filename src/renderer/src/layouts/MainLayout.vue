@@ -66,9 +66,21 @@
             <span class="session-count" v-if="activeSessionCount > 0">{{ activeSessionCount }} {{ $t('topbar.activeSessions') }}</span>
           </div>
           <div class="window-controls">
-            <button class="win-btn" @click="minimize">_</button>
-            <button class="win-btn" @click="toggleMaximize">[]</button>
-            <button class="win-btn win-btn-close" @click="closeWindow">X</button>
+            <button class="win-btn" @click="minimize" title="最小化">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button class="win-btn" @click="toggleMaximize" title="最大化/还原">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <rect x="2" y="2" width="8" height="8" stroke="currentColor" stroke-width="1.5" rx="1"/>
+              </svg>
+            </button>
+            <button class="win-btn win-btn-close" @click="closeWindow" title="关闭">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
           </div>
         </div>
       </header>
@@ -460,27 +472,37 @@ onMounted(() => {
 }
 
 .win-btn {
-  width: 34px;
-  height: 26px;
+  width: 46px;
+  height: 32px;
   border: none;
   background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
+  color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
+  transition: all 140ms ease;
+
+  svg {
+    transition: transform 140ms ease;
+  }
 
   &:hover {
-    background: var(--bg-hover);
+    background: rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
+
+    svg {
+      transform: scale(1.1);
+    }
+  }
+
+  &:active {
+    background: rgba(255, 255, 255, 0.12);
   }
 }
 
 .win-btn-close:hover {
-  background: var(--status-error);
+  background: #e81123;
   color: white;
 }
 

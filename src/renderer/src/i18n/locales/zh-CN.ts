@@ -275,6 +275,106 @@ session: {
     zoomPresets: '缩放预设',
     resetZoom: '重置缩放大小'
   },
+  inspector: {
+    title: '检查面板',
+    open: '检查',
+    close: '收起',
+    refresh: '刷新',
+    refreshFile: '刷新当前文件',
+    loading: '加载中...',
+    gitReady: 'Git 已连接',
+    noProject: '未绑定项目',
+    noProjectHint: '当前分窗没有可识别的本地项目，暂时无法显示文件和 Git 变更。',
+    followActivePane: '自动跟随当前分窗项目',
+    followShort: '跟随',
+    manualProjectPlaceholder: '手动选择当前运行中的会话项目',
+    projectShort: '项目',
+    hideSidebar: '隐藏侧边栏',
+    showSidebar: '显示侧边栏',
+    sidebarAutoCollapse: '开启侧边目录自动收缩',
+    emptyChanges: '当前项目目录范围内暂无 Git 变更。',
+    emptyFiles: '当前项目目录下暂无可显示文件。',
+    emptyDiff: '当前文件暂无可显示的文本 diff。',
+    gitUnavailable: {
+      nonGit: '非 Git 目录',
+      missing: '未检测到 Git',
+      error: 'Git 状态异常'
+    },
+    focusPreview: '专注预览',
+    showBrowser: '显示目录',
+    viewerTitles: {
+      diff: '差异预览',
+      preview: '文件预览',
+      stagedDiff: '已暂存差异',
+      unstagedDiff: '未暂存差异',
+      stagedPreview: '已暂存文件预览',
+      unstagedPreview: '未暂存文件预览'
+    },
+    hints: {
+      selectChange: '选择一个变更文件查看 diff',
+      selectFile: '选择一个文件查看内容',
+      binary: '当前文件是二进制文件，暂不支持预览。',
+      tooLarge: '当前文件过大，已阻止整文件预览。',
+      emptyPreview: '暂无可显示内容。'
+    },
+    errors: {
+      loadRootFailed: '读取检查面板数据失败'
+    },
+    tabs: {
+      changes: '变更',
+      files: '文件',
+      history: '历史',
+      preview: '预览'
+    },
+    gitStatus: {
+      modified: '已修改',
+      added: '新增',
+      deleted: '删除',
+      renamed: '重命名',
+      untracked: '未跟踪',
+      copied: '复制',
+      conflicted: '冲突',
+      unknown: '其他'
+    },
+    history: {
+      emptyHistory: '暂无提交历史',
+      loadMore: '加载更多',
+      nonGit: '当前项目不是 Git 仓库',
+      gitUnavailable: '系统中未检测到 Git',
+      description: '描述',
+      author: '作者',
+      date: '日期',
+      commit: '提交描述',
+      source: '来源',
+      when: '时间',
+      hash: '哈希',
+      refs: '引用',
+      currentBranch: '当前分支',
+      upstreamBranch: '上游分支',
+      syncStatus: '同步状态',
+      detailTitle: '提交详情',
+      selectCommitHint: '从左侧图中选择一次提交，右侧会显示该提交涉及的文件和 diff。',
+      selectCommitFileHint: '选择一个文件以查看这次提交里的具体 diff。',
+      stageCaption: '{branch} · {count} 条记录',
+      incomingPill: '待拉取',
+      outgoingPill: '待推送',
+      incomingSummary: '待从 {branch} 拉取 {count} 个提交',
+      outgoingSummary: '待向 {branch} 推送 {count} 个提交'
+    },
+    branches: {
+      title: '分支',
+      remoteBranches: '远程分支',
+      currentBranch: '当前分支',
+      viewing: '查看中'
+    },
+    staged: '已暂存',
+    unstaged: '未暂存',
+    stageAction: '暂存',
+    unstageAction: '取消暂存',
+    discardAction: '取消更改',
+    commitPlaceholder: '输入提交信息，Ctrl+Enter 提交',
+    commitButton: '提交'
+  },
   error: {
     componentCrash: '页面组件发生错误',
     retry: '重试'

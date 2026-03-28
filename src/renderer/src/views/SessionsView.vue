@@ -68,8 +68,9 @@
       </div>
     </section>
 
-    <aside v-else class="session-list-panel" :class="{ collapsed: isListCollapsed }">
-      <div v-if="!isListCollapsed" class="list-toolbar">
+    <div class="sessions-main-area">
+      <aside v-if="!isTopLayout" class="session-list-panel" :class="{ collapsed: isListCollapsed }">
+        <div v-if="!isListCollapsed" class="list-toolbar">
         <button class="btn btn-primary btn-sm" @click="openCreateDialog()">+ {{ $t('session.create') }}</button>
         <button
           v-if="settingsStore.settings.desktopRemoteMountEnabled"
@@ -104,10 +105,10 @@
           <option value="codex">X</option>
           <option value="opencode">O</option>
         </select>
-      </div>
+        </div>
 
-      <template v-if="!isListCollapsed">
-        <div class="session-tree">
+        <template v-if="!isListCollapsed">
+          <div class="session-tree">
           <div v-for="instanceGroup in instanceTree" :key="instanceGroup.key" class="instance-group">
             <div
               class="instance-node"
@@ -229,9 +230,9 @@
               </div>
             </div>
           </div>
-        </div>
-      </template>
-      <div v-else class="session-items compact">
+          </div>
+        </template>
+        <div v-else class="session-items compact">
         <template v-for="group in projectSessionTree" :key="group.key">
           <div v-if="group.sessions.length > 0" class="compact-group-label" :title="group.projectName">
             {{ group.projectName.charAt(0) }}
@@ -254,55 +255,58 @@
             <span class="status-dot" :class="s.status"></span>
           </button>
         </template>
-      </div>
+        </div>
 
-      <div class="panel-footer">
+        <div class="panel-footer">
         <button class="panel-btn" :title="$t('session.listPosition')" @click="toggleListPosition">{{ isTopLayout ? 'L' : 'T' }}</button>
         <button
           class="panel-btn"
           :title="isListCollapsed ? $t('session.expandList') : $t('session.collapseList')"
           @click="toggleListCollapsed"
         >{{ isListCollapsed ? '>' : '<' }}</button>
-      </div>
-    </aside>
+        </div>
+      </aside>
 
-    <main class="session-detail-panel">
-      <WorkspacePaneTree
-        class="workspace-root"
-        node-path="root"
-        :node="workspaceLayout.root"
-        :tabs-index="workspaceLayout.tabs"
-        :resolved-tabs-index="workspaceStore.resolvedTabs"
-        :sessions-by-global-key="sessionsByGlobalKey"
-        :pane-zoom-percent-by-id="paneZoomPercentById"
-        :active-pane-id="workspaceLayout.activePaneId"
-        :can-close-panes="workspaceStore.paneCount > 1"
-        :pane-ids="workspaceStore.paneIds"
-        @focus-pane="handleFocusPane"
-        @set-active-tab="handleSetPaneTab"
-        @split-pane="handleSplitPane"
-        @close-pane="handleClosePane"
-        @close-tab="handleClosePaneTab"
-        @move-tab="handleMoveTab"
-        @split-and-move-tab="handleSplitAndMoveTab"
-        @close-other-tabs="handleCloseOtherTabs"
-        @close-tabs-right="handleCloseTabsRight"
-        @toggle-tab-pin="handleToggleTabPin"
-        @resize-split="handleResizeSplit"
-        @even-split-pane="handleEvenSplitPane"
-        @open-session-drop="handleOpenSessionDrop"
-        @undo-layout="handleUndoLayout"
-        @reset-layout="handleResetWorkspace"
-        @start-session="handleStart"
-        @pause-session="handlePause"
-        @restart-session="handleRestart"
-        @destroy-session="handleDestroy"
-        @clear-output="sessionsStore.clearSessionOutputRef($event)"
-        @set-pane-zoom="handleSetPaneZoom"
-        @reset-pane-zoom="handleResetPaneZoom"
-        @swap-pane-tabs="handleSwapPaneTabs"
-      />
-    </main>
+      <main class="session-detail-panel">
+        <WorkspacePaneTree
+          class="workspace-root"
+          node-path="root"
+          :node="workspaceLayout.root"
+          :tabs-index="workspaceLayout.tabs"
+          :resolved-tabs-index="workspaceStore.resolvedTabs"
+          :sessions-by-global-key="sessionsByGlobalKey"
+          :pane-zoom-percent-by-id="paneZoomPercentById"
+          :active-pane-id="workspaceLayout.activePaneId"
+          :can-close-panes="workspaceStore.paneCount > 1"
+          :pane-ids="workspaceStore.paneIds"
+          @focus-pane="handleFocusPane"
+          @set-active-tab="handleSetPaneTab"
+          @split-pane="handleSplitPane"
+          @close-pane="handleClosePane"
+          @close-tab="handleClosePaneTab"
+          @move-tab="handleMoveTab"
+          @split-and-move-tab="handleSplitAndMoveTab"
+          @close-other-tabs="handleCloseOtherTabs"
+          @close-tabs-right="handleCloseTabsRight"
+          @toggle-tab-pin="handleToggleTabPin"
+          @resize-split="handleResizeSplit"
+          @even-split-pane="handleEvenSplitPane"
+          @open-session-drop="handleOpenSessionDrop"
+          @undo-layout="handleUndoLayout"
+          @reset-layout="handleResetWorkspace"
+          @start-session="handleStart"
+          @pause-session="handlePause"
+          @restart-session="handleRestart"
+          @destroy-session="handleDestroy"
+          @clear-output="sessionsStore.clearSessionOutputRef($event)"
+          @set-pane-zoom="handleSetPaneZoom"
+          @reset-pane-zoom="handleResetPaneZoom"
+          @swap-pane-tabs="handleSwapPaneTabs"
+        />
+      </main>
+
+      <InspectorPanel class="inspector-panel-shell" />
+    </div>
 
     <div v-if="contextMenu.visible" class="context-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
       <button class="context-item" @click="handleOpenInPaneContext">{{ $t('session.openInFocusedPane') }}</button>
@@ -400,8 +404,10 @@ import { useProjectsStore } from '@/stores/projects'
 import { useSettingsStore, type AppSettings } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useInstancesStore } from '@/stores/instances'
+import { useInspectorStore } from '@/stores/inspector'
 import { useToast } from '@/composables/useToast'
 import CreateSessionDialog from '@/components/CreateSessionDialog.vue'
+import InspectorPanel from '@/components/InspectorPanel.vue'
 import WorkspacePaneTree from '@/components/WorkspacePaneTree.vue'
 import type { WorkspaceSplitDirection } from '@/api/workspace'
 import {
@@ -428,6 +434,7 @@ const projectsStore = useProjectsStore()
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 const instancesStore = useInstancesStore()
+useInspectorStore()
 const toast = useToast()
 
 type SessionListItem = SessionTreeSessionItem
@@ -1487,6 +1494,14 @@ watch(
   flex-direction: column;
 }
 
+.sessions-main-area {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+}
+
 .session-top-panel {
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
@@ -2239,6 +2254,10 @@ watch(
   overflow: hidden;
   min-height: 0;
   padding: 4px;
+}
+
+.inspector-panel-shell {
+  flex-shrink: 0;
 }
 
 .workspace-root {
