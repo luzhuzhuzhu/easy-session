@@ -11,7 +11,7 @@
 <p align="center">原生终端，统一管理，远程可达</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-0.4.1-blue" alt="Version" />
   <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-green" alt="License" />
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform" />
   <img src="https://img.shields.io/badge/Electron-33-47848F?logo=electron" alt="Electron" />
@@ -35,7 +35,7 @@ CLI 恢复会话本身很简单（`--resume`），但当你有多个项目、每
 
 ## 亮点速览
 
-- 🚀 **0.3.0 不再只是本地启动器** —— 远程 Web、桌面端远程挂载、本地/远程统一资源模型都已经落地
+- 🚀 **0.4.1 让 EasySession 更像真正的日常工作台** —— 远程 Web、桌面端远程挂载、Git 检查与 Markdown / 文件预览现在已经整合到同一个产品里
 - 🖥️ **CLI 体验仍然是原生的** —— 终端透传优先，提示、快捷键、恢复流程和真实 CLI 行为都尽量保留
 - 🌍 **在你所在的地方继续工作** —— 桌面端适合日常主力使用，浏览器 / 手机端适合远程进入，远程挂载适合多机器统一管理
 - 🔐 **面向真实远程场景** —— Token 认证、实时 Socket 桥接、反代友好路由，并兼容 Cloudflare Tunnel 等接入方式
@@ -61,6 +61,8 @@ CLI 恢复会话本身很简单（`--resume`），但当你有多个项目、每
 - 🌉 **桌面端远程挂载** - 可将多个 EasySession 远程实例挂回同一个桌面工作区，统一查看项目和会话
 - 📱 **远程 Web 访问** - 提供独立的浏览器 / 移动端远程 Web，支持实时终端透传、项目树与响应式操作
 - 🔐 **远程服务与 Tunnel 支持** - 内置本地远程服务、Token 认证、反向代理支持，并兼容 Cloudflare Tunnel 等浏览器访问场景
+- 🌲 **Git 检查工作区** - 直接查看已暂存 / 未暂存变更、Git 历史图、Diff 预览与文件内容，不必额外打开编辑器
+- 📝 **Markdown 与文件预览** - 在应用内直接阅读 README、笔记、提示词和普通文本文件，支持 Markdown 渲染与更适合代码/配置的文本预览
 - 🌲 **项目级会话树** — 以项目为中心组织会话，绑定工作目录，减少来回切终端和切路径
 - 📊 **仪表盘总览** — 一目了然查看所有会话状态和项目概况
 - ⚙️ **配置编辑** — 图形化编辑 CLI 配置，实时监听变更

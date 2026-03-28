@@ -11,7 +11,7 @@
 <p align="center">Native Terminal, Unified Management, Remote Ready</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.3.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-0.4.1-blue" alt="Version" />
   <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-green" alt="License" />
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform" />
   <img src="https://img.shields.io/badge/Electron-33-47848F?logo=electron" alt="Electron" />
@@ -35,7 +35,7 @@ Resuming a CLI session is easy (`--resume`), but when you have multiple projects
 
 ## Highlights
 
-- 🚀 **0.3.0 brings EasySession beyond a local launcher** — remote web access, desktop remote mount, and unified local/remote resources now live in the same product
+- 🚀 **0.4.1 pushes EasySession further into a real daily workspace** — remote web, desktop remote mount, Git inspection, and Markdown/file preview now live in the same product
 - 🖥️ **Keep the CLI native** — terminal passthrough stays terminal-first, so prompts, shortcuts, resume flows, and real CLI behavior are preserved
 - 🌍 **Use it where you are** — desktop app for daily work, browser/mobile remote web for quick control, and remote instance mount for multi-machine setups
 - 🔐 **Built for practical remote use** — token auth, realtime socket bridge, reverse proxy friendly routing, and Cloudflare Tunnel compatible access
@@ -61,6 +61,8 @@ Resuming a CLI session is easy (`--resume`), but when you have multiple projects
 - 🌉 **Desktop Remote Mount** - Mount multiple EasySession instances back into one desktop workspace with unified session/project views
 - 📱 **Remote Web Access** - Dedicated browser/mobile remote web with live terminal passthrough, project tree, and responsive controls
 - 🔐 **Remote Service & Tunnel Support** - Built-in local remote service, token auth, reverse proxy support, and Cloudflare Tunnel friendly access
+- 🌲 **Git Inspector Workspace** - Inspect staged / unstaged changes, browse Git history graph, preview diffs, and review files without leaving EasySession
+- 📝 **Markdown & File Preview** - Read README, notes, prompts, and text files in-app with Markdown rendering and code-friendly text preview
 - 🌲 **Project-Centric Session Tree** - Organize sessions by project, keep project paths bound, and switch faster with less terminal juggling
 - 📊 **Dashboard** — Overview of all session states and project status at a glance
 - ⚙️ **Config Editor** — GUI-based CLI config editing with live change detection
