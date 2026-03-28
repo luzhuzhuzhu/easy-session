@@ -15,16 +15,6 @@
         <circle cx="4" cy="12" r="1.5" fill="currentColor"/>
       </svg>
       <span class="branch-name">{{ displayBranchName }}</span>
-      <svg v-if="ahead > 0 || behind > 0" class="sync-indicator" width="12" height="12" viewBox="0 0 16 16" fill="none">
-        <path v-if="ahead > 0 && behind > 0" d="M4 6l4-3 4 3M12 10l-4 3-4-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <path v-else-if="ahead > 0" d="M8 13V3M4 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <path v-else d="M8 3v10M4 9l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-      <span v-if="ahead > 0 || behind > 0" class="sync-count">
-        <span v-if="ahead > 0" class="ahead">{{ ahead }}</span>
-        <span v-if="ahead > 0 && behind > 0">/</span>
-        <span v-if="behind > 0" class="behind">{{ behind }}</span>
-      </span>
     </button>
     <Teleport to="body">
       <div
@@ -148,15 +138,6 @@ const dropdownStyle = ref<Record<string, string>>({})
 const displayBranchName = computed(() => props.viewedBranch || props.currentBranch || '--')
 
 const currentBranchItem = computed(() => props.branches.find((b) => b.isCurrent))
-
-const viewedBranchItem = computed(() => {
-  if (!props.viewedBranch) return currentBranchItem.value ?? null
-  return props.branches.find((branch) => branch.name === props.viewedBranch) ?? null
-})
-
-const ahead = computed(() => viewedBranchItem.value?.ahead ?? 0)
-
-const behind = computed(() => viewedBranchItem.value?.behind ?? 0)
 
 const localBranches = computed(() => props.branches.filter((b) => !b.isRemote))
 
@@ -287,28 +268,6 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.sync-indicator {
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.sync-count {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 10px;
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-
-  .ahead {
-    color: #10b981;
-  }
-
-  .behind {
-    color: #f59e0b;
-  }
 }
 
 .branch-dropdown {

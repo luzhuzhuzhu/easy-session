@@ -11,6 +11,9 @@ import {
   unstageProjectFile,
   discardProjectFile,
   commitProjectChanges,
+  fetchProjectGitRemote,
+  pullProjectGitCurrentBranch,
+  pushProjectGitCurrentBranch,
   getCommitChanges,
   getCommitDiff,
   listProjectFiles,
@@ -99,6 +102,8 @@ export const useInspectorStore = defineStore('inspector', () => {
   const loadingGitLog = ref(false)
   const loadingBranches = ref(false)
   const loadingFileHistory = ref(false)
+  const syncingGitRemote = ref<'fetch' | 'pull' | 'push' | null>(null)
+  const gitSyncError = ref<string | null>(null)
   const gitLogSkip = ref(0)
   const viewedBranchName = ref<string | null>(null)
 
@@ -282,6 +287,11 @@ export const useInspectorStore = defineStore('inspector', () => {
   }
 
   async function refresh(): Promise<void> {
+    if (activeTab.value === 'history') {
+      await refreshGitHistoryContext()
+      return
+    }
+
     const relativePath = selectedRelativePath.value
     const source = selectionSource.value
     const changeViewMode = selectedChangeViewMode.value
@@ -498,6 +508,26 @@ export const useInspectorStore = defineStore('inspector', () => {
     }
   }
 
+  async function refreshGitHistoryContext(): Promise<void> {
+    gitSyncError.value = null
+    await loadGitBranches()
+    if (activeTab.value === 'history') {
+      clearSelectedCommit()
+      await loadGitLog()
+    }
+  }
+
+  function normalizeGitSyncError(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    if (/Could not connect to server|Failed to connect to .* port 443/i.test(message)) {
+      return '无法连接远端 Git 服务器，请检查当前网络或代理设置'
+    }
+    if (/unable to access/i.test(message)) {
+      return '无法访问远端仓库，请检查仓库地址、网络或代理设置'
+    }
+    return message || t('inspector.errors.loadRootFailed')
+  }
+
   async function loadGitFileHistory(relativePath: string, append = false): Promise<void> {
     const target = currentTarget.value
     if (!target) return
@@ -566,7 +596,56 @@ export const useInspectorStore = defineStore('inspector', () => {
     viewedBranchName.value = branchName
     activeTab.value = 'history'
     clearSelectedCommit()
+    if (!gitBranches.value) {
+      await loadGitBranches()
+    }
     await loadGitLog()
+  }
+
+  async function fetchGitRemote(): Promise<void> {
+    const target = currentTarget.value
+    if (!target) return
+    syncingGitRemote.value = 'fetch'
+    gitSyncError.value = null
+    try {
+      await fetchProjectGitRemote(target)
+      await refreshGitHistoryContext()
+    } catch (error) {
+      gitSyncError.value = normalizeGitSyncError(error)
+    } finally {
+      syncingGitRemote.value = null
+    }
+  }
+
+  async function pullGitCurrentBranch(): Promise<void> {
+    const target = currentTarget.value
+    if (!target) return
+    syncingGitRemote.value = 'pull'
+    gitSyncError.value = null
+    try {
+      await pullProjectGitCurrentBranch(target)
+      await loadRootState(true)
+      await refreshGitHistoryContext()
+    } catch (error) {
+      gitSyncError.value = normalizeGitSyncError(error)
+    } finally {
+      syncingGitRemote.value = null
+    }
+  }
+
+  async function pushGitCurrentBranch(): Promise<void> {
+    const target = currentTarget.value
+    if (!target) return
+    syncingGitRemote.value = 'push'
+    gitSyncError.value = null
+    try {
+      await pushProjectGitCurrentBranch(target)
+      await refreshGitHistoryContext()
+    } catch (error) {
+      gitSyncError.value = normalizeGitSyncError(error)
+    } finally {
+      syncingGitRemote.value = null
+    }
   }
 
   async function selectCommit(commitHash: string): Promise<void> {
@@ -681,9 +760,11 @@ export const useInspectorStore = defineStore('inspector', () => {
     gitBranches,
     gitFileHistory,
     viewedBranchName,
+    gitSyncError,
     loadingGitLog,
     loadingBranches,
     loadingFileHistory,
+    syncingGitRemote,
     selectedCommitHash,
     selectedCommitChanges,
     commitDiff,
@@ -705,6 +786,9 @@ export const useInspectorStore = defineStore('inspector', () => {
     loadMoreGitLog,
     loadGitBranches,
     loadGitFileHistory,
+    fetchGitRemote,
+    pullGitCurrentBranch,
+    pushGitCurrentBranch,
     clearGitHistory,
     stageFile,
     unstageFile,

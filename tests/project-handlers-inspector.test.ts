@@ -5,7 +5,10 @@ const inspectorMocks = vi.hoisted(() => ({
   listFileTree: vi.fn(async () => ({ entries: [] })),
   readFile: vi.fn(async () => ({ kind: 'text', content: 'demo' })),
   getGitStatus: vi.fn(async () => ({ state: 'non-git', items: [], message: 'no git' })),
-  getGitDiff: vi.fn(async () => ({ state: 'non-git', diff: '', message: 'no git' }))
+  getGitDiff: vi.fn(async () => ({ state: 'non-git', diff: '', message: 'no git' })),
+  fetchGitRemote: vi.fn(async () => undefined),
+  pullCurrentBranch: vi.fn(async () => undefined),
+  pushCurrentBranch: vi.fn(async () => undefined)
 }))
 
 vi.mock('electron', () => ({
@@ -28,6 +31,9 @@ vi.mock('../src/main/services/project-inspector', () => ({
     readFile = inspectorMocks.readFile
     getGitStatus = inspectorMocks.getGitStatus
     getGitDiff = inspectorMocks.getGitDiff
+    fetchGitRemote = inspectorMocks.fetchGitRemote
+    pullCurrentBranch = inspectorMocks.pullCurrentBranch
+    pushCurrentBranch = inspectorMocks.pushCurrentBranch
   }
 }))
 
@@ -40,6 +46,9 @@ describe('project-handlers inspector ipc', () => {
     inspectorMocks.readFile.mockClear()
     inspectorMocks.getGitStatus.mockClear()
     inspectorMocks.getGitDiff.mockClear()
+    inspectorMocks.fetchGitRemote.mockClear()
+    inspectorMocks.pullCurrentBranch.mockClear()
+    inspectorMocks.pushCurrentBranch.mockClear()
   })
 
   it('registers project inspector channels', () => {
@@ -49,6 +58,9 @@ describe('project-handlers inspector ipc', () => {
     expect(handlers.has('project:fileRead')).toBe(true)
     expect(handlers.has('project:gitStatus')).toBe(true)
     expect(handlers.has('project:gitDiff')).toBe(true)
+    expect(handlers.has('project:gitFetch')).toBe(true)
+    expect(handlers.has('project:gitPull')).toBe(true)
+    expect(handlers.has('project:gitPush')).toBe(true)
   })
 
   it('forwards project:fileTree to inspector service', async () => {

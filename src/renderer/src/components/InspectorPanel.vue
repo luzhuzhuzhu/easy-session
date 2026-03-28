@@ -169,6 +169,46 @@
                   :loading="inspectorStore.loadingBranches"
                   @select-branch="handleBranchSelect"
                 />
+                <div
+                  v-if="historySyncMessage"
+                  class="history-sync-summary"
+                  :class="{ error: !!inspectorStore.gitSyncError }"
+                  :title="historySyncMessage"
+                >
+                  {{ historySyncMessage }}
+                </div>
+                <div class="history-sync-actions">
+                  <button
+                    class="history-sync-btn"
+                    type="button"
+                    :disabled="!canFetchHistorySync || inspectorStore.syncingGitRemote !== null"
+                    :title="$t('inspector.history.fetchAction')"
+                    @click="inspectorStore.fetchGitRemote()"
+                  >
+                    <span v-if="inspectorStore.syncingGitRemote === 'fetch'">{{ $t('inspector.loading') }}</span>
+                    <span v-else>{{ $t('inspector.history.fetchAction') }}</span>
+                  </button>
+                  <button
+                    class="history-sync-btn"
+                    type="button"
+                    :disabled="!canPullHistorySync || inspectorStore.syncingGitRemote !== null"
+                    :title="$t('inspector.history.pullAction')"
+                    @click="inspectorStore.pullGitCurrentBranch()"
+                  >
+                    <span v-if="inspectorStore.syncingGitRemote === 'pull'">{{ $t('inspector.loading') }}</span>
+                    <span v-else>{{ $t('inspector.history.pullAction') }}</span>
+                  </button>
+                  <button
+                    class="history-sync-btn"
+                    type="button"
+                    :disabled="!canPushHistorySync || inspectorStore.syncingGitRemote !== null"
+                    :title="$t('inspector.history.pushAction')"
+                    @click="inspectorStore.pushGitCurrentBranch()"
+                  >
+                    <span v-if="inspectorStore.syncingGitRemote === 'push'">{{ $t('inspector.loading') }}</span>
+                    <span v-else>{{ $t('inspector.history.pushAction') }}</span>
+                  </button>
+                </div>
               </div>
               <GitHistoryTree
                 class="history-stage-tree"
@@ -557,6 +597,43 @@ const historyViewerTitle = computed(() => {
   return t('inspector.history.commit')
 })
 
+const currentSyncBranch = computed(() => {
+  const currentBranch = inspectorStore.gitBranches?.currentBranch
+  if (!currentBranch) return null
+  return inspectorStore.gitBranches?.branches.find((branch) => branch.name === currentBranch) ?? null
+})
+
+const historySyncSummary = computed(() => {
+  const branch = currentSyncBranch.value
+  if (!branch) return ''
+  const parts: string[] = []
+  if (branch.ahead > 0) {
+    parts.push(t('inspector.history.outgoingSummary', { branch: branch.upstream || branch.name, count: branch.ahead }))
+  }
+  if (branch.behind > 0) {
+    parts.push(t('inspector.history.incomingSummary', { branch: branch.upstream || branch.name, count: branch.behind }))
+  }
+  return parts.join(' · ')
+})
+
+const historySyncMessage = computed(() => {
+  return inspectorStore.gitSyncError || historySyncSummary.value
+})
+
+const canFetchHistorySync = computed(() => {
+  return inspectorStore.gitState === 'ready'
+})
+
+const canPullHistorySync = computed(() => {
+  const branch = currentSyncBranch.value
+  return inspectorStore.gitState === 'ready' && !!branch?.upstream && (branch.behind > 0 || branch.ahead >= 0)
+})
+
+const canPushHistorySync = computed(() => {
+  const branch = currentSyncBranch.value
+  return inspectorStore.gitState === 'ready' && !!branch?.upstream && (branch.ahead > 0 || branch.behind >= 0)
+})
+
 const projectSelectValue = computed(() => {
   if (inspectorStore.autoFollowActivePaneProject) {
     return inspectorStore.currentProjectOption?.projectPath ?? ''
@@ -909,8 +986,13 @@ function startSidebarResize(event: PointerEvent): void {
 watch(
   () => inspectorStore.activeTab,
   async (tab) => {
-    if (tab === 'history' && inspectorStore.currentTarget && !inspectorStore.gitLog) {
-      await inspectorStore.loadGitLog()
+    if (tab === 'history' && inspectorStore.currentTarget) {
+      if (!inspectorStore.gitBranches) {
+        await inspectorStore.loadGitBranches()
+      }
+      if (!inspectorStore.gitLog) {
+        await inspectorStore.loadGitLog()
+      }
     }
   }
 )
@@ -1398,10 +1480,58 @@ onBeforeUnmount(() => {
 .history-stage-toolbar {
   display: flex;
   align-items: center;
+  gap: 8px;
   min-width: 0;
   padding: 8px 10px 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-color) 76%, transparent);
   background: color-mix(in srgb, var(--bg-secondary) 86%, var(--bg-primary) 14%);
+}
+
+.history-sync-summary {
+  min-width: 0;
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-sync-summary.error {
+  color: var(--status-error);
+}
+
+.history-sync-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.history-sync-btn {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+
+  &:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  &:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+  }
 }
 
 .history-stage-tree {

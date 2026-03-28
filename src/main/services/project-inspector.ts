@@ -1270,6 +1270,54 @@ export class ProjectInspectorService {
     ])
   }
 
+  async fetchGitRemote(target: ProjectInspectorTarget): Promise<void> {
+    const resolvedTarget = await this.resolveTarget(target)
+    const gitContext = await this.resolveGitContext(resolvedTarget.projectPath)
+
+    if (gitContext.state !== 'ready') {
+      throw new Error('当前项目不是 Git 仓库')
+    }
+
+    await execFileText('git', [
+      '-C',
+      resolvedTarget.projectPath,
+      'fetch',
+      '--all',
+      '--prune'
+    ])
+  }
+
+  async pullCurrentBranch(target: ProjectInspectorTarget): Promise<void> {
+    const resolvedTarget = await this.resolveTarget(target)
+    const gitContext = await this.resolveGitContext(resolvedTarget.projectPath)
+
+    if (gitContext.state !== 'ready') {
+      throw new Error('当前项目不是 Git 仓库')
+    }
+
+    await execFileText('git', [
+      '-C',
+      resolvedTarget.projectPath,
+      'pull',
+      '--ff-only'
+    ])
+  }
+
+  async pushCurrentBranch(target: ProjectInspectorTarget): Promise<void> {
+    const resolvedTarget = await this.resolveTarget(target)
+    const gitContext = await this.resolveGitContext(resolvedTarget.projectPath)
+
+    if (gitContext.state !== 'ready') {
+      throw new Error('当前项目不是 Git 仓库')
+    }
+
+    await execFileText('git', [
+      '-C',
+      resolvedTarget.projectPath,
+      'push'
+    ])
+  }
+
   async getCommitChanges(
     target: ProjectInspectorTarget,
     commitHash: string

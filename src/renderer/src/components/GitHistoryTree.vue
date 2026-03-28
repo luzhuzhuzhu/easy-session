@@ -1,5 +1,5 @@
 <template>
-  <div class="git-history-graph" @scroll="handleScroll">
+  <div class="git-history-graph" v-bind="rootAttrs" @scroll="handleScroll">
     <div v-if="message" class="tree-message">{{ message }}</div>
     <div v-else-if="loading && !commits.length" class="tree-message">{{ $t('inspector.loading') }}</div>
     <div v-else-if="!commits.length" class="tree-message">{{ $t('inspector.history.emptyHistory') }}</div>
@@ -118,12 +118,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VirtualTree from '@/components/tree/VirtualTree.vue'
 import type { ProjectGitCommitItem, ProjectGitSwimlane } from '@/api/local-project'
 
-defineOptions({ name: 'GitHistoryTree' })
+defineOptions({
+  name: 'GitHistoryTree',
+  inheritAttrs: false
+})
 
 const props = defineProps<{
   commits: ProjectGitCommitItem[]
@@ -139,6 +142,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const rootAttrs = useAttrs()
 const hoveredCommit = ref<ProjectGitCommitItem | null>(null)
 const hoverCardStyle = ref<Record<string, string>>({})
 const hoverCardHovered = ref(false)

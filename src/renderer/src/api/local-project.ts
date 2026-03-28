@@ -306,6 +306,18 @@ export function checkoutBranch(target: ProjectInspectorTarget, branchName: strin
   return ipc.invoke<void>('project:gitCheckout', target, branchName)
 }
 
+export function fetchProjectGitRemote(target: ProjectInspectorTarget): Promise<void> {
+  return ipc.invoke<void>('project:gitFetch', target)
+}
+
+export function pullProjectGitCurrentBranch(target: ProjectInspectorTarget): Promise<void> {
+  return ipc.invoke<void>('project:gitPull', target)
+}
+
+export function pushProjectGitCurrentBranch(target: ProjectInspectorTarget): Promise<void> {
+  return ipc.invoke<void>('project:gitPush', target)
+}
+
 export function getCommitChanges(target: ProjectInspectorTarget, commitHash: string): Promise<ProjectGitCommitChangesResult> {
   return ipc.invoke<ProjectGitCommitChangesResult>('project:gitCommitChanges', target, commitHash)
 }

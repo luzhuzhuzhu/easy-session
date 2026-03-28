@@ -185,6 +185,18 @@ export function registerProjectHandlers(
     return inspector.checkoutBranch(target, branchName)
   })
 
+  ipcMain.handle('project:gitFetch', async (_event, target: ProjectInspectorTarget) => {
+    return inspector.fetchGitRemote(target)
+  })
+
+  ipcMain.handle('project:gitPull', async (_event, target: ProjectInspectorTarget) => {
+    return inspector.pullCurrentBranch(target)
+  })
+
+  ipcMain.handle('project:gitPush', async (_event, target: ProjectInspectorTarget) => {
+    return inspector.pushCurrentBranch(target)
+  })
+
   ipcMain.handle('project:gitCommitChanges', async (_event, target: ProjectInspectorTarget, commitHash: string) => {
     return inspector.getCommitChanges(target, commitHash)
   })

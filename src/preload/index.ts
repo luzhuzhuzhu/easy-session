@@ -37,6 +37,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'project:fileTree', 'project:fileRead', 'project:gitStatus', 'project:gitDiff',
   'project:gitLog', 'project:gitFileHistory', 'project:gitBranches',
   'project:gitStage', 'project:gitUnstage', 'project:gitCommit', 'project:gitCheckout',
+  'project:gitFetch', 'project:gitPull', 'project:gitPush',
   'project:gitCommitChanges', 'project:gitCommitDiff',
   // remote instances
   'remote-instance:list', 'remote-instance:add', 'remote-instance:update',

@@ -198,6 +198,32 @@ describe('ProjectInspectorService', () => {
     expect(calls.some((args) => args[2] === 'clean' && args.includes('notes.txt'))).toBe(true)
   })
 
+  it('runs fetch, pull and push against the current repository', async () => {
+    const calls: string[][] = []
+    execMocks.execFileMock.mockImplementation((command: string, args: string[], _options: any, callback: Function) => {
+      expect(command).toBe('git')
+      calls.push(args)
+      const subCommand = args[2]
+      if (subCommand === 'rev-parse') {
+        callback(null, `${tempDir}\n\n`)
+        return
+      }
+      if (subCommand === 'fetch' || subCommand === 'pull' || subCommand === 'push') {
+        callback(null, '')
+        return
+      }
+      callback(new Error(`unexpected git command: ${subCommand}`))
+    })
+
+    await service.fetchGitRemote({ projectPath: tempDir })
+    await service.pullCurrentBranch({ projectPath: tempDir })
+    await service.pushCurrentBranch({ projectPath: tempDir })
+
+    expect(calls.some((args) => args[2] === 'fetch' && args.includes('--all') && args.includes('--prune'))).toBe(true)
+    expect(calls.some((args) => args[2] === 'pull' && args.includes('--ff-only'))).toBe(true)
+    expect(calls.some((args) => args[2] === 'push')).toBe(true)
+  })
+
   it('builds swimlane-based git graph rows for history instead of ascii graph text', async () => {
     const logArgs: string[][] = []
     execMocks.execFileMock.mockImplementation((command: string, args: string[], _options: any, callback: Function) => {
