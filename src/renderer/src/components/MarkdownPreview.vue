@@ -18,6 +18,9 @@ const props = defineProps<{
   zoomPercent?: number
 }>()
 
+const markdownRendererCache = new Map<string, any>()
+const markdownHtmlCache = new Map<string, string>()
+
 const viewerStyle = computed(() => ({
   '--viewer-scale': String((props.zoomPercent ?? 100) / 100)
 }))
@@ -81,7 +84,13 @@ function renderExtendedTaskStates(html: string): string {
     )
 }
 
-function createMarkdownRenderer(sourcePath?: string | null): MarkdownIt {
+function createMarkdownRenderer(sourcePath?: string | null): any {
+  const cacheKey = sourcePath ?? ''
+  const cached = markdownRendererCache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
   const markdown = new MarkdownIt({
     html: true,
     linkify: true,
@@ -98,9 +107,9 @@ function createMarkdownRenderer(sourcePath?: string | null): MarkdownIt {
 
   const defaultLinkOpen =
     markdown.renderer.rules.link_open ??
-    ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+    ((tokens: any, idx: number, options: any, _env: any, self: any) => self.renderToken(tokens, idx, options))
 
-  markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+  markdown.renderer.rules.link_open = (tokens: any, idx: number, options: any, env: any, self: any) => {
     const hrefIndex = tokens[idx].attrIndex('href')
     if (hrefIndex >= 0) {
       const href = tokens[idx].attrs?.[hrefIndex]?.[1] ?? ''
@@ -113,9 +122,9 @@ function createMarkdownRenderer(sourcePath?: string | null): MarkdownIt {
 
   const defaultImage =
     markdown.renderer.rules.image ??
-    ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+    ((tokens: any, idx: number, options: any, _env: any, self: any) => self.renderToken(tokens, idx, options))
 
-  markdown.renderer.rules.image = (tokens, idx, options, env, self) => {
+  markdown.renderer.rules.image = (tokens: any, idx: number, options: any, env: any, self: any) => {
     const srcIndex = tokens[idx].attrIndex('src')
     if (srcIndex >= 0) {
       const src = tokens[idx].attrs?.[srcIndex]?.[1] ?? ''
@@ -124,13 +133,32 @@ function createMarkdownRenderer(sourcePath?: string | null): MarkdownIt {
     return defaultImage(tokens, idx, options, env, self)
   }
 
+  markdownRendererCache.set(cacheKey, markdown)
   return markdown
 }
 
 const html = computed(() => {
+  const sourcePath = props.sourcePath ?? ''
+  const normalizedContent = props.content.replace(/^\uFEFF/, '')
+  const cacheKey = `${sourcePath}::${normalizedContent}`
+  const cached = markdownHtmlCache.get(cacheKey)
+  if (cached != null) {
+    return cached
+  }
+
   const renderer = createMarkdownRenderer(props.sourcePath)
-  const rawHtml = renderer.render(props.content.replace(/^\uFEFF/, ''))
-  return renderExtendedTaskStates(renderGithubAlerts(rawHtml))
+  const rawHtml = renderer.render(normalizedContent)
+  const rendered = renderExtendedTaskStates(renderGithubAlerts(rawHtml))
+
+  markdownHtmlCache.set(cacheKey, rendered)
+  if (markdownHtmlCache.size > 24) {
+    const oldestKey = markdownHtmlCache.keys().next().value
+    if (oldestKey) {
+      markdownHtmlCache.delete(oldestKey)
+    }
+  }
+
+  return rendered
 })
 </script>
 
@@ -141,6 +169,7 @@ const html = computed(() => {
   height: 100%;
   min-height: 0;
   overflow: auto;
+  contain: content;
   padding: calc(24px * var(--viewer-scale)) calc(28px * var(--viewer-scale)) calc(40px * var(--viewer-scale));
   background: var(--bg-primary);
 }

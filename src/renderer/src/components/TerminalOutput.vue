@@ -3,6 +3,14 @@
     <div class="terminal-toolbar">
       <button
         class="tool-btn"
+        :disabled="loadingMoreHistory || loadingHistory || !hasMoreHistory"
+        :title="$t('terminal.loadMoreHistory')"
+        @click="loadMoreHistory"
+      >
+        HM
+      </button>
+      <button
+        class="tool-btn"
         :class="{ active: autoScroll }"
         :title="$t(autoScroll ? 'terminal.pauseScroll' : 'terminal.resumeScroll')"
         @click="toggleAutoScroll"
@@ -31,6 +39,8 @@ import '@xterm/xterm/css/xterm.css'
 import type { OutputLine } from '@/api/session'
 import { useToast } from '@/composables/useToast'
 import { useSettingsStore } from '@/stores/settings'
+import { useSessionsStore } from '@/stores/sessions'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { getSharedGatewayResolver, type GatewayOutputEvent } from '@/gateways'
 import type { SessionRef } from '@/models/unified-resource'
 
@@ -39,6 +49,8 @@ const emit = defineEmits<{ clear: [] }>()
 const { t } = useI18n()
 const toast = useToast()
 const settingsStore = useSettingsStore()
+const sessionsStore = useSessionsStore()
+const workspaceStore = useWorkspaceStore()
 const gatewayResolver = getSharedGatewayResolver()
 
 const containerRef = ref<HTMLElement | null>(null)
@@ -51,22 +63,148 @@ let unlistenOutput: (() => void) | null = null
 let subscribedGlobalSessionKey: string | null = null
 let loadingHistory = false
 const pendingEvents: GatewayOutputEvent[] = []
+const liveOutputQueue: GatewayOutputEvent[] = []
+let liveOutputFlushRaf: number | null = null
 let lastSyncedCols = -1
 let lastSyncedRows = -1
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 const autoScroll = ref(true)
 let suppressAutoScrollTracking = false
 const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('windows')
-const HISTORY_LOAD_LINES = 20000
+const HISTORY_LOAD_LINES = 12000
+const HISTORY_LOAD_STEP = 8000
+const HISTORY_MAX_LOAD_LINES = 60000
+const HISTORY_WRITE_BATCH_SIZE = 240
+const HISTORY_CACHE_TTL_MS = 30000
 const DEFAULT_FONT_SIZE = 13
 const MIN_FONT_SIZE = 9
 const MAX_FONT_SIZE = 28
 const FONT_SIZE_PERSIST_DEBOUNCE_MS = 320
 let fontSizePersistTimer: ReturnType<typeof setTimeout> | null = null
 let hasPendingFontSizePersist = false
+let lastObservedWidth = -1
+let lastObservedHeight = -1
+const currentHistoryLoadLines = ref(HISTORY_LOAD_LINES)
+const hasMoreHistory = ref(true)
+const loadingMoreHistory = ref(false)
+
+const historySnapshotCache = new Map<string, {
+  lines: OutputLine[]
+  lastSeq: number
+  capturedAt: number
+}>()
+
+const isForegroundPane = computed(() => {
+  if (!props.paneId) return true
+  return workspaceStore.layout.activePaneId === props.paneId
+})
+
+const currentSessionStatus = computed(() => {
+  const globalSessionKey = props.sessionRef?.globalSessionKey
+  if (!globalSessionKey) return null
+  return sessionsStore.getUnifiedSession(globalSessionKey)?.status ?? null
+})
+
+function getLastSeq(history: OutputLine[]): number {
+  let maxSeq = 0
+  for (const line of history) {
+    const seq = resolveSeq(line, maxSeq)
+    if (seq > maxSeq) {
+      maxSeq = seq
+    }
+  }
+  return maxSeq
+}
+
+function readWarmHistorySnapshot(sessionKey: string): OutputLine[] | null {
+  const cached = historySnapshotCache.get(sessionKey)
+  if (!cached) return null
+  if (Date.now() - cached.capturedAt > HISTORY_CACHE_TTL_MS) {
+    historySnapshotCache.delete(sessionKey)
+    return null
+  }
+  return cached.lines.map((line) => ({ ...line }))
+}
+
+function writeWarmHistorySnapshot(sessionKey: string, history: OutputLine[]): void {
+  historySnapshotCache.set(sessionKey, {
+    lines: history.slice(-HISTORY_LOAD_LINES).map((line) => ({ ...line })),
+    lastSeq: getLastSeq(history),
+    capturedAt: Date.now()
+  })
+}
+
+function appendWarmHistorySnapshot(sessionKey: string, line: OutputLine): void {
+  const cached = historySnapshotCache.get(sessionKey)
+  if (!cached) {
+    historySnapshotCache.set(sessionKey, {
+      lines: [{ ...line }],
+      lastSeq: resolveSeq(line, 0),
+      capturedAt: Date.now()
+    })
+    return
+  }
+
+  const nextSeq = resolveSeq(line, cached.lastSeq)
+  if (nextSeq <= cached.lastSeq) {
+    cached.capturedAt = Date.now()
+    return
+  }
+
+  cached.lines.push({ ...line, seq: nextSeq })
+  if (cached.lines.length > HISTORY_LOAD_LINES) {
+    cached.lines.splice(0, cached.lines.length - HISTORY_LOAD_LINES)
+  }
+  cached.lastSeq = nextSeq
+  cached.capturedAt = Date.now()
+}
+
+function appendWarmHistorySnapshotBatch(sessionKey: string, lines: OutputLine[]): void {
+  for (const line of lines) {
+    appendWarmHistorySnapshot(sessionKey, line)
+  }
+}
+
+function clearWarmHistorySnapshot(sessionKey: string | null | undefined): void {
+  if (!sessionKey) return
+  historySnapshotCache.delete(sessionKey)
+}
+
+function clearLiveOutputQueue(): void {
+  liveOutputQueue.length = 0
+  if (liveOutputFlushRaf !== null) {
+    cancelAnimationFrame(liveOutputFlushRaf)
+    liveOutputFlushRaf = null
+  }
+}
+
+function getWarmHistorySnapshotLastSeq(sessionKey: string | null | undefined): number {
+  if (!sessionKey) return 0
+  return historySnapshotCache.get(sessionKey)?.lastSeq ?? 0
+}
+
+function isContainerRenderable(): boolean {
+  const host = containerRef.value
+  if (!host || !term || !fitAddon) return false
+  return host.clientWidth > 0 && host.clientHeight > 0
+}
+
+function isPaneVisible(): boolean {
+  const host = containerRef.value
+  if (!host) return false
+  return host.clientWidth > 0 && host.clientHeight > 0
+}
 
 function isSessionWritable(): boolean {
   return !!props.processKey
+}
+
+function isSessionRunning(): boolean {
+  return currentSessionStatus.value === 'running' && !!props.processKey
+}
+
+function shouldRenderLiveOutput(): boolean {
+  return isPaneVisible()
 }
 
 function clampFontSize(size: number): number {
@@ -160,8 +298,10 @@ async function resolveGatewayContext(): Promise<{
 
 function syncPtySize(force = false): void {
   if (!term || !props.sessionRef || !isSessionWritable()) return
+  if (!isSessionRunning()) return
 
   if (!force && term.cols === lastSyncedCols && term.rows === lastSyncedRows) return
+  if (term.cols <= 0 || term.rows <= 0) return
   lastSyncedCols = term.cols
   lastSyncedRows = term.rows
 
@@ -173,12 +313,17 @@ function syncPtySize(force = false): void {
 }
 
 function fitAndSync(force = false): void {
-  if (!term || !fitAddon) return
-  fitAddon.fit()
+  if (!isContainerRenderable()) return
+  const currentFitAddon = fitAddon
+  const currentTerm = term
+  if (!currentFitAddon || !currentTerm) return
+  currentFitAddon.fit()
+  if (currentTerm.cols <= 0 || currentTerm.rows <= 0) return
   syncPtySize(force)
 }
 
 function scheduleResize(): void {
+  if (!isContainerRenderable()) return
   if (resizeTimer) {
     clearTimeout(resizeTimer)
   }
@@ -270,6 +415,7 @@ function destroyTerminal(): void {
   }
 
   if (containerRef.value) containerRef.value.innerHTML = ''
+  clearLiveOutputQueue()
   lastRenderedSeq = 0
   lastSyncedCols = -1
   lastSyncedRows = -1
@@ -295,7 +441,9 @@ function initTerminal(): void {
   fitAddon = new FitAddon()
   term.loadAddon(fitAddon)
   term.open(containerRef.value)
-  fitAndSync(true)
+  requestAnimationFrame(() => {
+    fitAndSync(true)
+  })
 
   term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
     if (ev.type !== 'keydown') return true
@@ -385,6 +533,111 @@ function toggleAutoScroll(): void {
   }
 }
 
+function waitForNextHistoryBatch(): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, 0)
+  })
+}
+
+function writeTerminalChunk(text: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (!term || !text) {
+      resolve()
+      return
+    }
+    term.write(text, resolve)
+  })
+}
+
+async function replayHistoryInBatches(
+  history: OutputLine[],
+  token: number,
+  sessionKey: string
+): Promise<boolean> {
+  for (let index = 0; index < history.length; index += HISTORY_WRITE_BATCH_SIZE) {
+    if (token !== loadToken || !term || props.sessionRef?.globalSessionKey !== sessionKey) {
+      return false
+    }
+
+    let chunk = ''
+    const batch = history.slice(index, index + HISTORY_WRITE_BATCH_SIZE)
+    for (const raw of batch) {
+      const seq = resolveSeq(raw, lastRenderedSeq + 1)
+      if (seq <= lastRenderedSeq) continue
+      chunk += raw.text
+      lastRenderedSeq = seq
+    }
+
+    if (chunk) {
+      await writeTerminalChunk(chunk)
+    }
+
+    if (index + HISTORY_WRITE_BATCH_SIZE < history.length) {
+      await waitForNextHistoryBatch()
+    }
+  }
+
+  return true
+}
+
+async function renderHistorySnapshot(
+  history: OutputLine[],
+  token: number,
+  sessionKey: string,
+  forceScroll = false
+): Promise<boolean> {
+  if (!term || token !== loadToken || props.sessionRef?.globalSessionKey !== sessionKey) {
+    return false
+  }
+
+  const previousViewportOffsetFromBottom = !autoScroll.value
+    ? Math.max(0, term.buffer.active.baseY - term.buffer.active.viewportY)
+    : 0
+
+  term.reset()
+  lastSyncedCols = -1
+  lastSyncedRows = -1
+  fitAndSync(true)
+  resetLocalBuffer()
+
+  const replayed = await replayHistoryInBatches(history, token, sessionKey)
+  if (!replayed) {
+    return false
+  }
+
+  if (!forceScroll && !autoScroll.value) {
+    const nextViewportY = Math.max(0, term.buffer.active.baseY - previousViewportOffsetFromBottom)
+    suppressAutoScrollTracking = true
+    term.scrollToLine(nextViewportY)
+    queueMicrotask(() => {
+      suppressAutoScrollTracking = false
+    })
+    return true
+  }
+
+  scrollToBottom(forceScroll)
+  return true
+}
+
+async function syncForegroundFromWarmHistory(): Promise<void> {
+  const sessionKey = props.sessionRef?.globalSessionKey
+  if (!term || !sessionKey || loadingHistory || !isPaneVisible()) return
+
+  const cachedHistory = readWarmHistorySnapshot(sessionKey)
+  if (!cachedHistory?.length) return
+
+  const cachedSeq = getWarmHistorySnapshotLastSeq(sessionKey)
+  if (cachedSeq <= lastRenderedSeq) return
+
+  const token = ++loadToken
+  loadingHistory = true
+  const replayed = await renderHistorySnapshot(cachedHistory, token, sessionKey, false)
+  loadingHistory = false
+  if (replayed) {
+    scheduleResize()
+  }
+}
+
 async function loadHistory(): Promise<void> {
   const sessionRef = props.sessionRef ?? null
   if (!term || !sessionRef) {
@@ -396,6 +649,15 @@ async function loadHistory(): Promise<void> {
   loadingHistory = true
   pendingEvents.length = 0
   let history: OutputLine[] = []
+  const cachedHistory = readWarmHistorySnapshot(sessionRef.globalSessionKey)
+
+  if (cachedHistory?.length) {
+    const renderedFromCache = await renderHistorySnapshot(cachedHistory, token, sessionRef.globalSessionKey, true)
+    if (!renderedFromCache) {
+      loadingHistory = false
+      return
+    }
+  }
 
   try {
     const context = await resolveGatewayContext()
@@ -406,7 +668,7 @@ async function loadHistory(): Promise<void> {
     history = await context.gateway.getOutputHistory(
       context.sessionRef.instanceId,
       context.sessionRef.sessionId,
-      HISTORY_LOAD_LINES
+      currentHistoryLoadLines.value
     )
   } catch {
     loadingHistory = false
@@ -418,21 +680,18 @@ async function loadHistory(): Promise<void> {
     return
   }
 
-  term.reset()
-  lastSyncedCols = -1
-  lastSyncedRows = -1
-  fitAndSync(true)
-  resetLocalBuffer()
-
-  for (const raw of history) {
-    const seq = resolveSeq(raw, lastRenderedSeq + 1)
-    if (seq <= lastRenderedSeq) continue
-    const line: OutputLine = { ...raw, seq }
-    term.write(line.text)
-    lastRenderedSeq = seq
+  const latestSeq = getLastSeq(history)
+  const cachedSeq = cachedHistory ? getLastSeq(cachedHistory) : 0
+  if (!cachedHistory || latestSeq !== cachedSeq) {
+    const replayed = await renderHistorySnapshot(history, token, sessionRef.globalSessionKey, true)
+    if (!replayed) {
+      loadingHistory = false
+      return
+    }
   }
 
-  scrollToBottom(true)
+  hasMoreHistory.value = history.length >= currentHistoryLoadLines.value
+  writeWarmHistorySnapshot(sessionRef.globalSessionKey, history)
   loadingHistory = false
 
   if (pendingEvents.length === 0) {
@@ -445,22 +704,69 @@ async function loadHistory(): Promise<void> {
   }
 }
 
-function applyLiveOutputNow(event: GatewayOutputEvent): void {
-  if (!term || !props.sessionRef || event.globalSessionKey !== props.sessionRef.globalSessionKey) return
-
-  const seq = resolveSeq(
-    { text: event.data, stream: event.stream, timestamp: event.timestamp, seq: event.seq },
-    lastRenderedSeq + 1
-  )
-  if (seq <= lastRenderedSeq) return
-
-  const line: OutputLine = {
-    text: event.data,
-    stream: event.stream,
-    timestamp: event.timestamp,
-    seq
+async function loadMoreHistory(): Promise<void> {
+  if (loadingHistory || loadingMoreHistory.value || !hasMoreHistory.value) return
+  const nextLimit = Math.min(HISTORY_MAX_LOAD_LINES, currentHistoryLoadLines.value + HISTORY_LOAD_STEP)
+  if (nextLimit === currentHistoryLoadLines.value) {
+    hasMoreHistory.value = false
+    return
   }
-  writeLine(line)
+
+  loadingMoreHistory.value = true
+  currentHistoryLoadLines.value = nextLimit
+  try {
+    await loadHistory()
+  } finally {
+    loadingMoreHistory.value = false
+  }
+}
+
+function applyLiveOutputNow(event: GatewayOutputEvent): void {
+  if (!props.sessionRef || event.globalSessionKey !== props.sessionRef.globalSessionKey) return
+  liveOutputQueue.push(event)
+  scheduleLiveOutputFlush()
+}
+
+function scheduleLiveOutputFlush(): void {
+  if (liveOutputFlushRaf !== null) return
+  liveOutputFlushRaf = requestAnimationFrame(() => {
+    liveOutputFlushRaf = null
+    flushLiveOutputQueue()
+  })
+}
+
+function flushLiveOutputQueue(): void {
+  if (!term || !props.sessionRef || liveOutputQueue.length === 0) return
+
+  const sessionKey = props.sessionRef.globalSessionKey
+  const queued = liveOutputQueue.splice(0, liveOutputQueue.length)
+  let chunk = ''
+  const nextLines: OutputLine[] = []
+
+  for (const event of queued) {
+    if (event.globalSessionKey !== sessionKey) continue
+
+    const seq = resolveSeq(
+      { text: event.data, stream: event.stream, timestamp: event.timestamp, seq: event.seq },
+      lastRenderedSeq + 1
+    )
+    if (seq <= lastRenderedSeq) continue
+
+    const line: OutputLine = {
+      text: event.data,
+      stream: event.stream,
+      timestamp: event.timestamp,
+      seq
+    }
+    nextLines.push(line)
+    chunk += line.text
+    lastRenderedSeq = seq
+  }
+
+  if (nextLines.length === 0 || !chunk) return
+
+  term.write(chunk)
+  appendWarmHistorySnapshotBatch(sessionKey, nextLines)
   scrollToBottom(false)
 }
 
@@ -468,6 +774,19 @@ function applyLiveOutput(event: GatewayOutputEvent): void {
   if (!props.sessionRef || event.globalSessionKey !== props.sessionRef.globalSessionKey) return
   if (loadingHistory) {
     pendingEvents.push(event)
+    return
+  }
+  if (!shouldRenderLiveOutput()) {
+    const seq = resolveSeq(
+      { text: event.data, stream: event.stream, timestamp: event.timestamp, seq: event.seq },
+      getWarmHistorySnapshotLastSeq(event.globalSessionKey)
+    )
+    appendWarmHistorySnapshot(event.globalSessionKey, {
+      text: event.data,
+      stream: event.stream,
+      timestamp: event.timestamp,
+      seq
+    })
     return
   }
   applyLiveOutputNow(event)
@@ -552,11 +871,18 @@ function handleClear(): void {
   term?.reset()
   emit('clear')
   resetLocalBuffer()
+  clearLiveOutputQueue()
+  clearWarmHistorySnapshot(props.sessionRef?.globalSessionKey)
+  hasMoreHistory.value = false
 }
 
 watch(
   () => props.sessionRef?.globalSessionKey,
   () => {
+    clearLiveOutputQueue()
+    currentHistoryLoadLines.value = HISTORY_LOAD_LINES
+    hasMoreHistory.value = true
+    loadingMoreHistory.value = false
     reloadSessionView()
   },
   { flush: 'post' }
@@ -568,7 +894,9 @@ watch(
     if (term) {
       term.options.disableStdin = !isSessionWritable()
     }
-    syncPtySize(true)
+    if (isPaneVisible()) {
+      syncPtySize(true)
+    }
   }
 )
 
@@ -579,12 +907,40 @@ watch(
   }
 )
 
+watch(
+  isForegroundPane,
+  (foreground) => {
+    if (!foreground) return
+    void syncForegroundFromWarmHistory().then(() => {
+      focusTerminalForIME()
+    })
+  }
+)
+
+watch(
+  currentSessionStatus,
+  (status) => {
+    if (status === 'running' && isPaneVisible()) {
+      scheduleResize()
+    }
+  }
+)
+
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
   reloadSessionView()
 
   resizeObserver = new ResizeObserver(() => {
+    const host = containerRef.value
+    if (!host) return
+    const nextWidth = host.clientWidth
+    const nextHeight = host.clientHeight
+    if (nextWidth === lastObservedWidth && nextHeight === lastObservedHeight) {
+      return
+    }
+    lastObservedWidth = nextWidth
+    lastObservedHeight = nextHeight
     scheduleResize()
   })
 
@@ -606,6 +962,8 @@ onBeforeUnmount(() => {
     clearTimeout(resizeTimer)
     resizeTimer = null
   }
+  lastObservedWidth = -1
+  lastObservedHeight = -1
   unlistenOutput?.()
   unlistenOutput = null
   subscribedGlobalSessionKey = null
@@ -648,6 +1006,11 @@ onBeforeUnmount(() => {
   cursor: pointer;
   opacity: 0.6;
   transition: opacity var(--transition-fast);
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
 
   &:hover {
     opacity: 1;

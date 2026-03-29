@@ -26,121 +26,27 @@
     <template v-if="inspectorStore.panelOpen">
       <div class="resize-handle" @pointerdown="startResize" />
 
-      <header class="panel-header">
-        <div class="header-main">
-          <div class="header-left">
-            <nav v-if="inspectorStore.sidebarVisible" class="inline-tabs">
-              <button
-                v-for="tab in tabs"
-                :key="tab.value"
-                class="inline-tab-btn"
-                :class="{ active: inspectorStore.activeTab === tab.value }"
-                type="button"
-                :title="tab.label"
-                @click="inspectorStore.setActiveTab(tab.value)"
-              >
-                <svg v-if="tab.value === 'changes'" width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="3" r="2" stroke="currentColor" stroke-width="1.5"/>
-                  <circle cx="3" cy="13" r="2" stroke="currentColor" stroke-width="1.5"/>
-                  <circle cx="13" cy="13" r="2" stroke="currentColor" stroke-width="1.5"/>
-                  <path d="M8 5v3M5 11l2-2m4 2l-2-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-                <svg v-else-if="tab.value === 'files'" width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <path d="M2 3h5l2 2h5v8H2V3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                </svg>
-                <svg v-else width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.5"/>
-                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5"/>
-                </svg>
-              </button>
-            </nav>
-          </div>
-
-          <div class="header-right">
-            <button
-              v-if="!isHistoryTab"
-              class="mini-toggle-btn icon-btn"
-              :class="{ active: inspectorStore.sidebarVisible }"
-              type="button"
-              :title="inspectorStore.sidebarVisible ? $t('inspector.hideSidebar') : $t('inspector.showSidebar')"
-              @click="inspectorStore.setSidebarVisible(!inspectorStore.sidebarVisible)"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M2 3h12v10H2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-                <path d="M6 3v10" stroke="currentColor" stroke-width="1.5"/>
-              </svg>
-            </button>
-            <button
-              v-if="!isHistoryTab && inspectorStore.sidebarVisible"
-              class="mini-toggle-btn icon-btn"
-              :class="{ active: inspectorStore.sidebarAutoCollapse }"
-              type="button"
-              :title="$t('inspector.sidebarAutoCollapse')"
-              @click="handleSidebarAutoCollapseToggle(!inspectorStore.sidebarAutoCollapse)"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <path d="M8.5 4.5L12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <div ref="zoomControlRef" class="viewer-zoom-control">
-              <button
-                class="mini-btn viewer-zoom-btn"
-                type="button"
-                :title="`${t('terminal.zoomPresets')} / ${t('terminal.resetZoom')}`"
-                @click.stop="toggleZoomMenu"
-                @dblclick.stop="resetViewerZoom"
-              >
-                {{ viewerZoomPercent }}%
-              </button>
-              <div v-if="zoomMenuOpen" class="viewer-zoom-menu" @click.stop>
-                <button
-                  v-for="percent in ZOOM_PRESET_PERCENTS"
-                  :key="percent"
-                  class="viewer-zoom-item"
-                  :class="{ active: percent === viewerZoomPercent }"
-                  type="button"
-                  @click="setViewerZoom(percent)"
-                >
-                  {{ percent }}%
-                </button>
-              </div>
-            </div>
-            <button class="ghost-btn utility-btn icon-btn" type="button" :title="$t('inspector.refresh')" @click="inspectorStore.refresh()">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M14 8a6 6 0 11-1.76-4.24M12 2v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button
-              class="mini-toggle-btn icon-btn"
-              :class="{ active: inspectorStore.autoFollowActivePaneProject }"
-              type="button"
-              :title="$t('inspector.followActivePane')"
-              @click="handleFollowToggle(!inspectorStore.autoFollowActivePaneProject)"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M6.5 9.5l3-3M9 4h2a3 3 0 010 6H9M7 12H5a3 3 0 010-6h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
-            <select
-              class="project-select compact-select"
-              :title="projectSelectTitle"
-              :disabled="inspectorStore.autoFollowActivePaneProject"
-              :value="projectSelectValue"
-              @change="handleManualProjectChange(($event.target as HTMLSelectElement).value)"
-            >
-              <option value="">{{ projectSelectPlaceholder }}</option>
-              <option
-                v-for="option in inspectorStore.manualProjectOptions"
-                :key="option.key"
-                :value="option.projectPath"
-              >
-                {{ option.projectName }}
-              </option>
-            </select>
-          </div>
-        </div>
-      </header>
+      <InspectorHeader
+        :tabs="tabs"
+        :active-tab="inspectorStore.activeTab"
+        :sidebar-visible="inspectorStore.sidebarVisible"
+        :is-history-tab="isHistoryTab"
+        :sidebar-auto-collapse="inspectorStore.sidebarAutoCollapse"
+        :viewer-zoom-percent="viewerZoomPercent"
+        :auto-follow-active-pane-project="inspectorStore.autoFollowActivePaneProject"
+        :project-select-title="projectSelectTitle"
+        :project-select-value="projectSelectValue"
+        :project-select-placeholder="projectSelectPlaceholder"
+        :manual-project-options="inspectorStore.manualProjectOptions"
+        @set-active-tab="inspectorStore.setActiveTab($event)"
+        @toggle-sidebar-visible="inspectorStore.setSidebarVisible($event)"
+        @toggle-sidebar-auto-collapse="handleSidebarAutoCollapseToggle($event)"
+        @set-viewer-zoom="setViewerZoom($event)"
+        @reset-viewer-zoom="resetViewerZoom"
+        @refresh="inspectorStore.refresh()"
+        @toggle-follow="handleFollowToggle($event)"
+        @manual-project-change="handleManualProjectChange($event)"
+      />
 
       <div v-if="!inspectorStore.currentProjectOption" class="panel-empty">
         {{ $t('inspector.noProjectHint') }}
@@ -159,124 +65,42 @@
         :style="panelBodyStyle"
       >
         <template v-if="isHistoryTab">
-          <section class="history-workbench">
-            <div class="history-stage">
-              <div v-if="showBranchSelect" class="history-stage-toolbar">
-                <GitBranchSelect
-                  :current-branch="inspectorStore.gitBranches?.currentBranch ?? null"
-                  :viewed-branch="inspectorStore.viewedBranchName"
-                  :branches="inspectorStore.gitBranches?.branches ?? []"
-                  :loading="inspectorStore.loadingBranches"
-                  @select-branch="handleBranchSelect"
-                />
-                <div
-                  v-if="historySyncMessage"
-                  class="history-sync-summary"
-                  :class="{ error: !!inspectorStore.gitSyncError }"
-                  :title="historySyncMessage"
-                >
-                  {{ historySyncMessage }}
-                </div>
-                <div class="history-sync-actions">
-                  <button
-                    class="history-sync-btn"
-                    type="button"
-                    :disabled="!canFetchHistorySync || inspectorStore.syncingGitRemote !== null"
-                    :title="$t('inspector.history.fetchAction')"
-                    @click="inspectorStore.fetchGitRemote()"
-                  >
-                    <span v-if="inspectorStore.syncingGitRemote === 'fetch'">{{ $t('inspector.loading') }}</span>
-                    <span v-else>{{ $t('inspector.history.fetchAction') }}</span>
-                  </button>
-                  <button
-                    class="history-sync-btn"
-                    type="button"
-                    :disabled="!canPullHistorySync || inspectorStore.syncingGitRemote !== null"
-                    :title="$t('inspector.history.pullAction')"
-                    @click="inspectorStore.pullGitCurrentBranch()"
-                  >
-                    <span v-if="inspectorStore.syncingGitRemote === 'pull'">{{ $t('inspector.loading') }}</span>
-                    <span v-else>{{ $t('inspector.history.pullAction') }}</span>
-                  </button>
-                  <button
-                    class="history-sync-btn"
-                    type="button"
-                    :disabled="!canPushHistorySync || inspectorStore.syncingGitRemote !== null"
-                    :title="$t('inspector.history.pushAction')"
-                    @click="inspectorStore.pushGitCurrentBranch()"
-                  >
-                    <span v-if="inspectorStore.syncingGitRemote === 'push'">{{ $t('inspector.loading') }}</span>
-                    <span v-else>{{ $t('inspector.history.pushAction') }}</span>
-                  </button>
-                </div>
-              </div>
-              <GitHistoryTree
-                class="history-stage-tree"
-                :commits="inspectorStore.gitLog?.commits ?? []"
-                :has-more="inspectorStore.gitLog?.hasMore ?? false"
-                :loading="inspectorStore.loadingGitLog"
-                :selected-hash="inspectorStore.selectedCommitHash"
-                :message="historyMessage"
-                @select="handleHistorySelect"
-                @load-more="inspectorStore.loadMoreGitLog"
-              />
-              <div
-                class="sidebar-resize-handle history-resize-handle"
-                :class="{ compact: isCompactPanel }"
-                @pointerdown="startSidebarResize"
-              />
-            </div>
-
-            <section class="history-detail-panel" @wheel.capture="handleViewerWheel">
-              <div class="viewer-header history-viewer-header">
-                <div class="viewer-copy">
-                  <div class="viewer-title">{{ historyViewerTitle }}</div>
-                  <div
-                    v-if="inspectorStore.selectedCommitHash"
-                    class="viewer-subtitle commit-inline-meta"
-                    :title="inspectorStore.selectedCommitHash"
-                  >
-                    <span class="commit-hash">{{ inspectorStore.selectedCommitHash.slice(0, 7) }}</span>
-                    <span class="commit-files-count">{{ inspectorStore.selectedCommitChanges?.changes.length ?? 0 }} files</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="viewer-content history-viewer-content" :class="{ 'commit-detail-mode': showCommitChanges }">
-                <template v-if="showCommitChanges">
-                  <div class="commit-changes-list">
-                    <button
-                      v-for="change in inspectorStore.selectedCommitChanges?.changes ?? []"
-                      :key="change.path"
-                      class="change-item"
-                      type="button"
-                      @click="handleCommitFileSelect(change.path)"
-                    >
-                      <span class="change-status" :class="change.status">{{ changeStatusLetter(change.status) }}</span>
-                      <span class="change-path">{{ change.path }}</span>
-                    </button>
-                  </div>
-                  <DiffViewer
-                    v-if="inspectorStore.commitDiff"
-                    :diff="inspectorStore.commitDiff"
-                    :zoom-percent="viewerZoomPercent"
-                  />
-                  <TextFileViewer
-                    v-else
-                    content=""
-                    :zoom-percent="viewerZoomPercent"
-                    :message="historyDetailMessage"
-                  />
-                </template>
-                <TextFileViewer
-                  v-else
-                  content=""
-                  :zoom-percent="viewerZoomPercent"
-                  :message="historySelectionMessage"
-                />
-              </div>
-            </section>
-          </section>
+          <InspectorHistoryWorkspace
+            :compact="isCompactPanel"
+            :show-branch-select="showBranchSelect"
+            :current-branch="inspectorStore.gitBranches?.currentBranch ?? null"
+            :viewed-branch="inspectorStore.viewedBranchName"
+            :branches="inspectorStore.gitBranches?.branches ?? []"
+            :loading-branches="inspectorStore.loadingBranches"
+            :history-sync-message="historySyncMessage"
+            :has-sync-error="!!inspectorStore.gitSyncError"
+            :can-fetch-sync="canFetchHistorySync"
+            :can-pull-sync="canPullHistorySync"
+            :can-push-sync="canPushHistorySync"
+            :syncing-git-remote="inspectorStore.syncingGitRemote"
+            :commits="inspectorStore.gitLog?.commits ?? []"
+            :has-more="inspectorStore.gitLog?.hasMore ?? false"
+            :loading-git-log="inspectorStore.loadingGitLog"
+            :selected-hash="inspectorStore.selectedCommitHash"
+            :history-message="historyMessage"
+            :history-viewer-title="historyViewerTitle"
+            :selected-commit-hash="inspectorStore.selectedCommitHash"
+            :selected-commit-changes="inspectorStore.selectedCommitChanges"
+            :commit-diff="inspectorStore.commitDiff"
+            :viewer-zoom-percent="viewerZoomPercent"
+            :history-detail-message="historyDetailMessage"
+            :history-selection-message="historySelectionMessage"
+            :show-commit-changes="showCommitChanges"
+            @select-branch="handleBranchSelect"
+            @fetch="inspectorStore.fetchGitRemote()"
+            @pull="inspectorStore.pullGitCurrentBranch()"
+            @push="inspectorStore.pushGitCurrentBranch()"
+            @select-history="handleHistorySelect"
+            @load-more="inspectorStore.loadMoreGitLog"
+            @start-resize="startSidebarResize"
+            @viewer-wheel="handleViewerWheel"
+            @select-commit-file="handleCommitFileSelect"
+          />
         </template>
         <template v-else>
           <div
@@ -285,135 +109,51 @@
             :class="{ compact: isCompactPanel }"
             @pointerenter="handleSidebarPointerEnter"
           />
-          <section
+          <InspectorSidebar
             v-if="inspectorStore.sidebarVisible"
-            class="panel-sidebar"
-            :class="{
-              compact: isCompactPanel,
-              collapsed: !isSidebarExpanded
-            }"
-            @pointerenter="handleSidebarPointerEnter"
-            @pointerleave="handleSidebarPointerLeave"
-          >
-            <div class="sidebar-scroll">
-              <GitChangesTree
-                v-if="inspectorStore.activeTab === 'changes'"
-                :items="inspectorStore.gitStatus?.items ?? []"
-                :selected-relative-path="inspectorStore.selectedRelativePath"
-                :selected-view-mode="inspectorStore.selectedChangeViewMode"
-                :message="changesMessage"
-                @select="handleChangeSelect"
-                @stage="inspectorStore.stageFile"
-                @unstage="inspectorStore.unstageFile"
-                @discard="inspectorStore.discardFile"
-              />
+            :active-tab="inspectorStore.activeTab"
+            :compact="isCompactPanel"
+            :expanded="isSidebarExpanded"
+            :git-status-items="inspectorStore.gitStatus?.items ?? []"
+            :selected-relative-path="inspectorStore.selectedRelativePath"
+            :selected-view-mode="inspectorStore.selectedChangeViewMode"
+            :changes-message="changesMessage"
+            :loading-root="inspectorStore.loadingRoot"
+            :tree-index="inspectorStore.fileTreeByParent"
+            :loading-directories="inspectorStore.loadingDirectories"
+            :expanded-paths="inspectorStore.expandedDirectories"
+            @pointer-enter="handleSidebarPointerEnter"
+            @pointer-leave="handleSidebarPointerLeave"
+            @select-change="handleChangeSelect"
+            @stage="inspectorStore.stageFile"
+            @unstage="inspectorStore.unstageFile"
+            @discard="inspectorStore.discardFile"
+            @toggle-directory="inspectorStore.toggleDirectory"
+            @select-file="inspectorStore.selectFile"
+            @start-resize="startSidebarResize"
+          />
 
-              <div v-else class="files-wrap">
-                <div v-if="inspectorStore.loadingRoot" class="tree-message">{{ $t('inspector.loading') }}</div>
-                <div
-                  v-else-if="!Object.keys(inspectorStore.fileTreeByParent).length"
-                  class="tree-message"
-                >
-                  {{ $t('inspector.emptyFiles') }}
-                </div>
-                <ProjectFilesTree
-                  v-else
-                  :tree-index="inspectorStore.fileTreeByParent"
-                  :loading-directories="inspectorStore.loadingDirectories"
-                  :expanded-paths="inspectorStore.expandedDirectories"
-                  :selected-relative-path="inspectorStore.selectedRelativePath"
-                  @toggle-directory="inspectorStore.toggleDirectory"
-                  @select-file="inspectorStore.selectFile"
-                />
-              </div>
-            </div>
-            <div
-              v-if="isSidebarExpanded"
-              class="sidebar-resize-handle"
-              :class="{ compact: isCompactPanel }"
-              @pointerdown="startSidebarResize"
-            />
-          </section>
-
-          <section class="panel-viewer" @wheel.capture="handleViewerWheel">
-            <div class="viewer-header">
-              <div class="viewer-copy">
-                <div class="viewer-title">{{ viewerTitle }}</div>
-                <div v-if="inspectorStore.selectedRelativePath" class="viewer-subtitle-row">
-                  <span
-                    v-if="changeViewerBadge"
-                    class="viewer-source-badge"
-                    :class="`viewer-source-badge--${inspectorStore.selectedChangeViewMode}`"
-                  >
-                    {{ changeViewerBadge }}
-                  </span>
-                  <div
-                    class="viewer-subtitle"
-                    :title="inspectorStore.selectedRelativePath"
-                  >
-                    {{ inspectorStore.selectedRelativePath }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="viewer-content">
-              <button
-                v-if="inspectorStore.selectedRelativePath"
-                class="viewer-refresh-btn"
-                type="button"
-                :disabled="inspectorStore.loadingDiff || inspectorStore.loadingPreview"
-                :title="$t('inspector.refreshFile')"
-                @click="handleRefreshCurrentFile"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <path d="M14 8a6 6 0 11-1.76-4.24M12 2v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </button>
-
-              <DiffViewer
-                v-if="inspectorStore.currentViewerMode === 'diff'"
-                :diff="inspectorStore.gitDiff?.diff ?? ''"
-                :zoom-percent="viewerZoomPercent"
-                :message="inspectorStore.viewerMessage"
-              />
-              <MarkdownPreview
-                v-else-if="inspectorStore.currentViewerMode === 'markdown'"
-                :content="inspectorStore.filePreview?.content ?? ''"
-                :source-path="inspectorStore.filePreview?.absolutePath"
-                :zoom-percent="viewerZoomPercent"
-              />
-              <TextFileViewer
-                v-else-if="inspectorStore.currentViewerMode === 'text'"
-                :content="inspectorStore.filePreview?.content ?? ''"
-                :zoom-percent="viewerZoomPercent"
-              />
-              <TextFileViewer
-                v-else
-                content=""
-                :zoom-percent="viewerZoomPercent"
-                :message="inspectorStore.viewerMessage"
-              />
-
-              <div v-if="showCommitBox" class="commit-box">
-                <input
-                  v-model="commitMessage"
-                  type="text"
-                  class="commit-input"
-                  :placeholder="$t('inspector.commitPlaceholder')"
-                  @keydown.ctrl.enter="handleCommit"
-                />
-                <button
-                  class="commit-btn"
-                  type="button"
-                  :disabled="!commitMessage.trim() || committing"
-                  @click="handleCommit"
-                >
-                  {{ $t('inspector.commitButton') }}
-                </button>
-              </div>
-            </div>
-          </section>
+          <InspectorViewer
+            :viewer-title="viewerTitle"
+            :selected-relative-path="inspectorStore.selectedRelativePath"
+            :change-viewer-badge="changeViewerBadge"
+            :selected-change-view-mode="inspectorStore.selectedChangeViewMode"
+            :loading-diff="inspectorStore.loadingDiff"
+            :loading-preview="inspectorStore.loadingPreview"
+            :current-viewer-mode="inspectorStore.currentViewerMode"
+            :git-diff="inspectorStore.gitDiff?.diff ?? null"
+            :viewer-zoom-percent="viewerZoomPercent"
+            :viewer-message="inspectorStore.viewerMessage"
+            :file-preview-content="inspectorStore.filePreview?.content ?? null"
+            :file-preview-absolute-path="inspectorStore.filePreview?.absolutePath ?? null"
+            :show-commit-box="showCommitBox"
+            :commit-message="commitMessage"
+            :committing="committing"
+            @viewer-wheel="handleViewerWheel"
+            @refresh-current-file="handleRefreshCurrentFile"
+            @update:commit-message="commitMessage = $event"
+            @commit="handleCommit"
+          />
         </template>
       </div>
     </template>
@@ -423,13 +163,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import DiffViewer from '@/components/DiffViewer.vue'
-import GitBranchSelect from '@/components/GitBranchSelect.vue'
-import GitChangesTree from '@/components/GitChangesTree.vue'
-import GitHistoryTree from '@/components/GitHistoryTree.vue'
-import MarkdownPreview from '@/components/MarkdownPreview.vue'
-import ProjectFilesTree from '@/components/ProjectFilesTree.vue'
-import TextFileViewer from '@/components/TextFileViewer.vue'
+import InspectorHeader from '@/components/InspectorHeader.vue'
+import InspectorHistoryWorkspace from '@/components/InspectorHistoryWorkspace.vue'
+import InspectorSidebar from '@/components/InspectorSidebar.vue'
+import InspectorViewer from '@/components/InspectorViewer.vue'
 import { useInspectorStore } from '@/stores/inspector'
 
 defineOptions({ name: 'InspectorPanel' })
@@ -452,13 +189,11 @@ const INSPECTOR_SIDEBAR_DEFAULT_HEIGHT = 180
 const VIEWER_MIN_ZOOM = 80
 const VIEWER_MAX_ZOOM = 150
 const VIEWER_DEFAULT_ZOOM = 100
-const ZOOM_PRESET_PERCENTS = [80, 90, 100, 110, 125, 150] as const
 
 const { t } = useI18n()
 const inspectorStore = useInspectorStore()
 const panelRef = ref<HTMLElement | null>(null)
 const panelBodyRef = ref<HTMLElement | null>(null)
-const zoomControlRef = ref<HTMLElement | null>(null)
 const panelWidth = ref(readStoredWidth())
 const actualPanelWidth = ref(panelWidth.value)
 const viewerZoomPercent = ref(readStoredZoom())
@@ -467,14 +202,12 @@ const sidebarHeight = ref(readStoredSidebarHeight())
 const sidebarHovered = ref(false)
 const sidebarPointerInside = ref(false)
 const sidebarResizeLocked = ref(false)
-const zoomMenuOpen = ref(false)
 const commitMessage = ref('')
 const committing = ref(false)
 
 let resizeObserver: ResizeObserver | null = null
 let stopResize: (() => void) | null = null
 let stopSidebarResize: (() => void) | null = null
-let teardownGlobalListeners: (() => void) | null = null
 let sidebarHoverCloseTimer: number | null = null
 let sidebarResizeCooldownTimer: number | null = null
 
@@ -672,17 +405,6 @@ const showCommitChanges = computed(() => {
   return !!inspectorStore.selectedCommitHash
 })
 
-function changeStatusLetter(status: string): string {
-  switch (status) {
-    case 'added': return 'A'
-    case 'deleted': return 'D'
-    case 'modified': return 'M'
-    case 'renamed': return 'R'
-    case 'copied': return 'C'
-    default: return 'M'
-  }
-}
-
 function handleCommitFileSelect(path: string): void {
   inspectorStore.loadCommitFileDiff(path)
 }
@@ -795,19 +517,13 @@ function updateActualWidth(): void {
   actualPanelWidth.value = panelRef.value?.getBoundingClientRect().width ?? panelWidth.value
 }
 
-function toggleZoomMenu(): void {
-  zoomMenuOpen.value = !zoomMenuOpen.value
-}
-
 function setViewerZoom(percent: number): void {
   viewerZoomPercent.value = clampZoom(percent)
-  zoomMenuOpen.value = false
   persistZoom()
 }
 
 function resetViewerZoom(): void {
   viewerZoomPercent.value = VIEWER_DEFAULT_ZOOM
-  zoomMenuOpen.value = false
   persistZoom()
 }
 
@@ -1015,34 +731,12 @@ onMounted(() => {
   if (panelRef.value) {
     resizeObserver.observe(panelRef.value)
   }
-
-  const handleDocumentPointerDown = (event: PointerEvent) => {
-    if (!zoomMenuOpen.value) return
-    const host = zoomControlRef.value
-    if (host && event.target instanceof Node && !host.contains(event.target)) {
-      zoomMenuOpen.value = false
-    }
-  }
-
-  const handleEscape = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      zoomMenuOpen.value = false
-    }
-  }
-
-  window.addEventListener('pointerdown', handleDocumentPointerDown)
-  window.addEventListener('keydown', handleEscape)
-  teardownGlobalListeners = () => {
-    window.removeEventListener('pointerdown', handleDocumentPointerDown)
-    window.removeEventListener('keydown', handleEscape)
-  }
 })
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   stopResize?.()
   stopSidebarResize?.()
-  teardownGlobalListeners?.()
   clearSidebarHoverCloseTimer()
   clearSidebarResizeCooldownTimer()
 })
@@ -1076,16 +770,6 @@ onBeforeUnmount(() => {
   height: 100%;
   cursor: col-resize;
   z-index: 6;
-}
-
-.panel-header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  position: relative;
 }
 
 .edge-toggle-anchor {
@@ -1165,273 +849,6 @@ onBeforeUnmount(() => {
   transform: rotate(0deg);
 }
 
-.header-main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-}
-
-.header-left {
-  min-width: 0;
-  flex: 0 1 auto;
-  display: flex;
-  align-items: center;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.inline-tabs {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  border-radius: 3px;
-  flex-shrink: 0;
-  width: fit-content;
-  max-width: 100%;
-}
-
-.inline-tab-btn {
-  height: 22px;
-  width: 28px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 11px;
-  white-space: nowrap;
-  border-radius: 2px;
-  transition: all 140ms ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  &.active {
-    background: color-mix(in srgb, var(--bg-tertiary) 78%, var(--accent-primary) 22%);
-    color: var(--text-primary);
-  }
-}
-
-.meta-pill {
-  flex-shrink: 0;
-  padding: 2px 6px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  border-radius: 3px;
-
-  &.state-ready {
-    color: #0f766e;
-    border-color: color-mix(in srgb, #0f766e 30%, var(--border-color) 70%);
-  }
-
-  &.state-non-git,
-  &.state-git-unavailable {
-    color: #a16207;
-    border-color: color-mix(in srgb, #a16207 30%, var(--border-color) 70%);
-  }
-
-  &.state-error {
-    color: #b91c1c;
-    border-color: color-mix(in srgb, #b91c1c 30%, var(--border-color) 70%);
-  }
-}
-
-.header-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.viewer-zoom-control {
-  position: relative;
-  flex-shrink: 0;
-}
-
-.viewer-zoom-btn {
-  min-width: 48px;
-  padding: 0 6px;
-}
-
-.viewer-zoom-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  min-width: 72px;
-  padding: 4px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  box-shadow: var(--shadow-md);
-}
-
-.viewer-zoom-item {
-  border: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  text-align: right;
-  padding: 6px 8px;
-  cursor: pointer;
-
-  &:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  &.active {
-    color: var(--accent-primary);
-    background: rgba(108, 158, 255, 0.12);
-  }
-}
-
-.mini-btn,
-.ghost-btn,
-.tab-btn,
-.project-select {
-  height: 24px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.mini-btn,
-.ghost-btn,
-.tab-btn {
-  padding: 0 8px;
-  cursor: pointer;
-  font-size: 11px;
-}
-
-.ghost-btn {
-  background: transparent;
-}
-
-.utility-btn {
-  border-color: transparent;
-  color: var(--text-secondary);
-  padding-inline: 6px;
-
-  &:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-    border-color: transparent;
-  }
-}
-
-.focus-btn {
-  padding-inline: 8px;
-}
-
-.panel-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  margin-left: auto;
-}
-
-.project-select {
-  width: 100%;
-  min-width: 0;
-  padding: 0 8px;
-}
-
-.compact-select {
-  max-width: 180px;
-  flex: 1;
-  font-size: 12px;
-}
-
-.mini-toggle-btn {
-  height: 24px;
-  width: 28px;
-  padding: 0;
-  border: 1px solid var(--border-color);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &.active {
-    color: var(--accent-primary);
-    background: color-mix(in srgb, var(--bg-tertiary) 82%, var(--accent-primary) 18%);
-  }
-}
-
-.utility-btn {
-  border-color: transparent;
-  color: var(--text-secondary);
-  width: 28px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-    border-color: transparent;
-  }
-}
-
-.panel-tabs {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-  padding: 2px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-}
-
-.tab-btn {
-  flex: 0 0 auto;
-  min-width: 0;
-  white-space: nowrap;
-  height: 22px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  padding-inline: 10px;
-}
-
-.tab-btn.active {
-  background: color-mix(in srgb, var(--bg-tertiary) 78%, var(--accent-primary) 22%);
-  color: var(--text-primary);
-}
-
-.tab-btn:not(.active):hover {
-  color: var(--text-primary);
-  background: var(--bg-hover);
-}
-
 .panel-empty,
 .tree-message {
   padding: 14px 16px;
@@ -1460,430 +877,6 @@ onBeforeUnmount(() => {
   display: block;
 }
 
-.history-workbench {
-  height: 100%;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(96px, var(--history-stage-width, 220px)) minmax(0, 1fr);
-}
-
-.history-stage {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--bg-secondary);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.history-stage-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 8px 10px 6px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 76%, transparent);
-  background: color-mix(in srgb, var(--bg-secondary) 86%, var(--bg-primary) 14%);
-}
-
-.history-sync-summary {
-  min-width: 0;
-  flex: 1;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.history-sync-summary.error {
-  color: var(--status-error);
-}
-
-.history-sync-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.history-sync-btn {
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
-  border-radius: 4px;
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-  transition:
-    background 140ms ease,
-    color 140ms ease,
-    border-color 140ms ease;
-
-  &:hover:not(:disabled) {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  &:disabled {
-    opacity: 0.48;
-    cursor: not-allowed;
-  }
-}
-
-.history-stage-tree {
-  min-width: 0;
-  min-height: 0;
-}
-
-.history-resize-handle {
-  position: absolute;
-  top: 0;
-  right: -5px;
-  width: 10px;
-  height: 100%;
-  cursor: col-resize;
-  z-index: 3;
-  background: transparent;
-}
-
-.history-detail-panel {
-  min-width: 0;
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  background: var(--bg-primary);
-}
-
-.history-viewer-header {
-  border-bottom-color: color-mix(in srgb, var(--border-color) 82%, transparent);
-}
-
-.history-viewer-content {
-  padding-top: 0;
-}
-
-.history-viewer-content.commit-detail-mode {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.commit-inline-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.panel-sidebar {
-  min-width: 0;
-  min-height: 0;
-  border-right: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  overflow: hidden;
-  position: relative;
-  transition:
-    border-color 330ms ease,
-    opacity 330ms ease;
-}
-
-.panel-viewer {
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--bg-primary);
-  display: grid;
-  grid-template-rows: auto 1fr;
-}
-
-.viewer-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-}
-
-.viewer-copy {
-  min-width: 0;
-  flex: 1;
-}
-
-.viewer-title {
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.viewer-subtitle {
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.viewer-subtitle-row {
-  margin-top: 4px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.viewer-source-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  min-width: 48px;
-  height: 18px;
-  padding: 0 7px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--bg-secondary) 84%, var(--bg-primary) 16%);
-  color: var(--text-secondary);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.viewer-source-badge--staged {
-  color: var(--accent-primary);
-  border-color: color-mix(in srgb, var(--accent-primary) 28%, var(--border-color) 72%);
-  background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-secondary) 90%);
-}
-
-.viewer-source-badge--unstaged {
-  color: var(--status-warning);
-  border-color: color-mix(in srgb, var(--status-warning) 28%, var(--border-color) 72%);
-  background: color-mix(in srgb, var(--status-warning) 10%, var(--bg-secondary) 90%);
-}
-
-.viewer-content {
-  position: relative;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.viewer-refresh-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 10;
-  height: 26px;
-  width: 26px;
-  padding: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 160ms ease, color 140ms ease, background 140ms ease;
-
-  &:hover:not(:disabled) {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-}
-
-.viewer-content:hover .viewer-refresh-btn {
-  opacity: 1;
-}
-
-.commit-changes-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-}
-
-.commit-hash {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent-primary);
-}
-
-.commit-files-count {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.commit-changes-list {
-  min-height: 0;
-  max-height: 200px;
-  overflow-y: auto;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.change-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border: none;
-  background: transparent;
-  color: var(--text-primary);
-  text-align: left;
-  cursor: pointer;
-
-  &:hover {
-    background: var(--bg-hover);
-  }
-}
-
-.change-status {
-  width: 16px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-
-  &.added { color: var(--success-color); }
-  &.deleted { color: var(--error-color); }
-  &.modified { color: var(--accent-primary); }
-  &.renamed { color: var(--warning-color); }
-  &.copied { color: var(--text-muted); }
-}
-
-.change-path {
-  flex: 1;
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.commit-box {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  gap: 8px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-}
-
-.commit-input {
-  flex: 1;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 12px;
-
-  &:focus {
-    outline: none;
-    border-color: var(--accent-primary);
-  }
-
-  &::placeholder {
-    color: var(--text-muted);
-  }
-}
-
-.commit-btn {
-  height: 28px;
-  padding: 0 14px;
-  border: 1px solid var(--accent-primary);
-  border-radius: 4px;
-  background: var(--accent-primary);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 140ms ease;
-
-  &:hover:not(:disabled) {
-    filter: brightness(1.1);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.files-wrap {
-  height: 100%;
-  overflow: auto;
-}
-
-.sidebar-scroll {
-  height: 100%;
-  min-height: 0;
-  overflow: auto;
-}
-
-.sidebar-resize-handle {
-  position: absolute;
-  top: 0;
-  right: -5px;
-  width: 10px;
-  height: 100%;
-  cursor: col-resize;
-  z-index: 3;
-
-  &::after {
-    content: '';
-    position: absolute;
-    top: 10px;
-    bottom: 10px;
-    left: 50%;
-    width: 2px;
-    transform: translateX(-50%);
-    background: color-mix(in srgb, var(--border-color) 82%, var(--bg-primary) 18%);
-    transition: background 140ms ease;
-  }
-
-  &:hover::after {
-    background: color-mix(in srgb, var(--accent-primary) 42%, var(--border-color) 58%);
-  }
-}
-
-.sidebar-resize-handle.compact {
-  top: auto;
-  right: auto;
-  left: 0;
-  bottom: -5px;
-  width: 100%;
-  height: 10px;
-  cursor: row-resize;
-
-  &::after {
-    top: 50%;
-    bottom: auto;
-    left: 10px;
-    right: 10px;
-    width: auto;
-    height: 2px;
-    transform: translateY(-50%);
-  }
-}
-
 .sidebar-hover-zone {
   position: absolute;
   inset: 0 auto 0 8px;
@@ -1895,25 +888,6 @@ onBeforeUnmount(() => {
   inset: 8px 0 auto 0;
   width: auto;
   height: 16px;
-}
-
-.sidebar-auto-collapse .panel-sidebar.collapsed {
-  border-color: transparent;
-  opacity: 0.96;
-}
-
-.compact .header-toolbar {
-  flex-wrap: wrap;
-  align-items: stretch;
-}
-
-.compact .panel-controls {
-  margin-left: 0;
-  width: 100%;
-}
-
-.compact .panel-tabs {
-  width: 100%;
 }
 
 .compact .edge-toggle-btn {
@@ -1934,31 +908,8 @@ onBeforeUnmount(() => {
   grid-template-rows: minmax(150px, 36%) minmax(0, 1fr);
 }
 
-.compact .panel-sidebar {
-  border-right: none;
-  border-bottom: 1px solid var(--border-color);
-}
-
 .compact .panel-body:not(.has-sidebar) {
   grid-template-rows: minmax(0, 1fr);
 }
 
-.compact .history-workbench {
-  grid-template-columns: 1fr;
-  grid-template-rows: minmax(120px, var(--history-stage-height, 180px)) minmax(0, 1fr);
-}
-
-.compact .history-stage {
-  border-bottom: 1px solid var(--border-color);
-}
-
-.compact .history-resize-handle {
-  top: auto;
-  right: auto;
-  left: 0;
-  bottom: -5px;
-  width: 100%;
-  height: 10px;
-  cursor: row-resize;
-}
 </style>

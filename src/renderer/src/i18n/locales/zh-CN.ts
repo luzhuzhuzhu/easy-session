@@ -267,6 +267,7 @@ session: {
     remoteRefreshed: '远程列表已刷新'
   },
   terminal: {
+    loadMoreHistory: '加载更多历史',
     pauseScroll: '暂停自动滚动',
     resumeScroll: '恢复自动滚动',
     copyAll: '复制全部',
@@ -389,6 +390,7 @@ settings: {
     sessions: '会话设置',
     remoteInstances: '远程实例',
     remoteInstancesHint: '桌面端可挂载多个远程实例；Web 入口继续保留给移动端和浏览器应急使用。',
+    deferredSectionHint: '滚动到此区域或将鼠标移入后再加载详细状态，避免设置页首开时一次性读取所有远程信息。',
     localRemoteService: '本机远程服务',
     localRemoteServiceHint: '用于把当前这台机器暴露为远程入口，供手机 Web 应急访问或被其他桌面客户端挂载。',
     remoteServiceLoading: '正在读取本机远程服务状态...',

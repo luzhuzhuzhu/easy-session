@@ -28,6 +28,7 @@ const viewerStyle = computed(() => ({
   height: 100%;
   min-height: 0;
   overflow: auto;
+  contain: content;
   background: var(--bg-primary);
 }
 

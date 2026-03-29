@@ -36,7 +36,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'project:sessions', 'project:detect', 'project:prompt:read', 'project:prompt:write',
   'project:fileTree', 'project:fileRead', 'project:gitStatus', 'project:gitDiff',
   'project:gitLog', 'project:gitFileHistory', 'project:gitBranches',
-  'project:gitStage', 'project:gitUnstage', 'project:gitCommit', 'project:gitCheckout',
+  'project:gitStage', 'project:gitUnstage', 'project:gitDiscard', 'project:gitCommit', 'project:gitCheckout',
   'project:gitFetch', 'project:gitPull', 'project:gitPush',
   'project:gitCommitChanges', 'project:gitCommitDiff',
   // remote instances

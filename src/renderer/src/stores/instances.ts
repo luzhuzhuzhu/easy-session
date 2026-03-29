@@ -102,6 +102,7 @@ export const useInstancesStore = defineStore('instances', () => {
   const remoteInstances = ref<RemoteInstance[]>([])
   const loading = ref(false)
   const testingIds = ref<string[]>([])
+  const remoteStateVersion = ref(0)
 
   const localInstance = computed<LocalInstance>(() => buildLocalInstance(detectPlatform()))
   const remoteMountEnabled = computed(() => settingsStore.settings.desktopRemoteMountEnabled)
@@ -129,9 +130,11 @@ export const useInstancesStore = defineStore('instances', () => {
     const index = remoteInstances.value.findIndex((instance) => instance.id === nextInstance.id)
     if (index === -1) {
       remoteInstances.value.push(cloneRemoteInstance(nextInstance))
+      remoteStateVersion.value += 1
       return
     }
     remoteInstances.value[index] = cloneRemoteInstance(nextInstance)
+    remoteStateVersion.value += 1
   }
 
   function patchRemoteInstance(
@@ -159,6 +162,7 @@ export const useInstancesStore = defineStore('instances', () => {
   function clearRemoteState(): void {
     remoteInstances.value = []
     testingIds.value = []
+    remoteStateVersion.value += 1
     getSharedGatewayResolver().invalidate()
   }
 
@@ -170,6 +174,7 @@ export const useInstancesStore = defineStore('instances', () => {
         return instances.value
       }
       remoteInstances.value = (await apiListRemoteInstances()).map((instance) => cloneRemoteInstance(instance))
+      remoteStateVersion.value += 1
       return instances.value
     } finally {
       loading.value = false
@@ -197,6 +202,7 @@ export const useInstancesStore = defineStore('instances', () => {
     if (deleted) {
       getSharedGatewayResolver().invalidate(id)
       remoteInstances.value = remoteInstances.value.filter((instance) => instance.id !== id)
+      remoteStateVersion.value += 1
     }
     return deleted
   }
@@ -255,6 +261,7 @@ export const useInstancesStore = defineStore('instances', () => {
     instances,
     instanceIndex,
     remoteInstanceIndex,
+    remoteStateVersion,
     loading,
     testingIds,
     onlineRemoteCount,

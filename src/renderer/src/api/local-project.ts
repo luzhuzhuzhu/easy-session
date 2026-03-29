@@ -1,6 +1,96 @@
 import { ipc } from './ipc'
 import type { Session } from './local-session'
 
+const PROJECT_INSPECTOR_CACHE_TTL_MS = 1500
+
+interface ProjectInspectorCacheEntry<T> {
+  expiresAt: number
+  value: T
+}
+
+const projectInspectorReadCache = new Map<string, ProjectInspectorCacheEntry<unknown>>()
+const projectInspectorInFlight = new Map<string, Promise<unknown>>()
+
+function getProjectInspectorTargetKey(target: ProjectInspectorTarget): string {
+  if (target.projectId) {
+    return `id:${target.projectId}`
+  }
+
+  if (target.projectPath) {
+    return `path:${target.projectPath}`
+  }
+
+  return 'unknown'
+}
+
+function buildProjectInspectorCacheKey(
+  scope: string,
+  target: ProjectInspectorTarget,
+  parts: Array<string | number | undefined>
+): string {
+  return [
+    scope,
+    getProjectInspectorTargetKey(target),
+    ...parts.map((part) => String(part ?? ''))
+  ].join('::')
+}
+
+async function withProjectInspectorReadCache<T>(
+  key: string,
+  loader: () => Promise<T>,
+  ttlMs = PROJECT_INSPECTOR_CACHE_TTL_MS
+): Promise<T> {
+  const now = Date.now()
+  const cached = projectInspectorReadCache.get(key)
+  if (cached && cached.expiresAt > now) {
+    return cached.value as T
+  }
+
+  const inFlight = projectInspectorInFlight.get(key)
+  if (inFlight) {
+    return inFlight as Promise<T>
+  }
+
+  const request = loader()
+    .then((result) => {
+      projectInspectorReadCache.set(key, {
+        expiresAt: Date.now() + ttlMs,
+        value: result
+      })
+      projectInspectorInFlight.delete(key)
+      return result
+    })
+    .catch((error) => {
+      projectInspectorInFlight.delete(key)
+      throw error
+    })
+
+  projectInspectorInFlight.set(key, request)
+  return request
+}
+
+function invalidateProjectInspectorCache(target?: ProjectInspectorTarget): void {
+  if (!target) {
+    projectInspectorReadCache.clear()
+    projectInspectorInFlight.clear()
+    return
+  }
+
+  const targetKey = `::${getProjectInspectorTargetKey(target)}::`
+
+  for (const key of projectInspectorReadCache.keys()) {
+    if (key.includes(targetKey)) {
+      projectInspectorReadCache.delete(key)
+    }
+  }
+
+  for (const key of projectInspectorInFlight.keys()) {
+    if (key.includes(targetKey)) {
+      projectInspectorInFlight.delete(key)
+    }
+  }
+}
+
 export interface Project {
   id: string
   name: string
@@ -239,18 +329,27 @@ export function listProjectFiles(
   target: ProjectInspectorTarget,
   relativePath = ''
 ): Promise<ProjectFileTreeResult> {
-  return ipc.invoke<ProjectFileTreeResult>('project:fileTree', target, relativePath)
+  return withProjectInspectorReadCache(
+    buildProjectInspectorCacheKey('fileTree', target, [relativePath]),
+    () => ipc.invoke<ProjectFileTreeResult>('project:fileTree', target, relativePath)
+  )
 }
 
 export function readProjectFile(
   target: ProjectInspectorTarget,
   relativePath: string
 ): Promise<ProjectFileReadResult> {
-  return ipc.invoke<ProjectFileReadResult>('project:fileRead', target, relativePath)
+  return withProjectInspectorReadCache(
+    buildProjectInspectorCacheKey('fileRead', target, [relativePath]),
+    () => ipc.invoke<ProjectFileReadResult>('project:fileRead', target, relativePath)
+  )
 }
 
 export function getProjectGitStatus(target: ProjectInspectorTarget): Promise<ProjectGitStatusResult> {
-  return ipc.invoke<ProjectGitStatusResult>('project:gitStatus', target)
+  return withProjectInspectorReadCache(
+    buildProjectInspectorCacheKey('gitStatus', target, []),
+    () => ipc.invoke<ProjectGitStatusResult>('project:gitStatus', target)
+  )
 }
 
 export function getProjectGitDiff(
@@ -258,7 +357,10 @@ export function getProjectGitDiff(
   relativePath: string,
   options?: { viewMode?: 'staged' | 'unstaged' | 'auto' }
 ): Promise<ProjectGitDiffResult> {
-  return ipc.invoke<ProjectGitDiffResult>('project:gitDiff', target, relativePath, options)
+  return withProjectInspectorReadCache(
+    buildProjectInspectorCacheKey('gitDiff', target, [relativePath, options?.viewMode ?? 'auto']),
+    () => ipc.invoke<ProjectGitDiffResult>('project:gitDiff', target, relativePath, options)
+  )
 }
 
 export interface GitLogOptions {
@@ -271,7 +373,14 @@ export function getProjectGitLog(
   target: ProjectInspectorTarget,
   options?: GitLogOptions
 ): Promise<ProjectGitLogResult> {
-  return ipc.invoke<ProjectGitLogResult>('project:gitLog', target, options)
+  return withProjectInspectorReadCache(
+    buildProjectInspectorCacheKey('gitLog', target, [
+      options?.skip ?? 0,
+      options?.maxCount ?? 0,
+      options?.branch ?? ''
+    ]),
+    () => ipc.invoke<ProjectGitLogResult>('project:gitLog', target, options)
+  )
 }
 
 export function getProjectGitFileHistory(
@@ -279,49 +388,73 @@ export function getProjectGitFileHistory(
   relativePath: string,
   options?: { skip?: number; maxCount?: number }
 ): Promise<ProjectGitFileHistoryResult> {
-  return ipc.invoke<ProjectGitFileHistoryResult>('project:gitFileHistory', target, relativePath, options)
+  return withProjectInspectorReadCache(
+    buildProjectInspectorCacheKey('gitFileHistory', target, [
+      relativePath,
+      options?.skip ?? 0,
+      options?.maxCount ?? 0
+    ]),
+    () => ipc.invoke<ProjectGitFileHistoryResult>('project:gitFileHistory', target, relativePath, options)
+  )
 }
 
 export function getProjectGitBranches(target: ProjectInspectorTarget): Promise<ProjectGitBranchesResult> {
-  return ipc.invoke<ProjectGitBranchesResult>('project:gitBranches', target)
+  return withProjectInspectorReadCache(
+    buildProjectInspectorCacheKey('gitBranches', target, []),
+    () => ipc.invoke<ProjectGitBranchesResult>('project:gitBranches', target)
+  )
 }
 
 export function stageProjectFile(target: ProjectInspectorTarget, relativePath: string): Promise<void> {
+  invalidateProjectInspectorCache(target)
   return ipc.invoke<void>('project:gitStage', target, relativePath)
 }
 
 export function unstageProjectFile(target: ProjectInspectorTarget, relativePath: string): Promise<void> {
+  invalidateProjectInspectorCache(target)
   return ipc.invoke<void>('project:gitUnstage', target, relativePath)
 }
 
 export function discardProjectFile(target: ProjectInspectorTarget, relativePath: string): Promise<void> {
+  invalidateProjectInspectorCache(target)
   return ipc.invoke<void>('project:gitDiscard', target, relativePath)
 }
 
 export function commitProjectChanges(target: ProjectInspectorTarget, message: string): Promise<void> {
+  invalidateProjectInspectorCache(target)
   return ipc.invoke<void>('project:gitCommit', target, message)
 }
 
 export function checkoutBranch(target: ProjectInspectorTarget, branchName: string): Promise<void> {
+  invalidateProjectInspectorCache(target)
   return ipc.invoke<void>('project:gitCheckout', target, branchName)
 }
 
 export function fetchProjectGitRemote(target: ProjectInspectorTarget): Promise<void> {
+  invalidateProjectInspectorCache(target)
   return ipc.invoke<void>('project:gitFetch', target)
 }
 
 export function pullProjectGitCurrentBranch(target: ProjectInspectorTarget): Promise<void> {
+  invalidateProjectInspectorCache(target)
   return ipc.invoke<void>('project:gitPull', target)
 }
 
 export function pushProjectGitCurrentBranch(target: ProjectInspectorTarget): Promise<void> {
+  invalidateProjectInspectorCache(target)
   return ipc.invoke<void>('project:gitPush', target)
 }
 
 export function getCommitChanges(target: ProjectInspectorTarget, commitHash: string): Promise<ProjectGitCommitChangesResult> {
-  return ipc.invoke<ProjectGitCommitChangesResult>('project:gitCommitChanges', target, commitHash)
+  return withProjectInspectorReadCache(
+    buildProjectInspectorCacheKey('gitCommitChanges', target, [commitHash]),
+    () => ipc.invoke<ProjectGitCommitChangesResult>('project:gitCommitChanges', target, commitHash)
+  )
 }
 
 export function getCommitDiff(target: ProjectInspectorTarget, commitHash: string, relativePath?: string): Promise<string> {
-  return ipc.invoke<string>('project:gitCommitDiff', target, commitHash, relativePath)
+  return withProjectInspectorReadCache(
+    buildProjectInspectorCacheKey('gitCommitDiff', target, [commitHash, relativePath ?? '']),
+    () => ipc.invoke<string>('project:gitCommitDiff', target, commitHash, relativePath)
+  )
 }

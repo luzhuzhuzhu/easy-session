@@ -18,11 +18,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'DiffViewer' })
-
-const { t } = useI18n()
 
 const props = defineProps<{
   diff: string
@@ -73,6 +70,7 @@ const lines = computed(() => {
   height: 100%;
   min-height: 0;
   overflow: auto;
+  contain: content;
   background: var(--bg-primary);
 }
 

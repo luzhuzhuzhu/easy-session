@@ -1,6 +1,6 @@
 {
   "name": "easysession",
-  "version": "0.4.1",
+  "version": "0.4.8",
   "description": "EasySession: 原生终端，统一管理",
   "main": "./out/main/index.js",
   "scripts": {
@@ -13,7 +13,9 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npx playwright test --config=playwright.config.ts"
+    "test:e2e": "npx playwright test --config=playwright.config.ts",
+    "release:verify": "npm run typecheck && npm run test && npm run build",
+    "release:win": "npm run release:verify && electron-builder --win"
   },
   "keywords": [],
   "author": "",

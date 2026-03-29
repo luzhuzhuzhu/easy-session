@@ -9,7 +9,7 @@
           <div
             class="commit-row"
             :class="[{ selected: selectedHash === node.hash }, `kind-${node.kind}`]"
-            :style="buildRowStyle(node)"
+            :style="node.rowStyle"
             @pointerenter="handleRowPointerEnter($event, node)"
             @pointermove="handleRowPointerMove($event)"
             @pointerleave="handleRowPointerLeave"
@@ -17,7 +17,7 @@
           >
             <div class="commit-graph-stage">
               <svg :width="graphCanvasWidth" :height="ROW_HEIGHT" class="graph-svg">
-                <g v-for="(element, index) in buildGraphElements(node)" :key="`${node.hash}-${index}`">
+                <g v-for="(element, index) in node.graphElements" :key="`${node.hash}-${index}`">
                   <line
                     v-if="element.type === 'line'"
                     :x1="element.x1"
@@ -51,18 +51,18 @@
               </svg>
               <div class="commit-chip">
                 <div class="commit-info">
-                  <span class="commit-subject">{{ getCommitSubject(node) }}</span>
-                  <span v-if="node.refs.length" class="commit-refs">
+                  <span class="commit-subject">{{ node.subject }}</span>
+                  <span v-if="node.visibleRefs.length" class="commit-refs">
                     <span
-                      v-for="ref in node.refs.slice(0, 4)"
-                      :key="ref"
+                      v-for="ref in node.visibleRefs"
+                      :key="ref.raw"
                       class="ref-badge"
-                      :class="getRefClass(ref)"
+                      :class="ref.className"
                     >
-                      {{ formatRef(ref) }}
+                      {{ ref.label }}
                     </span>
-                    <span v-if="node.refs.length > 4" class="ref-badge ref-more">
-                      +{{ node.refs.length - 4 }}
+                    <span v-if="node.hiddenRefCount > 0" class="ref-badge ref-more">
+                      +{{ node.hiddenRefCount }}
                     </span>
                   </span>
                 </div>
@@ -91,25 +91,25 @@
       @pointerenter="hoverCardHovered = true"
       @pointerleave="handleHoverCardLeave"
     >
-      <div class="hover-card-title">{{ getHoverTitle(hoveredCommit) }}</div>
+      <div class="hover-card-title">{{ hoveredCommit.hoverTitle }}</div>
       <div class="hover-card-meta">
-        <span>{{ $t('inspector.history.source') }}: {{ getCommitSource(hoveredCommit) }}</span>
-        <span>{{ $t('inspector.history.when') }}: {{ getCommitWhen(hoveredCommit) }}</span>
+        <span>{{ $t('inspector.history.source') }}: {{ hoveredCommit.hoverSource }}</span>
+        <span>{{ $t('inspector.history.when') }}: {{ hoveredCommit.hoverWhen }}</span>
       </div>
       <div v-if="hoveredCommit.shortHash" class="hover-card-line">
         <span class="hover-card-label">{{ $t('inspector.history.hash') }}</span>
         <code>{{ hoveredCommit.shortHash }}</code>
       </div>
-      <div v-if="hoveredCommit.refs.length" class="hover-card-line refs">
+      <div v-if="hoveredCommit.hoverRefs.length" class="hover-card-line refs">
         <span class="hover-card-label">{{ $t('inspector.history.refs') }}</span>
         <span class="hover-card-refs">
           <span
-            v-for="ref in hoveredCommit.refs"
-            :key="ref"
+            v-for="ref in hoveredCommit.hoverRefs"
+            :key="ref.raw"
             class="ref-badge"
-            :class="getRefClass(ref)"
+            :class="ref.className"
           >
-            {{ formatRef(ref) }}
+            {{ ref.label }}
           </span>
         </span>
       </div>
@@ -118,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useAttrs } from 'vue'
+import { computed, onBeforeUnmount, ref, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VirtualTree from '@/components/tree/VirtualTree.vue'
 import type { ProjectGitCommitItem, ProjectGitSwimlane } from '@/api/local-project'
@@ -143,10 +143,12 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const rootAttrs = useAttrs()
-const hoveredCommit = ref<ProjectGitCommitItem | null>(null)
+const hoveredCommit = ref<DisplayCommit | null>(null)
 const hoverCardStyle = ref<Record<string, string>>({})
 const hoverCardHovered = ref(false)
 let hoverLeaveTimer: number | null = null
+let hoverMoveFrame: number | null = null
+let pendingHoverEvent: PointerEvent | null = null
 
 const ROW_HEIGHT = 24
 const SWIMLANE_WIDTH = 11
@@ -185,6 +187,24 @@ interface CircleElement {
 }
 
 type GraphElement = LineElement | PathElement | CircleElement
+interface DisplayRef {
+  raw: string
+  label: string
+  className: string
+}
+
+type DisplayCommit = ProjectGitCommitItem & {
+  key: string
+  rowStyle: Record<string, string>
+  graphElements: GraphElement[]
+  subject: string
+  visibleRefs: DisplayRef[]
+  hiddenRefCount: number
+  hoverTitle: string
+  hoverSource: string
+  hoverWhen: string
+  hoverRefs: DisplayRef[]
+}
 
 const normalizedCommits = computed(() =>
   props.commits.map((commit) => ({
@@ -198,10 +218,29 @@ const normalizedCommits = computed(() =>
 )
 
 const normalizedCommitItems = computed(() =>
-  normalizedCommits.value.map((commit) => ({
-    ...commit,
-    key: commit.hash
-  }))
+  normalizedCommits.value.map<DisplayCommit>((commit) => {
+    const safeCircleLaneIndex = Math.max(0, commit.circleLaneIndex || 0)
+    const anchorX = laneCenter(safeCircleLaneIndex)
+    const hoverRefs = commit.refs.map((ref) => toDisplayRef(ref))
+
+    return {
+      ...commit,
+      key: commit.hash,
+      rowStyle: {
+        '--graph-canvas-width': `${graphCanvasWidth.value}px`,
+        '--graph-anchor-x': `${anchorX}px`,
+        '--graph-content-left': `${anchorX + 18}px`
+      },
+      graphElements: buildGraphElements(commit),
+      subject: getCommitSubject(commit),
+      visibleRefs: hoverRefs.slice(0, 4),
+      hiddenRefCount: Math.max(0, hoverRefs.length - 4),
+      hoverTitle: getHoverTitle(commit),
+      hoverSource: getCommitSource(commit),
+      hoverWhen: getCommitWhen(commit),
+      hoverRefs
+    }
+  })
 )
 
 const graphColumnWidth = computed(() => {
@@ -213,16 +252,6 @@ const graphCanvasWidth = computed(() => Math.max(graphColumnWidth.value + 180, 3
 
 function laneCenter(index: number): number {
   return GRAPH_PADDING_X + SWIMLANE_WIDTH * index + SWIMLANE_WIDTH / 2
-}
-
-function buildRowStyle(commit: ProjectGitCommitItem): Record<string, string> {
-  const safeCircleLaneIndex = Math.max(0, commit.circleLaneIndex || 0)
-  const anchorX = laneCenter(safeCircleLaneIndex)
-  return {
-    '--graph-canvas-width': `${graphCanvasWidth.value}px`,
-    '--graph-anchor-x': `${anchorX}px`,
-    '--graph-content-left': `${anchorX + 18}px`
-  }
 }
 
 function resolveLaneColor(lane: ProjectGitSwimlane): string {
@@ -454,6 +483,19 @@ function updateHoverCardPosition(event: PointerEvent): void {
   }
 }
 
+function flushHoverCardPosition(): void {
+  hoverMoveFrame = null
+  if (!pendingHoverEvent) return
+  updateHoverCardPosition(pendingHoverEvent)
+  pendingHoverEvent = null
+}
+
+function scheduleHoverCardPosition(event: PointerEvent): void {
+  pendingHoverEvent = event
+  if (hoverMoveFrame != null) return
+  hoverMoveFrame = window.requestAnimationFrame(flushHoverCardPosition)
+}
+
 function clearHoverLeaveTimer(): void {
   if (hoverLeaveTimer != null) {
     window.clearTimeout(hoverLeaveTimer)
@@ -461,16 +503,16 @@ function clearHoverLeaveTimer(): void {
   }
 }
 
-function handleRowPointerEnter(event: PointerEvent, commit: ProjectGitCommitItem): void {
+function handleRowPointerEnter(event: PointerEvent, commit: DisplayCommit): void {
   clearHoverLeaveTimer()
   hoverCardHovered.value = false
   hoveredCommit.value = commit
-  updateHoverCardPosition(event)
+  scheduleHoverCardPosition(event)
 }
 
 function handleRowPointerMove(event: PointerEvent): void {
   if (!hoveredCommit.value) return
-  updateHoverCardPosition(event)
+  scheduleHoverCardPosition(event)
 }
 
 function handleRowPointerLeave(): void {
@@ -488,7 +530,7 @@ function handleHoverCardLeave(): void {
   hoveredCommit.value = null
 }
 
-function handleSelect(commit: ProjectGitCommitItem): void {
+function handleSelect(commit: DisplayCommit): void {
   emit('select', commit)
 }
 
@@ -515,6 +557,26 @@ function formatRef(ref: string): string {
   if (ref.startsWith('tag: ')) return ref.replace('tag: ', '')
   return ref
 }
+
+function toDisplayRef(ref: string): DisplayRef {
+  return {
+    raw: ref,
+    label: formatRef(ref),
+    className: getRefClass(ref)
+  }
+}
+
+onBeforeUnmount(() => {
+  if (hoverLeaveTimer != null) {
+    window.clearTimeout(hoverLeaveTimer)
+    hoverLeaveTimer = null
+  }
+  if (hoverMoveFrame != null) {
+    window.cancelAnimationFrame(hoverMoveFrame)
+    hoverMoveFrame = null
+  }
+  pendingHoverEvent = null
+})
 </script>
 
 <style scoped lang="scss">

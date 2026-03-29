@@ -72,6 +72,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const sessions = ref<Session[]>([])
   const activeGlobalSessionKeyState = ref<string | null>(null)
   const remoteSessionsByInstance = ref<Record<string, UnifiedSession[]>>({})
+  const sessionCollectionVersion = ref(0)
 
   let cleanupStatus: (() => void) | null = null
   const remoteStatusCleanups = new Map<string, () => void>()
@@ -104,6 +105,10 @@ export const useSessionsStore = defineStore('sessions', () => {
       globalSessionKey: session.globalSessionKey
     }
   })
+
+  function bumpSessionCollectionVersion(): void {
+    sessionCollectionVersion.value += 1
+  }
 
   function toSessionRef(session: Pick<UnifiedSession, 'instanceId' | 'sessionId' | 'globalSessionKey'>): SessionRef {
     return {
@@ -183,6 +188,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     ensureListeners()
     const gateway = await resolver.resolve(LOCAL_INSTANCE_ID)
     sessions.value = (await gateway.listSessions(LOCAL_INSTANCE_ID, filter)).map((session) => toLocalSession(session))
+    bumpSessionCollectionVersion()
   }
 
   async function ensureRemoteStatusListener(instanceId: string): Promise<void> {
@@ -216,6 +222,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       ...remoteSessionsByInstance.value,
       [instanceId]: remoteSessions
     }
+    bumpSessionCollectionVersion()
     return remoteSessions
   }
 
@@ -248,6 +255,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   function clearRemoteSessions(instanceId?: string): void {
     if (!instanceId) {
       remoteSessionsByInstance.value = {}
+      bumpSessionCollectionVersion()
       for (const cleanup of remoteStatusCleanups.values()) {
         cleanup()
       }
@@ -263,6 +271,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const next = { ...remoteSessionsByInstance.value }
     delete next[instanceId]
     remoteSessionsByInstance.value = next
+    bumpSessionCollectionVersion()
     resolver.invalidate(instanceId)
   }
 
@@ -279,11 +288,13 @@ export const useSessionsStore = defineStore('sessions', () => {
       ...remoteSessionsByInstance.value,
       [instanceId]: next
     }
+    bumpSessionCollectionVersion()
   }
 
   function removeSessionRefFromState(sessionRef: SessionRef): void {
     if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
       sessions.value = sessions.value.filter((session) => session.id !== sessionRef.sessionId)
+      bumpSessionCollectionVersion()
       return
     }
 
@@ -292,6 +303,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       ...remoteSessionsByInstance.value,
       [sessionRef.instanceId]: current.filter((session) => session.sessionId !== sessionRef.sessionId)
     }
+    bumpSessionCollectionVersion()
   }
 
   async function createSessionForInstance(
@@ -305,6 +317,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (instanceId === LOCAL_INSTANCE_ID) {
       const session = await apiCreateSession(toCreateSessionParams(params))
       sessions.value.push(session)
+      bumpSessionCollectionVersion()
       if (shouldActivate) {
         activeGlobalSessionKeyState.value = buildGlobalSessionKey(LOCAL_INSTANCE_ID, session.id)
       }
@@ -349,6 +362,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
 
     sessions.value = sessions.value.filter((s) => s.id !== id)
+    bumpSessionCollectionVersion()
     if (activeGlobalSessionKeyState.value === buildGlobalSessionKey(LOCAL_INSTANCE_ID, id)) {
       activeGlobalSessionKeyState.value =
         sessions.value.length > 0 ? buildGlobalSessionKey(LOCAL_INSTANCE_ID, sessions.value[0].id) : null
@@ -536,6 +550,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     remoteSessionsByInstance,
     unifiedSessions,
     sessionIndexByGlobalKey,
+    sessionCollectionVersion,
     activeSessionId,
     activeGlobalSessionKey,
     activeSessionRef,

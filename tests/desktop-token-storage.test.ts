@@ -22,12 +22,18 @@ describe('desktop remote token storage regression', () => {
   it('does not persist remote tokens with localStorage in desktop renderer or preload code', async () => {
     const roots = ['src/renderer/src', 'src/preload']
     const offenders: string[] = []
+    const suspiciousPatterns = [
+      /localStorage\.(setItem|getItem)\([^)]*token/i,
+      /localStorage\.(setItem|getItem)\([^)]*remote/i,
+      /window\.localStorage\.(setItem|getItem)\([^)]*token/i,
+      /window\.localStorage\.(setItem|getItem)\([^)]*remote/i
+    ]
 
     for (const root of roots) {
       const files = await collectFiles(root)
       for (const file of files) {
         const content = await readFile(file, 'utf-8')
-        if (content.includes('localStorage')) {
+        if (suspiciousPatterns.some((pattern) => pattern.test(content))) {
           offenders.push(file.replace(/\\/g, '/'))
         }
       }

@@ -2,517 +2,134 @@
   <div class="settings-page">
     <h1>{{ $t('settings.title') }}</h1>
 
-    <section class="settings-section">
-      <h2>{{ $t('settings.appearance') }}</h2>
-      <div class="setting-row">
-        <label>{{ $t('settings.theme') }}</label>
-        <select v-model="settingsStore.settings.theme" @change="handleSave">
-          <option value="dark">{{ $t('settings.themeDark') }}</option>
-          <option value="light" disabled>{{ $t('settings.themeLight') }} ({{ $t('settings.comingSoon') }})</option>
-        </select>
-      </div>
-    </section>
+    <GeneralPreferencesSettingsSection
+      :theme="settingsStore.settings.theme"
+      :language="settingsStore.settings.language"
+      :session-wake-confirm="settingsStore.settings.sessionWakeConfirm"
+      :sessions-list-position="settingsStore.settings.sessionsListPosition"
+      :sessions-panel-collapsed="settingsStore.settings.sessionsPanelCollapsed"
+      :smart-priority-enabled="settingsStore.settings.smartPriorityEnabled"
+      :smart-priority-scope="settingsStore.settings.smartPriorityScope"
+      :smart-priority-mode="settingsStore.settings.smartPriorityMode"
+      @update:theme="settingsStore.settings.theme = $event; handleSave()"
+      @update:language="settingsStore.settings.language = $event; handleSave()"
+      @update:session-wake-confirm="settingsStore.settings.sessionWakeConfirm = $event; handleSave()"
+      @toggle-sessions-list-position="toggleSessionsListPosition"
+      @update:sessions-panel-collapsed="settingsStore.settings.sessionsPanelCollapsed = $event; handleSave()"
+      @update:smart-priority-enabled="settingsStore.settings.smartPriorityEnabled = $event; handleSave()"
+      @update:smart-priority-scope="settingsStore.settings.smartPriorityScope = $event; handleSave()"
+      @update:smart-priority-mode="settingsStore.settings.smartPriorityMode = $event; handleSave()"
+    />
 
-    <section class="settings-section">
-      <h2>{{ $t('settings.language') }}</h2>
-      <div class="setting-row">
-        <label>{{ $t('settings.language') }}</label>
-        <select v-model="settingsStore.settings.language" @change="handleSave">
-          <option value="zh-CN">中文</option>
-          <option value="en">English</option>
-        </select>
-      </div>
-    </section>
+    <CliPathsSettingsSection
+      :claude-path="settingsStore.settings.claudePath"
+      :codex-path="settingsStore.settings.codexPath"
+      :opencode-path="settingsStore.settings.opencodePath"
+      @update:claude-path="settingsStore.settings.claudePath = $event; handleSave()"
+      @update:codex-path="settingsStore.settings.codexPath = $event; handleSave()"
+      @update:opencode-path="settingsStore.settings.opencodePath = $event; handleSave()"
+    />
 
-    <section class="settings-section">
-      <h2>{{ $t('settings.sessions') }}</h2>
-      <div class="setting-row">
-        <label>{{ $t('settings.sessionWakeConfirm') }}</label>
-        <input v-model="settingsStore.settings.sessionWakeConfirm" type="checkbox" @change="handleSave" />
-      </div>
-      <div class="setting-row">
-        <label>{{ $t('settings.sessionsListPosition') }}</label>
-        <button class="toggle-btn" type="button" @click="toggleSessionsListPosition">
-          {{ settingsStore.settings.sessionsListPosition === 'left' ? 'L' : 'T' }}
-        </button>
-      </div>
-      <div class="setting-row">
-        <label>{{ $t('settings.sessionsPanelCollapsed') }}</label>
-        <input v-model="settingsStore.settings.sessionsPanelCollapsed" type="checkbox" @change="handleSave" />
-      </div>
-      <div class="setting-row">
-        <label>{{ $t('settings.smartPriorityEnabled') }}</label>
-        <input v-model="settingsStore.settings.smartPriorityEnabled" type="checkbox" @change="handleSave" />
-      </div>
-      <div class="setting-row">
-        <label>{{ $t('settings.smartPriorityScope') }}</label>
-        <select v-model="settingsStore.settings.smartPriorityScope" @change="handleSave">
-          <option value="both">{{ $t('settings.smartPriorityScopeBoth') }}</option>
-          <option value="sessions">{{ $t('settings.smartPriorityScopeSessions') }}</option>
-          <option value="projects">{{ $t('settings.smartPriorityScopeProjects') }}</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <label>{{ $t('settings.smartPriorityMode') }}</label>
-        <select v-model="settingsStore.settings.smartPriorityMode" @change="handleSave">
-          <option value="balanced">{{ $t('settings.smartPriorityModeBalanced') }}</option>
-          <option value="recent">{{ $t('settings.smartPriorityModeRecent') }}</option>
-        </select>
-      </div>
-    </section>
+    <RemoteServiceSettingsSection
+      ref="remoteServiceSectionRef"
+      :active="deferredSections.remoteService"
+      :loading="remoteServiceLoading"
+      :state="remoteServiceState"
+      :has-env-overrides="hasRemoteServiceEnvOverrides"
+      :env-override-fields="remoteServiceEnvOverrideFields"
+      :form="remoteServiceForm"
+      :can-submit="canSubmitRemoteServiceForm"
+      :saving="savingRemoteService"
+      :copying-token="copyingRemoteServiceToken"
+      :regenerating-token="regeneratingRemoteServiceToken"
+      :resetting-token="resettingRemoteServiceToken"
+      :format-token-source="formatTokenSource"
+      @activate="activateDeferredSection('remoteService')"
+      @save="handleSaveRemoteService"
+      @reset-form="handleResetRemoteServiceForm"
+      @reset-token="handleResetRemoteServiceToken"
+      @copy-token="handleCopyRemoteServiceToken"
+      @regenerate-token="handleRegenerateRemoteServiceToken"
+    />
 
-    <section class="settings-section">
-      <h2>{{ $t('settings.cliPaths') }}</h2>
-      <div class="setting-row">
-        <label>{{ $t('settings.claudePath') }}</label>
-        <input v-model="settingsStore.settings.claudePath" type="text" :placeholder="$t('settings.autoDetect')" @change="handleSave" />
-      </div>
-      <div class="setting-row">
-        <label>{{ $t('settings.codexPath') }}</label>
-        <input v-model="settingsStore.settings.codexPath" type="text" :placeholder="$t('settings.autoDetect')" @change="handleSave" />
-      </div>
-      <div class="setting-row">
-        <label>{{ $t('settings.opencodePath') }}</label>
-        <input v-model="settingsStore.settings.opencodePath" type="text" :placeholder="$t('settings.autoDetect')" @change="handleSave" />
-      </div>
-    </section>
+    <CloudflareTunnelSettingsSection
+      ref="cloudflareSectionRef"
+      :active="deferredSections.cloudflare"
+      :loading="cloudflareTunnelLoading"
+      :state="cloudflareTunnelState"
+      :binary-path="cloudflareBinaryPathInput"
+      :can-start="canStartCloudflareTunnel"
+      :show-remote-service-warning="!!remoteServiceState && !remoteServiceState.running"
+      :saving-config="savingCloudflareTunnelConfig"
+      :starting="startingCloudflareTunnel"
+      :stopping="stoppingCloudflareTunnel"
+      :copying-url="copyingCloudflareTunnelUrl"
+      :format-path-source="formatCloudflarePathSource"
+      @activate="activateDeferredSection('cloudflare')"
+      @update:binary-path="cloudflareBinaryPathInput = $event"
+      @save-config="handleSaveCloudflareTunnelConfig"
+      @start="handleStartCloudflareTunnel"
+      @stop="handleStopCloudflareTunnel"
+      @copy-url="handleCopyCloudflareTunnelUrl"
+    />
 
-    <section class="settings-section settings-section-remote">
-      <div class="section-head">
-        <div>
-          <h2>{{ $t('settings.localRemoteService') }}</h2>
-          <p class="setting-hint section-hint">{{ $t('settings.localRemoteServiceHint') }}</p>
-        </div>
-        <div class="instance-summary">
-          <span class="summary-pill" :class="{ online: remoteServiceState?.running }">
-            {{
-              remoteServiceState?.running
-                ? $t('settings.remoteServiceRunning')
-                : $t('settings.remoteServiceStopped')
-            }}
-          </span>
-          <span class="summary-pill">{{ remoteServiceState?.tokenSource ? formatTokenSource(remoteServiceState.tokenSource) : '-' }}</span>
-        </div>
-      </div>
+    <RemoteInstancesSettingsSection
+      ref="remoteInstancesSectionRef"
+      :active="deferredSections.remoteInstances"
+      :desktop-remote-mount-enabled="settingsStore.settings.desktopRemoteMountEnabled"
+      :instances="instancesStore.remoteInstances"
+      :online-count="instancesStore.onlineRemoteCount"
+      :form="remoteForm"
+      :is-editing="isEditingRemote"
+      :can-submit="canSubmitRemoteForm"
+      :saving="savingRemote"
+      :busy-instance-ids="busyInstanceIds"
+      :format-status-text="formatStatusText"
+      :format-latency-label="formatLatencyLabel"
+      :format-last-checked="formatLastChecked"
+      @activate="activateDeferredSection('remoteInstances')"
+      @toggle-desktop-remote-mount="handleRemoteFeatureToggle"
+      @save="handleSaveRemoteInstance"
+      @cancel-edit="resetRemoteForm"
+      @edit-instance="handleEditRemoteInstance"
+      @delete-instance="handleDeleteRemoteInstance"
+    />
 
-      <div v-if="remoteServiceLoading" class="remote-disabled-state">
-        {{ $t('settings.remoteServiceLoading') }}
-      </div>
+    <TerminalSettingsSection
+      :buffer-size="settingsStore.settings.bufferSize"
+      :terminal-font="settingsStore.settings.terminalFont"
+      @update:buffer-size="settingsStore.settings.bufferSize = $event; handleSave()"
+      @update:terminal-font="settingsStore.settings.terminalFont = $event; handleSave()"
+    />
 
-      <template v-else>
-        <div v-if="hasRemoteServiceEnvOverrides" class="remote-disabled-state remote-service-env-note">
-          {{ $t('settings.remoteServiceEnvOverrideHint', { fields: remoteServiceEnvOverrideFields }) }}
-        </div>
-
-        <div class="remote-form-panel">
-          <div class="remote-form-grid">
-            <label class="checkbox-row field-block field-block-inline-start">
-              <input v-model="remoteServiceForm.enabled" type="checkbox" />
-              <span>{{ $t('settings.remoteServiceEnabled') }}</span>
-            </label>
-            <label class="checkbox-row field-block field-block-inline-start">
-              <input v-model="remoteServiceForm.passthroughOnly" type="checkbox" />
-              <span>{{ $t('settings.remoteServicePassthroughOnly') }}</span>
-            </label>
-            <div class="field-block field-block-wide field-hint-only">
-              <span class="setting-hint inline-hint">{{ $t('settings.remoteServiceControlRiskHint') }}</span>
-            </div>
-            <div class="field-block">
-              <label>{{ $t('settings.remoteServiceHost') }}</label>
-              <input v-model.trim="remoteServiceForm.host" type="text" :placeholder="$t('settings.remoteServiceHostPlaceholder')" />
-            </div>
-            <div class="field-block">
-              <label>{{ $t('settings.remoteServicePort') }}</label>
-              <input v-model.number="remoteServiceForm.port" type="number" min="1" max="65535" />
-            </div>
-            <div class="field-block">
-              <label>{{ $t('settings.remoteServiceTokenMode') }}</label>
-              <select v-model="remoteServiceForm.tokenMode">
-                <option value="default">{{ $t('settings.remoteServiceTokenModeDefault') }}</option>
-                <option value="custom">{{ $t('settings.remoteServiceTokenModeCustom') }}</option>
-              </select>
-            </div>
-            <div class="field-block field-block-wide">
-              <label>{{ $t('settings.remoteServiceCustomToken') }}</label>
-              <input
-                v-model.trim="remoteServiceForm.customToken"
-                type="password"
-                autocomplete="new-password"
-                :placeholder="
-                  remoteServiceForm.tokenMode === 'custom'
-                    ? $t('settings.remoteServiceCustomTokenPlaceholder')
-                    : $t('settings.remoteServiceCustomTokenDisabled')
-                "
-                :disabled="remoteServiceForm.tokenMode !== 'custom'"
-              />
-              <span v-if="remoteServiceForm.tokenMode === 'custom' && remoteServiceState?.customTokenConfigured" class="setting-hint inline-hint">
-                {{ $t('settings.remoteServiceCustomTokenKeepHint') }}
-              </span>
-            </div>
-          </div>
-
-          <div class="remote-form-actions">
-            <button
-              class="btn btn-primary btn-sm"
-              type="button"
-              :disabled="savingRemoteService || !canSubmitRemoteServiceForm"
-              @click="handleSaveRemoteService"
-            >
-              {{ savingRemoteService ? $t('settings.remoteServiceApplying') : $t('settings.remoteServiceApply') }}
-            </button>
-            <button
-              class="btn btn-sm"
-              type="button"
-              :disabled="savingRemoteService || !remoteServiceState"
-              @click="handleResetRemoteServiceForm"
-            >
-              {{ $t('settings.remoteServiceResetForm') }}
-            </button>
-            <button
-              class="btn btn-sm"
-              type="button"
-              :disabled="savingRemoteService || resettingRemoteServiceToken || !remoteServiceState?.customTokenConfigured"
-              @click="handleResetRemoteServiceToken"
-            >
-              {{
-                resettingRemoteServiceToken
-                  ? $t('settings.remoteServiceResettingToken')
-                  : $t('settings.remoteServiceResetToDefaultToken')
-              }}
-            </button>
-            <button
-              class="btn btn-sm"
-              type="button"
-              :disabled="copyingRemoteServiceToken || !remoteServiceState"
-              @click="handleCopyRemoteServiceToken"
-            >
-              {{ copyingRemoteServiceToken ? $t('settings.remoteServiceCopyingToken') : $t('settings.remoteServiceCopyToken') }}
-            </button>
-            <button
-              class="btn btn-sm"
-              type="button"
-              :disabled="regeneratingRemoteServiceToken"
-              @click="handleRegenerateRemoteServiceToken"
-            >
-              {{
-                regeneratingRemoteServiceToken
-                  ? $t('settings.remoteServiceRegeneratingToken')
-                  : $t('settings.remoteServiceRegenerateDefaultToken')
-              }}
-            </button>
-          </div>
-        </div>
-
-        <div v-if="remoteServiceState" class="remote-card-grid">
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteServiceConfiguredEnabled') }}</span>
-            <span class="meta-value">{{ remoteServiceState.configuredEnabled ? $t('settings.remoteYes') : $t('settings.remoteNo') }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteServiceEffectiveEnabled') }}</span>
-            <span class="meta-value">{{ remoteServiceState.effectiveEnabled ? $t('settings.remoteYes') : $t('settings.remoteNo') }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteServiceCurrentBaseUrl') }}</span>
-            <span class="meta-value mono">{{ remoteServiceState.baseUrl }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteServiceTokenSource') }}</span>
-            <span class="meta-value">{{ formatTokenSource(remoteServiceState.tokenSource) }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteServiceTokenFingerprint') }}</span>
-            <span class="meta-value mono">{{ remoteServiceState.tokenFingerprint }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.remoteServiceTokenFilePath') }}</span>
-            <span class="meta-value mono">{{ remoteServiceState.tokenFilePath }}</span>
-          </div>
-        </div>
-      </template>
-    </section>
-
-    <section class="settings-section settings-section-remote">
-      <div class="section-head">
-        <div>
-          <h2>{{ $t('settings.cloudflareTunnel') }}</h2>
-          <p class="setting-hint section-hint">{{ $t('settings.cloudflareTunnelHint') }}</p>
-        </div>
-        <div class="instance-summary">
-          <span class="summary-pill" :class="{ online: cloudflareTunnelState?.running }">
-            {{
-              cloudflareTunnelState?.running
-                ? $t('settings.cloudflareTunnelRunning')
-                : $t('settings.cloudflareTunnelStopped')
-            }}
-          </span>
-          <span class="summary-pill">
-            {{
-              cloudflareTunnelState?.pathSource
-                ? formatCloudflarePathSource(cloudflareTunnelState.pathSource)
-                : '-'
-            }}
-          </span>
-        </div>
-      </div>
-
-      <div v-if="cloudflareTunnelLoading" class="remote-disabled-state">
-        {{ $t('settings.cloudflareTunnelLoading') }}
-      </div>
-
-      <template v-else>
-        <div class="remote-form-panel">
-          <div class="remote-form-grid">
-            <div class="field-block field-block-wide">
-              <label>{{ $t('settings.cloudflareTunnelBinaryPath') }}</label>
-              <input
-                v-model.trim="cloudflareBinaryPathInput"
-                type="text"
-                :placeholder="$t('settings.cloudflareTunnelBinaryPathPlaceholder')"
-              />
-              <span class="setting-hint inline-hint">
-                {{ $t('settings.cloudflareTunnelBinaryPathHint') }}
-              </span>
-            </div>
-          </div>
-
-          <div class="remote-form-actions">
-            <button
-              class="btn btn-sm"
-              type="button"
-              :disabled="savingCloudflareTunnelConfig"
-              @click="handleSaveCloudflareTunnelConfig"
-            >
-              {{
-                savingCloudflareTunnelConfig
-                  ? $t('settings.cloudflareTunnelConfigSaving')
-                  : $t('settings.cloudflareTunnelConfigSave')
-              }}
-            </button>
-            <button
-              class="btn btn-primary btn-sm"
-              type="button"
-              :disabled="startingCloudflareTunnel || !canStartCloudflareTunnel || !!cloudflareTunnelState?.running"
-              @click="handleStartCloudflareTunnel"
-            >
-              {{
-                startingCloudflareTunnel
-                  ? $t('settings.cloudflareTunnelStarting')
-                  : $t('settings.cloudflareTunnelStart')
-              }}
-            </button>
-            <button
-              class="btn btn-sm"
-              type="button"
-              :disabled="stoppingCloudflareTunnel || !cloudflareTunnelState?.running"
-              @click="handleStopCloudflareTunnel"
-            >
-              {{
-                stoppingCloudflareTunnel
-                  ? $t('settings.cloudflareTunnelStopping')
-                  : $t('settings.cloudflareTunnelStop')
-              }}
-            </button>
-            <button
-              class="btn btn-sm"
-              type="button"
-              :disabled="copyingCloudflareTunnelUrl || !cloudflareTunnelState?.publicUrl"
-              @click="handleCopyCloudflareTunnelUrl"
-            >
-              {{
-                copyingCloudflareTunnelUrl
-                  ? $t('settings.cloudflareTunnelUrlCopying')
-                  : $t('settings.cloudflareTunnelCopyUrl')
-              }}
-            </button>
-          </div>
-        </div>
-
-        <div v-if="remoteServiceState && !remoteServiceState.running" class="remote-disabled-state remote-service-env-note">
-          {{ $t('settings.cloudflareTunnelRequiresRemoteService') }}
-        </div>
-
-        <div v-if="cloudflareTunnelState" class="remote-card-grid">
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelAvailability') }}</span>
-            <span class="meta-value">{{ cloudflareTunnelState.available ? $t('settings.remoteYes') : $t('settings.remoteNo') }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelPathSource') }}</span>
-            <span class="meta-value">{{ formatCloudflarePathSource(cloudflareTunnelState.pathSource) }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelEffectiveBinaryPath') }}</span>
-            <span class="meta-value mono">{{ cloudflareTunnelState.effectiveBinaryPath || '-' }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelLocalTarget') }}</span>
-            <span class="meta-value mono">{{ cloudflareTunnelState.localTargetUrl || '-' }}</span>
-          </div>
-          <div class="meta-item meta-item-full">
-            <span class="meta-label">{{ $t('settings.cloudflareTunnelPublicUrl') }}</span>
-            <span class="meta-value mono">{{ cloudflareTunnelState.publicUrl || '-' }}</span>
-          </div>
-        </div>
-      </template>
-    </section>
-
-    <section class="settings-section settings-section-remote">
-      <div class="section-head">
-        <div>
-          <h2>{{ $t('settings.remoteInstances') }}</h2>
-          <p class="setting-hint section-hint">{{ $t('settings.remoteInstancesHint') }}</p>
-        </div>
-        <div class="instance-summary">
-          <span class="summary-pill">{{ $t('settings.remoteCount', { count: instancesStore.remoteInstances.length }) }}</span>
-          <span class="summary-pill online">{{ $t('settings.remoteOnlineCount', { count: instancesStore.onlineRemoteCount }) }}</span>
-        </div>
-      </div>
-
-      <div class="setting-row setting-row-stack remote-toggle-row">
-        <div class="setting-label-group">
-          <label>{{ $t('settings.desktopRemoteMountEnabled') }}</label>
-          <p class="setting-hint">{{ $t('settings.desktopRemoteMountHint') }}</p>
-        </div>
-        <input
-          v-model="settingsStore.settings.desktopRemoteMountEnabled"
-          type="checkbox"
-          @change="handleRemoteFeatureToggle"
-        />
-      </div>
-
-      <div v-if="!settingsStore.settings.desktopRemoteMountEnabled" class="remote-disabled-state">
-        {{ $t('settings.desktopRemoteMountDisabled') }}
-      </div>
-
-      <template v-else>
-      <div class="remote-form-panel">
-        <div class="remote-form-grid">
-          <div class="field-block">
-            <label>{{ $t('settings.remoteName') }}</label>
-            <input v-model.trim="remoteForm.name" type="text" :placeholder="$t('settings.remoteNamePlaceholder')" />
-          </div>
-          <div class="field-block field-block-wide">
-            <label>{{ $t('settings.remoteBaseUrl') }}</label>
-            <input v-model.trim="remoteForm.baseUrl" type="text" :placeholder="$t('settings.remoteBaseUrlPlaceholder')" />
-          </div>
-          <div class="field-block field-block-wide">
-            <label>{{ $t('settings.remoteToken') }}</label>
-            <input v-model.trim="remoteForm.token" type="password" autocomplete="new-password" :placeholder="$t('settings.remoteTokenPlaceholder')" />
-          </div>
-          <label class="checkbox-row field-block-inline">
-            <input v-model="remoteForm.enabled" type="checkbox" />
-            <span>{{ $t('settings.remoteEnabled') }}</span>
-          </label>
-        </div>
-
-        <div class="remote-form-actions">
-          <button class="btn btn-primary btn-sm" type="button" :disabled="savingRemote || !canSubmitRemoteForm" @click="handleSaveRemoteInstance">
-            {{ savingRemote ? $t('settings.remoteSaving') : (isEditingRemote ? $t('settings.remoteUpdate') : $t('settings.remoteAdd')) }}
-          </button>
-          <button v-if="isEditingRemote" class="btn btn-sm" type="button" :disabled="savingRemote" @click="resetRemoteForm">
-            {{ $t('settings.remoteCancelEdit') }}
-          </button>
-        </div>
-      </div>
-
-      <div v-if="instancesStore.remoteInstances.length === 0" class="remote-empty-state">
-        {{ $t('settings.remoteEmpty') }}
-      </div>
-      <div v-else class="remote-instance-list">
-        <article
-          v-for="instance in instancesStore.remoteInstances"
-          :key="instance.id"
-          class="remote-instance-card"
-          :class="[`status-${instance.status}`, { disabled: !instance.enabled }]"
-        >
-          <div class="remote-card-head">
-            <div class="remote-card-title">
-              <div class="remote-title-line">
-                <h3>{{ instance.name }}</h3>
-                <span class="status-badge" :class="`status-${instance.status}`">{{ formatStatusText(instance.status) }}</span>
-                <span class="mode-badge">{{ instance.passthroughOnly ? $t('settings.remoteModePassthrough') : $t('settings.remoteModeManaged') }}</span>
-                <span v-if="!instance.enabled" class="mode-badge muted">{{ $t('settings.remoteDisabled') }}</span>
-              </div>
-              <p class="remote-card-url">{{ instance.baseUrl }}</p>
-            </div>
-            <div class="remote-card-actions">
-              <button class="btn btn-sm" type="button" :disabled="busyInstanceIds.includes(instance.id)" @click="handleEditRemoteInstance(instance)">
-                {{ $t('settings.remoteEdit') }}
-              </button>
-              <button class="btn btn-danger btn-sm" type="button" :disabled="busyInstanceIds.includes(instance.id)" @click="handleDeleteRemoteInstance(instance.id)">
-                {{ $t('settings.remoteDelete') }}
-              </button>
-            </div>
-          </div>
-
-          <div class="remote-card-grid">
-            <div class="meta-item">
-              <span class="meta-label">{{ $t('settings.remoteBaseUrl') }}</span>
-              <span class="meta-value mono">{{ instance.baseUrl }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">{{ $t('settings.remotePassthrough') }}</span>
-              <span class="meta-value">{{ instance.passthroughOnly ? $t('settings.remoteYes') : $t('settings.remoteNo') }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">{{ $t('settings.remoteLatency') }}</span>
-              <span class="meta-value">{{ formatLatencyLabel(instance.latencyMs, instance.status) }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">{{ $t('settings.remoteLastChecked') }}</span>
-              <span class="meta-value">{{ formatLastChecked(instance.lastCheckedAt) }}</span>
-            </div>
-          </div>
-        </article>
-      </div>
-      </template>
-    </section>
-
-    <section class="settings-section">
-      <h2>{{ $t('settings.terminal') }}</h2>
-      <div class="setting-row">
-        <label>{{ $t('settings.bufferSize') }}</label>
-        <input v-model.number="settingsStore.settings.bufferSize" type="number" min="1000" max="50000" step="1000" @change="handleSave" />
-      </div>
-      <div class="setting-row">
-        <label>{{ $t('settings.terminalFont') }}</label>
-        <input v-model="settingsStore.settings.terminalFont" type="text" @change="handleSave" />
-      </div>
-    </section>
-
-    <section class="settings-section">
-      <h2>{{ $t('settings.about') }}</h2>
-      <div class="about-grid">
-        <div class="about-item">
-          <span class="about-label">{{ $t('settings.version') }}</span>
-          <span class="about-value">{{ appStore.version || '-' }}</span>
-        </div>
-        <div class="about-item">
-          <span class="about-label">{{ $t('settings.electronVersion') }}</span>
-          <span class="about-value">{{ systemInfo.electronVersion || '-' }}</span>
-        </div>
-        <div class="about-item">
-          <span class="about-label">{{ $t('settings.nodeVersion') }}</span>
-          <span class="about-value">{{ systemInfo.nodeVersion || '-' }}</span>
-        </div>
-        <div class="about-item">
-          <span class="about-label">{{ $t('settings.system') }}</span>
-          <span class="about-value">{{ systemInfo.platform }} ({{ systemInfo.arch }})</span>
-        </div>
-      </div>
-    </section>
+    <AboutSettingsSection
+      :version="appStore.version || '-'"
+      :electron-version="systemInfo.electronVersion || '-'"
+      :node-version="systemInfo.nodeVersion || '-'"
+      :platform="systemInfo.platform"
+      :arch="systemInfo.arch"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import AboutSettingsSection from '@/components/settings/AboutSettingsSection.vue'
+import CliPathsSettingsSection from '@/components/settings/CliPathsSettingsSection.vue'
+import CloudflareTunnelSettingsSection from '@/components/settings/CloudflareTunnelSettingsSection.vue'
+import GeneralPreferencesSettingsSection from '@/components/settings/GeneralPreferencesSettingsSection.vue'
+import RemoteServiceSettingsSection from '@/components/settings/RemoteServiceSettingsSection.vue'
+import RemoteInstancesSettingsSection from '@/components/settings/RemoteInstancesSettingsSection.vue'
+import TerminalSettingsSection from '@/components/settings/TerminalSettingsSection.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useAppStore } from '@/stores/app'
 import { useInstancesStore } from '@/stores/instances'
 import { useProjectsStore } from '@/stores/projects'
 import { useSessionsStore } from '@/stores/sessions'
 import { useToast } from '@/composables/useToast'
+import {
+  useSettingsPageRuntime
+} from '@/composables/useSettingsPageRuntime'
 import { useI18n } from 'vue-i18n'
 import type { RemoteInstanceDraft } from '@/api/remote-instance'
 import {
@@ -557,7 +174,6 @@ const projectsStore = useProjectsStore()
 const sessionsStore = useSessionsStore()
 const toast = useToast()
 
-const systemInfo = ref({ electronVersion: '', nodeVersion: '', platform: '', arch: '' })
 const savingRemote = ref(false)
 const savingRemoteService = ref(false)
 const savingCloudflareTunnelConfig = ref(false)
@@ -587,6 +203,39 @@ const remoteServiceForm = reactive<RemoteServiceFormState>({
   passthroughOnly: true,
   tokenMode: 'default',
   customToken: ''
+})
+
+const {
+  systemInfo,
+  deferredSections,
+  remoteServiceSectionRef,
+  cloudflareSectionRef,
+  remoteInstancesSectionRef,
+  activateDeferredSection,
+  flushSettingsSave,
+  scheduleSettingsSave
+} = useSettingsPageRuntime({
+  loadDeferredSection: (section) => {
+    if (section === 'remoteService') {
+      return loadRemoteServiceState()
+    }
+    if (section === 'cloudflare') {
+      return loadCloudflareTunnelState()
+    }
+    return loadRemoteInstances()
+  },
+  refreshDeferredSection: (section) => {
+    if (section === 'remoteService') {
+      return loadRemoteServiceState()
+    }
+    if (section === 'cloudflare') {
+      return loadCloudflareTunnelState()
+    }
+    return loadRemoteInstances()
+  },
+  onSaveSettings: () => settingsStore.save(),
+  onSaveSuccess: () => toast.success(t('toast.settingsSaved')),
+  onSaveError: () => toast.error(t('toast.settingsSaveFail'))
 })
 
 const isEditingRemote = computed(() => !!remoteForm.id)
@@ -692,27 +341,8 @@ function formatLastChecked(timestamp: number | null): string {
   return new Date(timestamp).toLocaleString()
 }
 
-async function handleSave(): Promise<void> {
-  try {
-    await settingsStore.save()
-    toast.success(t('toast.settingsSaved'))
-  } catch {
-    toast.error(t('toast.settingsSaveFail'))
-  }
-}
-
-function toggleSessionsListPosition(): void {
-  settingsStore.settings.sessionsListPosition = settingsStore.settings.sessionsListPosition === 'left' ? 'top' : 'left'
-  void handleSave()
-}
-
-async function loadSystemInfo(): Promise<void> {
-  try {
-    const info = await window.electronAPI.invoke('app:getSystemInfo') as typeof systemInfo.value
-    systemInfo.value = info
-  } catch {
-    // ignore
-  }
+function handleSave(showToast = false): void {
+  scheduleSettingsSave(showToast)
 }
 
 async function loadRemoteInstances(): Promise<void> {
@@ -751,6 +381,11 @@ async function loadCloudflareTunnelState(): Promise<void> {
   } finally {
     cloudflareTunnelLoading.value = false
   }
+}
+
+function toggleSessionsListPosition(): void {
+  settingsStore.settings.sessionsListPosition = settingsStore.settings.sessionsListPosition === 'left' ? 'top' : 'left'
+  handleSave()
 }
 
 async function handleSaveRemoteService(): Promise<void> {
@@ -885,10 +520,12 @@ async function handleCopyCloudflareTunnelUrl(): Promise<void> {
   }
 }
 
-async function handleRemoteFeatureToggle(): Promise<void> {
-  const enabled = settingsStore.settings.desktopRemoteMountEnabled
+async function handleRemoteFeatureToggle(nextEnabled?: boolean): Promise<void> {
+  const previousEnabled = settingsStore.settings.desktopRemoteMountEnabled
+  const enabled = typeof nextEnabled === 'boolean' ? nextEnabled : previousEnabled
+  settingsStore.settings.desktopRemoteMountEnabled = enabled
   try {
-    await settingsStore.save()
+    await flushSettingsSave(false)
     if (!enabled) {
       resetRemoteForm()
       instancesStore.clearRemoteState()
@@ -899,7 +536,7 @@ async function handleRemoteFeatureToggle(): Promise<void> {
     }
     toast.success(t('toast.settingsSaved'))
   } catch (error) {
-    settingsStore.settings.desktopRemoteMountEnabled = !enabled
+    settingsStore.settings.desktopRemoteMountEnabled = previousEnabled
     toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
   }
 }
@@ -964,21 +601,11 @@ async function handleDeleteRemoteInstance(id: string): Promise<void> {
 }
 
 onMounted(async () => {
-  if (!settingsStore.loaded) await settingsStore.load()
-  await Promise.all([
-    loadSystemInfo(),
-    loadRemoteServiceState(),
-    loadCloudflareTunnelState(),
-    loadRemoteInstances()
-  ])
+  if (!settingsStore.loaded) {
+    await settingsStore.load()
+  }
 })
 
-onActivated(() => {
-  void loadSystemInfo()
-  void loadRemoteServiceState()
-  void loadCloudflareTunnelState()
-  void loadRemoteInstances()
-})
 </script>
 
 <style scoped lang="scss">

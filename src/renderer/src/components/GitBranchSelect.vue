@@ -137,8 +137,6 @@ const dropdownStyle = ref<Record<string, string>>({})
 
 const displayBranchName = computed(() => props.viewedBranch || props.currentBranch || '--')
 
-const currentBranchItem = computed(() => props.branches.find((b) => b.isCurrent))
-
 const localBranches = computed(() => props.branches.filter((b) => !b.isRemote))
 
 const remoteBranches = computed(() => props.branches.filter((b) => b.isRemote))

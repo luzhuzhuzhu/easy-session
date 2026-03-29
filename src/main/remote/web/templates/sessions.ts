@@ -1,13 +1,5 @@
 export function sessionsTemplate(passthroughOnly: boolean): string {
   const modeText = passthroughOnly ? '仅透传模式' : '允许远程控制'
-  const mobileKeypad = `
-    <div class="terminal-keypad" aria-label="终端功能键">
-      <button type="button" class="terminal-key-btn" data-terminal-key="arrow-up">↑</button>
-      <button type="button" class="terminal-key-btn" data-terminal-key="arrow-down">↓</button>
-      <button type="button" class="terminal-key-btn" data-terminal-key="arrow-left">←</button>
-      <button type="button" class="terminal-key-btn" data-terminal-key="arrow-right">→</button>
-    </div>
-  `
 
   return `
     <div class="page-shell remote-shell">

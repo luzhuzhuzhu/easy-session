@@ -267,6 +267,7 @@ session: {
     remoteRefreshed: 'Remote list refreshed'
   },
   terminal: {
+    loadMoreHistory: 'Load More History',
     pauseScroll: 'Pause Auto-scroll',
     resumeScroll: 'Resume Auto-scroll',
     copyAll: 'Copy All',
@@ -389,6 +390,7 @@ settings: {
     sessions: 'Sessions',
     remoteInstances: 'Remote Instances',
     remoteInstancesHint: 'Mount multiple remote instances in the desktop app. The Web entry remains available for mobile and browser fallback use.',
+    deferredSectionHint: 'Detailed remote state loads only after this section enters view or you move the pointer into it, keeping Settings lighter on first open.',
     localRemoteService: 'Local Remote Service',
     localRemoteServiceHint: 'Expose this machine as a remote entry for mobile Web fallback and for other desktop clients to mount.',
     remoteServiceLoading: 'Loading local remote service status...',

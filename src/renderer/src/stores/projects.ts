@@ -29,6 +29,41 @@ import { useInstancesStore } from './instances'
 import { useSessionsStore } from './sessions'
 import { useWorkspaceStore } from './workspace'
 
+interface UnifiedProjectPayload {
+  instanceId: string
+  projectId: string
+  globalProjectKey: string
+  name: string
+  path: string
+  createdAt: number
+  lastOpenedAt: number
+  pathExists?: boolean
+  source: UnifiedProject['source']
+}
+
+function syncUnifiedProject(
+  cache: Map<string, UnifiedProject>,
+  payload: UnifiedProjectPayload
+): UnifiedProject {
+  const existing = cache.get(payload.globalProjectKey)
+  if (existing) {
+    existing.instanceId = payload.instanceId
+    existing.projectId = payload.projectId
+    existing.globalProjectKey = payload.globalProjectKey
+    existing.name = payload.name
+    existing.path = payload.path
+    existing.createdAt = payload.createdAt
+    existing.lastOpenedAt = payload.lastOpenedAt
+    existing.pathExists = payload.pathExists
+    existing.source = payload.source
+    return existing
+  }
+
+  const created: UnifiedProject = { ...payload }
+  cache.set(payload.globalProjectKey, created)
+  return created
+}
+
 export type { Project, UnifiedProject, ProjectRef }
 
 export const useProjectsStore = defineStore('projects', () => {
@@ -36,18 +71,47 @@ export const useProjectsStore = defineStore('projects', () => {
   const activeGlobalProjectKeyState = ref<string | null>(null)
   const loading = ref(false)
   const remoteProjectsByInstance = ref<Record<string, UnifiedProject[]>>({})
+  const projectCollectionVersion = ref(0)
   const resolver = getSharedGatewayResolver()
+  const unifiedProjectCache = new Map<string, UnifiedProject>()
 
-  const unifiedProjects = computed<UnifiedProject[]>(() =>
-    [
-      ...projects.value.map((project) => toUnifiedProject(project)),
-      ...Object.values(remoteProjectsByInstance.value).flat()
-    ]
-  )
+  function bumpProjectCollectionVersion(): void {
+    projectCollectionVersion.value += 1
+  }
 
-  const projectIndexByGlobalKey = computed<Record<string, UnifiedProject>>(() =>
-    Object.fromEntries(unifiedProjects.value.map((project) => [project.globalProjectKey, project]))
-  )
+  const unifiedProjects = computed<UnifiedProject[]>(() => {
+    const next: UnifiedProject[] = []
+    const seen = new Set<string>()
+
+    for (const project of projects.value) {
+      const payload = toUnifiedProject(project)
+      next.push(syncUnifiedProject(unifiedProjectCache, payload))
+      seen.add(payload.globalProjectKey)
+    }
+
+    for (const projectList of Object.values(remoteProjectsByInstance.value)) {
+      for (const project of projectList) {
+        next.push(syncUnifiedProject(unifiedProjectCache, project))
+        seen.add(project.globalProjectKey)
+      }
+    }
+
+    for (const key of Array.from(unifiedProjectCache.keys())) {
+      if (!seen.has(key)) {
+        unifiedProjectCache.delete(key)
+      }
+    }
+
+    return next
+  })
+
+  const projectIndexByGlobalKey = computed<Record<string, UnifiedProject>>(() => {
+    const index: Record<string, UnifiedProject> = {}
+    for (const project of unifiedProjects.value) {
+      index[project.globalProjectKey] = project
+    }
+    return index
+  })
 
   const activeProjectRef = computed<ProjectRef | null>(() => {
     if (!activeGlobalProjectKeyState.value) return null
@@ -122,6 +186,7 @@ export const useProjectsStore = defineStore('projects', () => {
         lastOpenedAt: project.lastOpenedAt,
         pathExists: project.pathExists
       }))
+      bumpProjectCollectionVersion()
     } finally {
       loading.value = false
     }
@@ -140,6 +205,7 @@ export const useProjectsStore = defineStore('projects', () => {
       ...remoteProjectsByInstance.value,
       [instanceId]: remoteProjects
     }
+    bumpProjectCollectionVersion()
     return remoteProjects
   }
 
@@ -177,6 +243,7 @@ export const useProjectsStore = defineStore('projects', () => {
     if (!instanceId) {
       remoteProjectsByInstance.value = {}
       resolver.invalidate()
+      bumpProjectCollectionVersion()
       return
     }
 
@@ -185,6 +252,7 @@ export const useProjectsStore = defineStore('projects', () => {
     delete next[instanceId]
     remoteProjectsByInstance.value = next
     resolver.invalidate(instanceId)
+    bumpProjectCollectionVersion()
   }
 
   function getProjectRef(projectId: string): ProjectRef {
@@ -215,7 +283,10 @@ export const useProjectsStore = defineStore('projects', () => {
   async function addProject(path: string, name?: string) {
     const project = await apiAddProject(path, name)
     const exists = projects.value.some((item) => item.id === project.id)
-    if (!exists) projects.value.push(project)
+    if (!exists) {
+      projects.value.push(project)
+      bumpProjectCollectionVersion()
+    }
     return project
   }
 
@@ -228,11 +299,13 @@ export const useProjectsStore = defineStore('projects', () => {
     if (instanceId === LOCAL_INSTANCE_ID) {
       const localProject = await apiOpenProject(project.projectId)
       const exists = projects.value.some((item) => item.id === localProject.id)
-      if (!exists) projects.value.push(localProject)
-      else {
+      if (!exists) {
+        projects.value.push(localProject)
+      } else {
         const index = projects.value.findIndex((item) => item.id === localProject.id)
         projects.value[index] = localProject
       }
+      bumpProjectCollectionVersion()
     } else {
       const current = remoteProjectsByInstance.value[instanceId] || []
       remoteProjectsByInstance.value = {
@@ -240,6 +313,7 @@ export const useProjectsStore = defineStore('projects', () => {
         [instanceId]: [...current.filter((item) => item.projectId !== project.projectId), project]
       }
       useInstancesStore().markRemoteFetchSuccess(instanceId)
+      bumpProjectCollectionVersion()
     }
     return project
   }
@@ -259,6 +333,7 @@ export const useProjectsStore = defineStore('projects', () => {
     if (projectRef.instanceId === LOCAL_INSTANCE_ID) {
       await apiRemoveProject(projectRef.projectId)
       projects.value = projects.value.filter((project) => project.id !== projectRef.projectId)
+      bumpProjectCollectionVersion()
     } else {
       const gateway = await resolver.resolve(projectRef.instanceId)
       const deleted = await gateway.removeProject(projectRef.instanceId, projectRef.projectId)
@@ -268,6 +343,7 @@ export const useProjectsStore = defineStore('projects', () => {
         ...remoteProjectsByInstance.value,
         [projectRef.instanceId]: current.filter((project) => project.projectId !== projectRef.projectId)
       }
+      bumpProjectCollectionVersion()
       const sessionsStore = useSessionsStore()
       await sessionsStore.fetchSessionsForInstance(projectRef.instanceId)
     }
@@ -304,6 +380,7 @@ export const useProjectsStore = defineStore('projects', () => {
         } else {
           projects.value.push(updated)
         }
+        bumpProjectCollectionVersion()
         const unified = toUnifiedProject(updated)
         activeGlobalProjectKeyState.value = unified.globalProjectKey
         return unified
@@ -324,6 +401,7 @@ export const useProjectsStore = defineStore('projects', () => {
         ...current.filter((project) => project.projectId !== projectRef.projectId)
       ]
     }
+    bumpProjectCollectionVersion()
     activeGlobalProjectKeyState.value = updated.globalProjectKey
     return updated
   }
@@ -351,6 +429,7 @@ export const useProjectsStore = defineStore('projects', () => {
       const updated = await apiUpdateProject(projectRef.projectId, updates)
       const index = projects.value.findIndex((project) => project.id === projectRef.projectId)
       if (index !== -1) projects.value[index] = updated
+      bumpProjectCollectionVersion()
       return toUnifiedProject(updated)
     }
 
@@ -365,6 +444,7 @@ export const useProjectsStore = defineStore('projects', () => {
         ...current.filter((project) => project.projectId !== projectRef.projectId)
       ]
     }
+    bumpProjectCollectionVersion()
     return updated
   }
 
@@ -406,6 +486,7 @@ export const useProjectsStore = defineStore('projects', () => {
   return {
     projects,
     remoteProjectsByInstance,
+    projectCollectionVersion,
     unifiedProjects,
     projectIndexByGlobalKey,
     activeProjectId,

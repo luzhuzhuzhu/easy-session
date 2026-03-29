@@ -20,6 +20,9 @@ const HISTORY_LIMIT = 20
 
 function cloneLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
   const raw = toRaw(layout)
+  if (typeof structuredClone === 'function') {
+    return structuredClone(raw) as WorkspaceLayoutState
+  }
   return JSON.parse(JSON.stringify(raw)) as WorkspaceLayoutState
 }
 
@@ -137,8 +140,7 @@ function normalizeWorkspaceTab(tabId: string, tab: WorkspaceTabState): Workspace
   }
 }
 
-function normalizeLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
-  const next = cloneLayout(layout)
+function normalizeLayoutInPlace(next: WorkspaceLayoutState): WorkspaceLayoutState {
   next.version = 2
 
   const leaves: WorkspaceLeafNode[] = []
@@ -189,6 +191,10 @@ function normalizeLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
   }
 
   return next
+}
+
+function normalizeLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
+  return normalizeLayoutInPlace(cloneLayout(layout))
 }
 
 function genId(prefix: string): string {
@@ -313,7 +319,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const previous = cloneLayout(layout.value)
     const draft = cloneLayout(layout.value)
     mutator(draft)
-    const next = normalizeLayout(draft)
+    const next = normalizeLayoutInPlace(draft)
     if (layoutEquals(previous, next)) return
     if (trackHistory) {
       pushHistory(previous)
@@ -348,6 +354,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       createdAt: Date.now()
     }
     return tabId
+  }
+
+  function findTabLocationBySessionRef(
+    draft: WorkspaceLayoutState,
+    sessionRef: SessionRef
+  ): { leaf: WorkspaceLeafNode; tabId: string } | null {
+    const leaves = collectLeaves(draft.root)
+    for (const leaf of leaves) {
+      for (const tabId of leaf.tabs) {
+        const tab = draft.tabs[tabId]
+        if (tab?.globalSessionKey === sessionRef.globalSessionKey) {
+          return { leaf, tabId }
+        }
+      }
+    }
+    return null
   }
 
   function focusPane(paneId: string): void {
@@ -405,6 +427,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   function openSessionRefInActivePane(sessionRef: SessionRef): void {
     openSessionRefInPane(sessionRef, getOrCreatePaneId())
+  }
+
+  function focusSessionRef(sessionRef: SessionRef): boolean {
+    let focused = false
+    mutate((draft) => {
+      const located = findTabLocationBySessionRef(draft, sessionRef)
+      if (!located) return
+      located.leaf.activeTabId = located.tabId
+      draft.activePaneId = located.leaf.paneId
+      focused = true
+    }, { trackHistory: false })
+    return focused
   }
 
   function openSessionInActivePane(sessionId: string): void {
@@ -742,7 +776,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   async function hardReset(): Promise<void> {
     const previous = cloneLayout(layout.value)
-    const next = normalizeLayout(await resetWorkspaceLayout())
+    const next = normalizeLayoutInPlace(await resetWorkspaceLayout())
     if (!layoutEquals(previous, next)) {
       pushHistory(previous)
     }
@@ -775,6 +809,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     openSessionRefInPane,
     openSessionInPane,
     openSessionRefInActivePane,
+    focusSessionRef,
     openSessionInActivePane,
     moveTabToPane,
     splitPane,
