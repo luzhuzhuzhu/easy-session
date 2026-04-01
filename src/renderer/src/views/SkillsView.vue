@@ -239,9 +239,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
+  padding: 4px 8px;
   cursor: pointer;
-  font-size: var(--font-size-xs);
+  font-size: 10px;
   user-select: none;
   transition: background var(--transition-fast);
   &:hover { background: var(--bg-hover); }
@@ -305,14 +305,14 @@ onMounted(async () => {
   height: 16px;
   line-height: 16px;
   text-align: center;
-  border-radius: 8px;
+  border-radius: 0;
   flex-shrink: 0;
 }
 
 .skill-tag {
   font-size: 9px;
   padding: 1px 5px;
-  border-radius: 6px;
+  border-radius: 0;
   flex-shrink: 0;
   line-height: 14px;
   &.builtin { color: var(--accent-primary); background: rgba(108, 158, 255, 0.1); }
@@ -321,7 +321,7 @@ onMounted(async () => {
 
 .skill-detail {
   flex: 1;
-  padding: var(--spacing-lg);
+  padding: var(--spacing-sm);
   overflow-y: auto;
   &.empty-detail {
     display: flex;
@@ -374,7 +374,7 @@ onMounted(async () => {
 .field-badge {
   font-size: var(--font-size-xs);
   padding: 0 4px;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   &.required { color: var(--status-error); }
   &.optional { color: var(--text-muted); }
 }
@@ -384,7 +384,7 @@ onMounted(async () => {
 .prompt-block {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   padding: var(--spacing-sm);
   font-size: var(--font-size-xs);
   white-space: pre-wrap;
