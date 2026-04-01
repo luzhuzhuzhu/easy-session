@@ -73,9 +73,25 @@
     <div class="quick-actions">
       <h3>{{ $t('dashboard.quickActions') }}</h3>
       <div class="actions">
-        <button class="action-btn" @click="handleNewProject">{{ $t('dashboard.newProject') }}</button>
-        <button class="action-btn" @click="$router.push('/sessions')">{{ $t('dashboard.newSession') }}</button>
-        <button class="action-btn" @click="openConfigPanel">{{ $t('dashboard.openConfig') }}</button>
+        <button class="action-btn" @click="handleNewProject">
+          <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+            <path d="M8 3.25v9.5M3.25 8h9.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
+          </svg>
+          {{ $t('dashboard.newProject') }}
+        </button>
+        <button class="action-btn" @click="$router.push('/sessions')">
+          <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+            <rect x="4" y="4" width="8" height="8" rx="0" fill="none" stroke="currentColor" stroke-width="1.6" />
+          </svg>
+          {{ $t('dashboard.newSession') }}
+        </button>
+        <button class="action-btn" @click="openConfigPanel">
+          <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+            <circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6" />
+          </svg>
+          {{ $t('dashboard.openConfig') }}
+        </button>
       </div>
     </div>
 
@@ -196,41 +212,44 @@ watch(
 
 <style scoped lang="scss">
 .dashboard {
-  padding: var(--spacing-xl);
-  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 .welcome {
-  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  
   h1 {
-    font-size: var(--font-size-2xl);
+    font-size: var(--font-size-lg);
     margin-bottom: var(--spacing-xs);
     letter-spacing: -0.3px;
   }
   p {
     color: var(--text-secondary);
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-sm);
   }
 }
 
 .cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  flex-shrink: 0;
+  overflow-x: auto;
 }
 
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  transition: all var(--transition-fast);
-
-  &:hover {
-    border-color: var(--border-light);
-    box-shadow: var(--shadow-sm);
-  }
+  border-radius: 0;
+  padding: var(--spacing-md);
+  flex: 1;
+  min-width: 200px;
 
   h3 {
     font-size: var(--font-size-xs);
@@ -249,14 +268,14 @@ watch(
 }
 
 .indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 0;
   display: inline-block;
   flex-shrink: 0;
 
   &.checking { background: var(--status-warning); animation: pulse 1.2s infinite; }
-  &.available { background: var(--status-success); box-shadow: 0 0 6px rgba(52, 211, 153, 0.4); }
+  &.available { background: var(--status-success); }
   &.unavailable { background: var(--status-error); }
 }
 
@@ -267,12 +286,12 @@ watch(
 
 .status-text {
   font-weight: 600;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-sm);
 }
 
 .cli-detail {
   margin-top: var(--spacing-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 
   .label {
@@ -285,23 +304,25 @@ watch(
     font-size: var(--font-size-xs);
     background: var(--bg-tertiary);
     padding: 2px 6px;
-    border-radius: var(--radius-sm);
+    border-radius: 0;
   }
 
   div + div { margin-top: 4px; }
 }
 
 .stat {
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-xl);
   font-weight: 700;
   color: var(--accent-primary);
 }
 
 .recent-projects {
-  margin-bottom: var(--spacing-md);
+  padding: 8px;
+  flex: 1;
+  overflow-y: auto;
 
   h3 {
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-sm);
     color: var(--text-secondary);
     margin-bottom: var(--spacing-sm);
   }
@@ -310,7 +331,7 @@ watch(
 .recent-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: 4px;
 }
 
 .recent-note {
@@ -326,7 +347,7 @@ watch(
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   cursor: pointer;
   transition: all var(--transition-fast);
 
@@ -338,7 +359,7 @@ watch(
 
 .recent-name {
   font-weight: 600;
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-sm);
 }
 
 .recent-path {
@@ -348,17 +369,21 @@ watch(
 }
 
 .quick-actions {
-  margin-top: var(--spacing-lg);
+  padding: 8px;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
 
   h3 {
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-sm);
     color: var(--text-secondary);
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
   }
 }
 
 .config-merged {
-  margin-top: var(--spacing-lg);
+  padding: 8px;
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .config-merged-head {
@@ -368,7 +393,7 @@ watch(
   margin-bottom: var(--spacing-sm);
 
   h3 {
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-sm);
     color: var(--text-secondary);
     margin: 0;
   }
@@ -376,26 +401,33 @@ watch(
 
 .actions {
   display: flex;
-  gap: var(--spacing-md);
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .action-btn {
-  padding: var(--spacing-sm) var(--spacing-lg);
-  background: var(--bg-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  color: var(--accent-primary);
-  font-size: var(--font-size-sm);
+  border-radius: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
   cursor: pointer;
   transition: all var(--transition-fast);
 
   &:hover {
-    background: var(--accent-primary);
-    color: var(--bg-primary);
+    background: var(--bg-hover);
     border-color: var(--accent-primary);
+    color: var(--accent-primary);
   }
 
-  &:active { transform: scale(0.97); }
+  svg {
+    flex-shrink: 0;
+  }
 }
 
 .action-btn-small {
