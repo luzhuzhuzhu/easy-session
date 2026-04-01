@@ -1,8 +1,10 @@
 <template>
   <div class="projects-page">
     <div class="toolbar">
-      <button class="btn btn-primary btn-sm" @click="handleAddProject">
-        + {{ $t('project.add') }}
+      <button class="icon-btn icon-btn-primary icon-btn-lg" :title="$t('project.add')" @click="handleAddProject">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 3.25v9.5M3.25 8h9.5" />
+        </svg>
       </button>
       <select v-model="createTargetInstanceId" class="sort-select" :title="$t('project.createTarget')">
         <option
@@ -40,7 +42,11 @@
       <div class="empty-icon">P</div>
       <p class="empty-title">{{ $t('project.noProjects') }}</p>
       <p class="empty-desc">{{ $t('project.addFirst') }}</p>
-      <button class="btn btn-primary" @click="handleAddProject">+ {{ $t('project.add') }}</button>
+      <button class="icon-btn icon-btn-primary icon-btn-lg" :title="$t('project.add')" @click="handleAddProject">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 3.25v9.5M3.25 8h9.5" />
+        </svg>
+      </button>
     </div>
 
     <div v-else class="project-grid">
@@ -66,14 +72,21 @@
             </span>
           </div>
           <div class="card-actions" @click.stop>
-            <button class="icon-btn" :title="$t('project.settings')" @click="openProjectDetail(project)">S</button>
+            <button class="icon-btn" :title="$t('project.settings')" @click="openProjectDetail(project)">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+                <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6" />
+              </svg>
+            </button>
             <button
               v-if="canCreateSession(project)"
-              class="icon-btn"
+              class="icon-btn icon-btn-primary"
               :title="$t('projectDetail.newSession')"
               @click="openCreateSessionDialog(project)"
             >
-              +
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 3.25v9.5M3.25 8h9.5" />
+              </svg>
             </button>
             <button
               v-if="canRenameProject(project)"
@@ -81,7 +94,9 @@
               :title="$t('project.rename')"
               @click="handleRename(project)"
             >
-              R
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M11.5 2.5l2 2M3 11v2h2l7-7-2-2-7 7z" fill="none" stroke="currentColor" stroke-width="1.6" />
+              </svg>
             </button>
             <button
               v-if="canOpenInExplorer(project)"
@@ -89,7 +104,9 @@
               :title="$t('project.openInExplorer')"
               @click="openInExplorer(project.path)"
             >
-              O
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M2 4h5l1 1h6v8H2V4z" fill="none" stroke="currentColor" stroke-width="1.6" />
+              </svg>
             </button>
             <button
               v-if="canRemoveProject(project)"
@@ -97,7 +114,9 @@
               :title="$t('project.remove')"
               @click="handleRemove(project)"
             >
-              X
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M4 4l8 8M12 4l-8 8" />
+              </svg>
             </button>
           </div>
         </div>
