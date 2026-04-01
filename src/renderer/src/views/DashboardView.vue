@@ -81,7 +81,7 @@
         </button>
         <button class="action-btn" @click="$router.push('/sessions')">
           <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
-            <rect x="4" y="4" width="8" height="8" rx="0" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <rect x="4" y="4" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1.6" />
           </svg>
           {{ $t('dashboard.newSession') }}
         </button>
@@ -99,6 +99,10 @@
       <div class="config-merged-head">
         <h3>{{ $t('config.title') }}</h3>
         <button class="action-btn action-btn-small" @click="toggleConfigPanel">
+          <svg viewBox="0 0 16 16" aria-hidden="true" width="12" height="12">
+            <path v-if="configPanelOpen" d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
+            <path v-else d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
+          </svg>
           {{ $t(configPanelOpen ? 'dashboard.hideConfig' : 'dashboard.showConfig') }}
         </button>
       </div>
@@ -247,14 +251,19 @@ watch(
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 0;
-  padding: var(--spacing-md);
+  padding: var(--spacing-sm);
+  transition: all var(--transition-fast);
   flex: 1;
   min-width: 200px;
+
+  &:hover {
+    border-color: var(--border-light);
+  }
 
   h3 {
     font-size: var(--font-size-xs);
     color: var(--text-muted);
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-xs);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 500;
