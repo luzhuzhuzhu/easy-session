@@ -132,31 +132,52 @@
             </div>
             <button
               v-if="canStartSession && activeSession.status !== 'running' && activeSessionRef"
-              class="btn btn-primary btn-sm"
+              class="pane-action-btn pane-action-btn-primary"
+              type="button"
+              :title="$t('session.start')"
               @click="emit('start-session', activeSessionRef)"
             >
-              {{ $t('session.start') }}
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M5 3l7 5-7 5V3z" fill="currentColor" />
+              </svg>
             </button>
             <button
               v-else-if="canPauseSession && activeSessionRef"
-              class="btn btn-sm"
+              class="pane-action-btn"
+              type="button"
+              :title="$t('session.pause')"
               @click="emit('pause-session', activeSessionRef)"
             >
-              {{ $t('session.pause') }}
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="4" y="4" width="3" height="8" rx="0.5" fill="currentColor" />
+                <rect x="9" y="4" width="3" height="8" rx="0.5" fill="currentColor" />
+              </svg>
             </button>
             <button
               v-if="canRestartSession && activeSessionRef"
-              class="btn btn-sm"
+              class="pane-action-btn"
+              type="button"
+              :title="$t('session.restart')"
               @click="emit('restart-session', activeSessionRef)"
             >
-              {{ $t('session.restart') }}
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M13.5 7A5.5 5.5 0 1 1 8 2.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
+                <path d="M13.5 2v5H8.5" fill="currentColor" />
+              </svg>
             </button>
             <button
               v-if="canDestroySession && activeSessionRef"
-              class="btn btn-danger btn-sm"
+              class="pane-action-btn pane-action-btn-danger"
+              type="button"
+              :title="$t('session.destroy')"
               @click="emit('destroy-session', activeSessionRef)"
             >
-              {{ $t('session.destroy') }}
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="3" y="5" width="10" height="9" fill="currentColor" rx="1" />
+                <rect x="5" y="2" width="6" height="2" fill="currentColor" rx="0.5" />
+                <line x1="6.5" y1="7" x2="6.5" y2="11" stroke="var(--bg-tertiary)" stroke-width="1.5" />
+                <line x1="9.5" y1="7" x2="9.5" y2="11" stroke="var(--bg-tertiary)" stroke-width="1.5" />
+              </svg>
             </button>
           </div>
         </div>
@@ -866,20 +887,26 @@ watch(
 
 .pane-zoom-reset-btn {
   flex-shrink: 0;
-  height: 22px;
-  min-width: 42px;
+  height: 24px;
+  min-width: 48px;
   padding: 0 8px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-size: 11px;
-  line-height: 20px;
+  line-height: 22px;
   cursor: pointer;
+  transition: all 140ms ease;
 
   &:hover {
     color: var(--text-primary);
     background: var(--bg-hover);
+    border-color: var(--text-muted);
+  }
+
+  &:active {
+    transform: scale(0.96);
   }
 }
 
@@ -898,7 +925,7 @@ watch(
   min-width: 72px;
   padding: 4px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   background: var(--bg-secondary);
   box-shadow: var(--shadow-md);
 }
@@ -909,7 +936,7 @@ watch(
   color: var(--text-secondary);
   font-size: 12px;
   text-align: right;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   padding: 6px 8px;
   cursor: pointer;
 
@@ -927,6 +954,15 @@ watch(
 .pane-header-info :deep(.status-tag) {
   white-space: nowrap;
   flex-shrink: 0;
+  border-radius: 0;
+}
+
+.pane-header-info :deep(.type-badge) {
+  border-radius: 0;
+}
+
+.pane-header-info :deep(.session-runtime-info) {
+  border-radius: 0;
 }
 
 .pane-header-actions {
@@ -937,6 +973,60 @@ watch(
 
 .pane-header-actions :deep(.btn) {
   white-space: nowrap;
+}
+
+.pane-action-btn {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 140ms ease;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+.pane-action-btn-primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--bg-primary);
+
+  &:hover {
+    opacity: 0.85;
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--bg-primary);
+  }
+}
+
+.pane-action-btn-danger {
+  border-color: var(--status-error);
+  color: var(--status-error);
+
+  &:hover {
+    background: rgba(248, 113, 113, 0.15);
+    border-color: var(--status-error);
+    color: var(--status-error);
+  }
 }
 
 .pane-empty {

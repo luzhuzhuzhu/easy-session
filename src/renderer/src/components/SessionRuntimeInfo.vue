@@ -154,7 +154,7 @@ const runtimeTitle = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   padding: 2px 6px;
-  border-radius: 999px;
+  border-radius: 0;
   border: 1px solid var(--border-color);
   background: rgba(108, 158, 255, 0.08);
   color: var(--text-secondary);
@@ -173,7 +173,7 @@ const runtimeTitle = computed(() => {
 .runtime-key {
   width: 14px;
   height: 14px;
-  border-radius: 50%;
+  border-radius: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;

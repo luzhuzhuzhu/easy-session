@@ -15,7 +15,26 @@
       <nav class="nav-menu">
         <template v-for="item in navItems" :key="item.path">
           <router-link :to="item.path" class="nav-item" :title="sidebarCollapsed ? $t(item.label) : undefined">
-            <span class="nav-icon">{{ item.icon }}</span>
+            <span class="nav-icon">
+              <svg v-if="item.icon === 'dashboard'" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="2" y="2" width="5" height="5" fill="currentColor" />
+                <rect x="9" y="2" width="5" height="5" fill="currentColor" />
+                <rect x="2" y="9" width="5" height="5" fill="currentColor" />
+                <rect x="9" y="9" width="5" height="5" fill="currentColor" />
+              </svg>
+<svg v-else-if="item.icon === 'sessions'" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="2" y="2" width="12" height="12" fill="currentColor" />
+                <rect x="2" y="5" width="12" height="2" fill="var(--bg-secondary)" />
+                <rect x="4" y="8" width="8" height="1" fill="var(--bg-secondary)" />
+                <rect x="4" y="10" width="5" height="1" fill="var(--bg-secondary)" />
+              </svg>
+              <svg v-else-if="item.icon === 'projects'" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M2 4.5a1.5 1.5 0 0 1 1.5-1.5h3.2l2 2h5.3a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H3.5a1.5 1.5 0 0 1-1.5-1.5v-6z" fill="currentColor" />
+              </svg>
+              <svg v-else-if="item.icon === 'skills'" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 1.5L9.8 6h4.7l-3.8 2.8 1.5 4.7L8 12l-4.2 2.5 1.5-4.7L1.5 6h4.7L8 1.5z" fill="currentColor" />
+              </svg>
+            </span>
             <span v-if="!sidebarCollapsed" class="nav-text">{{ $t(item.label) }}</span>
             <span v-if="!sidebarCollapsed && SHORTCUT_LABELS[item.path]" class="shortcut-hint">{{ SHORTCUT_LABELS[item.path] }}</span>
           </router-link>
@@ -36,13 +55,31 @@
       </nav>
       <div class="sidebar-footer">
         <router-link to="/settings" class="nav-item" :title="sidebarCollapsed ? $t('settings.title') : undefined">
-          <span class="nav-icon">SET</span>
+          <span class="nav-icon">
+<svg viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="5" fill="currentColor" />
+              <rect x="7" y="1" width="2" height="3" fill="currentColor" />
+              <rect x="7" y="12" width="2" height="3" fill="currentColor" />
+              <rect x="1" y="7" width="3" height="2" fill="currentColor" />
+              <rect x="12" y="7" width="3" height="2" fill="currentColor" />
+              <rect x="2.5" y="2.5" width="2.5" height="2.5" fill="currentColor" />
+              <rect x="11" y="2.5" width="2.5" height="2.5" fill="currentColor" />
+              <rect x="2.5" y="11" width="2.5" height="2.5" fill="currentColor" />
+              <rect x="11" y="11" width="2.5" height="2.5" fill="currentColor" />
+              <circle cx="8" cy="8" r="2.5" fill="var(--bg-secondary)" />
+            </svg>
+          </span>
           <span v-if="!sidebarCollapsed" class="nav-text">{{ $t('settings.title') }}</span>
           <span v-if="!sidebarCollapsed" class="shortcut-hint">{{ SHORTCUT_LABELS['/settings'] }}</span>
         </router-link>
         <div v-if="!sidebarCollapsed" class="sidebar-version">v{{ appStore.version }}</div>
         <button class="collapse-btn" @click="toggleSidebar" :title="$t(sidebarCollapsed ? 'sidebar.expand' : 'sidebar.collapse')">
-          {{ sidebarCollapsed ? ">" : "<" }}
+          <svg v-if="sidebarCollapsed" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M6 3l5 5-5 5V3z" fill="currentColor" />
+          </svg>
+          <svg v-else viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M10 3l-5 5 5 5V3z" fill="currentColor" />
+          </svg>
         </button>
       </div>
     </aside>
@@ -121,10 +158,10 @@ const sessionsStore = useSessionsStore()
 const instancesStore = useInstancesStore()
 const settingsStore = useSettingsStore()
 const navItems = [
-  { path: "/dashboard", icon: "D", label: "nav.dashboard" },
-  { path: "/sessions", icon: "S", label: "nav.sessions" },
-  { path: "/projects", icon: "P", label: "nav.projects" },
-  { path: "/skills", icon: "K", label: "nav.skills" }
+  { path: "/dashboard", icon: "dashboard", label: "nav.dashboard" },
+  { path: "/sessions", icon: "sessions", label: "nav.sessions" },
+  { path: "/projects", icon: "projects", label: "nav.projects" },
+  { path: "/skills", icon: "skills", label: "nav.skills" }
 ]
 
 const recentProjects = computed(() => projectsStore.quickAccessRecentProjects.slice(0, 3))
@@ -211,7 +248,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
+  border-radius: 0;
   background: transparent;
   flex-shrink: 0;
 }
@@ -256,14 +293,22 @@ onMounted(() => {
 
 .collapse-btn {
   width: 100%;
-  padding: var(--spacing-xs);
+  height: 28px;
+  padding: 0;
   border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: var(--font-size-md);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
 
   &:hover {
     background: var(--bg-hover);
@@ -276,7 +321,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   color: var(--text-secondary);
   text-decoration: none;
   font-size: var(--font-size-sm);
@@ -307,7 +352,7 @@ onMounted(() => {
       top: 6px;
       bottom: 6px;
       width: 3px;
-      border-radius: 0 2px 2px 0;
+      border-radius: 0;
       background: var(--accent-primary);
     }
   }
@@ -316,18 +361,20 @@ onMounted(() => {
 .nav-icon {
   font-size: 11px;
   width: 28px;
-  height: 20px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   background: var(--bg-tertiary);
   color: var(--text-muted);
-  font-weight: 600;
-  font-family: var(--font-mono);
-  letter-spacing: 0.5px;
   transition: all var(--transition-fast);
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
 
   .nav-item:hover &,
   .router-link-active & {
@@ -343,7 +390,7 @@ onMounted(() => {
   opacity: 0.4;
   font-family: var(--font-mono);
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: 0;
   background: var(--bg-primary);
 }
 
@@ -366,7 +413,7 @@ onMounted(() => {
   font-size: var(--font-size-sm);
   color: var(--text-muted);
   text-decoration: none;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -449,7 +496,7 @@ onMounted(() => {
 .status-dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: 0;
   &.online { background: var(--status-success); box-shadow: 0 0 4px rgba(52, 211, 153, 0.4); }
   &.offline { background: var(--text-muted); }
 }
@@ -463,7 +510,7 @@ onMounted(() => {
 .session-count {
   padding: 2px 8px;
   background: var(--bg-tertiary);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   font-size: var(--font-size-xs);
   color: var(--accent-primary);
 }
