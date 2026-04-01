@@ -133,71 +133,86 @@ onMounted(() => loadCurrent())
 
 <style scoped lang="scss">
 .config-page {
-  padding: var(--spacing-xl);
-  max-width: 960px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 
   h1 {
-    font-size: var(--font-size-2xl);
-    margin-bottom: var(--spacing-lg);
+    font-size: var(--font-size-lg);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    margin: 0;
+    flex-shrink: 0;
   }
 }
 
 .tabs {
   display: flex;
   gap: 0;
-  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .tab {
-  padding: var(--spacing-sm) var(--spacing-lg);
+  padding: 4px 10px;
   background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
+  border: 1px solid transparent;
+  border-radius: 0;
   color: var(--text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   cursor: pointer;
   transition: all var(--transition-fast);
-  position: relative;
-  bottom: -1px;
 
-  &:hover { color: var(--text-primary); }
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+  }
   &.active {
     color: var(--accent-primary);
-    border-bottom-color: var(--accent-primary);
+    background: var(--bg-card);
+    border-color: var(--border-color);
+    border-bottom-color: var(--bg-card);
   }
 }
 
 .config-panel {
+  flex: 1;
+  overflow: auto;
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
+  padding: var(--spacing-sm);
+  border-radius: 0;
 }
 
 .file-path {
-  margin-bottom: var(--spacing-md);
-  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-xs);
   color: var(--text-secondary);
 
-  .label { color: var(--text-muted); margin-right: var(--spacing-xs); }
+  .label {
+    color: var(--text-muted);
+    margin-right: var(--spacing-xs);
+  }
   code {
     font-family: var(--font-mono);
     font-size: var(--font-size-xs);
     background: var(--bg-tertiary);
     padding: 2px 6px;
-    border-radius: var(--radius-sm);
+    border-radius: 0;
   }
 }
 
 .json-editor {
   width: 100%;
-  min-height: 360px;
+  min-height: 300px;
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
+  border-radius: 0;
+  padding: var(--spacing-sm);
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
   line-height: 1.6;
@@ -205,8 +220,13 @@ onMounted(() => loadCurrent())
   tab-size: 2;
   transition: border-color var(--transition-fast);
 
-  &:focus { outline: none; border-color: var(--accent-primary); }
-  &.modified { border-color: var(--status-warning); }
+  &:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+  }
+  &.modified {
+    border-color: var(--status-warning);
+  }
 }
 
 .modified-hint {
@@ -217,31 +237,38 @@ onMounted(() => loadCurrent())
 
 .loading {
   color: var(--text-muted);
-  padding: var(--spacing-xl) 0;
+  padding: var(--spacing-lg) 0;
   text-align: center;
 }
 
 .actions {
   display: flex;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
 }
 
-// btn, btn-primary 已在 global.scss 中定义
-
 .message {
-  margin-top: var(--spacing-md);
-  font-size: var(--font-size-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-md);
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: 0;
 
-  &.success { color: var(--status-success); background: rgba(52, 211, 153, 0.1); }
-  &.error { color: var(--status-error); background: rgba(248, 113, 113, 0.1); }
+  &.success {
+    color: var(--status-success);
+    background: rgba(52, 211, 153, 0.1);
+  }
+  &.error {
+    color: var(--status-error);
+    background: rgba(248, 113, 113, 0.1);
+  }
 }
 
 .status-bar {
-  margin-top: var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
   font-size: var(--font-size-xs);
   color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 </style>
