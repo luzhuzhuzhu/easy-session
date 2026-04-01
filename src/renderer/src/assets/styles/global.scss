@@ -333,3 +333,66 @@ textarea.form-input { resize: vertical; font-family: inherit; }
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+// ========== Icon Buttons (Sessions Style) ==========
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-light);
+    color: var(--text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.6;
+  }
+}
+
+.icon-btn-primary {
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--accent-primary) 20%, var(--border-color));
+}
+
+.icon-btn-sm {
+  width: 24px;
+  height: 24px;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.icon-btn-lg {
+  width: 32px;
+  height: 32px;
+
+  svg {
+    width: 15px;
+    height: 15px;
+  }
+}
