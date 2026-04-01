@@ -610,25 +610,31 @@ onMounted(async () => {
 
 <style scoped lang="scss">
 .settings-page {
-  padding: var(--spacing-xl);
-  max-width: 980px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 
   h1 {
-    font-size: var(--font-size-2xl);
-    margin-bottom: var(--spacing-xl);
+    font-size: var(--font-size-lg);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    margin: 0;
+    flex-shrink: 0;
   }
 }
 
 .settings-section {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
+  border-radius: 0;
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
 
   h2 {
-    font-size: var(--font-size-lg);
-    margin-bottom: var(--spacing-md);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-xs);
     color: var(--text-secondary);
   }
 }
@@ -655,7 +661,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
@@ -671,15 +677,15 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-md);
-  padding: 10px 0;
+  gap: var(--spacing-sm);
+  padding: 8px 0;
 
   & + .setting-row {
     border-top: 1px solid rgba(45, 53, 72, 0.5);
   }
 
   label {
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-sm);
     color: var(--text-primary);
   }
 
@@ -688,10 +694,10 @@ onMounted(async () => {
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-sm);
-    min-width: 200px;
+    border-radius: 0;
+    padding: 4px 8px;
+    font-size: var(--font-size-xs);
+    min-width: 160px;
 
     &:focus {
       outline: none;
@@ -734,7 +740,7 @@ onMounted(async () => {
 .remote-disabled-state {
   padding: var(--spacing-md);
   border: 1px dashed var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   background: rgba(108, 158, 255, 0.05);
   color: var(--text-secondary);
   line-height: 1.6;
@@ -743,7 +749,7 @@ onMounted(async () => {
 .remote-form-panel {
   background: linear-gradient(180deg, rgba(108, 158, 255, 0.06), rgba(108, 158, 255, 0.02));
   border: 1px solid rgba(108, 158, 255, 0.18);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
 }
@@ -770,7 +776,7 @@ onMounted(async () => {
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
+    border-radius: 0;
     padding: 10px 12px;
     font-size: var(--font-size-sm);
 
@@ -819,7 +825,7 @@ onMounted(async () => {
   gap: 4px;
   margin-top: var(--spacing-md);
   padding: 10px 12px;
-  border-radius: var(--radius-md);
+  border-radius: 0;
   font-size: var(--font-size-sm);
 }
 
@@ -850,7 +856,7 @@ onMounted(async () => {
   text-align: center;
   color: var(--text-muted);
   border: 1px dashed var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
 }
 
 .remote-instance-list {
@@ -860,7 +866,7 @@ onMounted(async () => {
 
 .remote-instance-card {
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   background: var(--bg-primary);
   padding: var(--spacing-md);
   display: flex;
@@ -910,7 +916,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 11px;
   border: 1px solid transparent;
 }
@@ -959,7 +965,7 @@ onMounted(async () => {
   gap: 6px;
   padding: 10px 12px;
   background: var(--bg-secondary);
-  border-radius: var(--radius-md);
+  border-radius: 0;
 }
 
 .meta-item-full {
@@ -987,17 +993,20 @@ onMounted(async () => {
 }
 
 .toggle-btn {
-  min-width: 36px;
-  height: 28px;
+  min-width: 28px;
+  height: 24px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-tertiary);
+  border-radius: 0;
+  background: var(--bg-card);
   color: var(--text-primary);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   cursor: pointer;
+  transition: all var(--transition-fast);
 
   &:hover {
     background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
   }
 }
 
@@ -1019,7 +1028,7 @@ onMounted(async () => {
   gap: 2px;
   padding: var(--spacing-sm);
   background: var(--bg-primary);
-  border-radius: var(--radius-md);
+  border-radius: 0;
 }
 
 .about-label {

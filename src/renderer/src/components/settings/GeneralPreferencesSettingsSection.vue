@@ -139,13 +139,13 @@ function handleSmartPriorityModeChange(event: Event): void {
 .settings-section {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
+  border-radius: 0;
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
 
   h2 {
-    font-size: var(--font-size-lg);
-    margin-bottom: var(--spacing-md);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-xs);
     color: var(--text-secondary);
   }
 }
@@ -154,15 +154,15 @@ function handleSmartPriorityModeChange(event: Event): void {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-md);
-  padding: 10px 0;
+  gap: var(--spacing-sm);
+  padding: 8px 0;
 
   & + .setting-row {
     border-top: 1px solid rgba(45, 53, 72, 0.5);
   }
 
   label {
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-sm);
     color: var(--text-primary);
   }
 
@@ -171,10 +171,10 @@ function handleSmartPriorityModeChange(event: Event): void {
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-sm);
-    min-width: 200px;
+    border-radius: 0;
+    padding: 4px 8px;
+    font-size: var(--font-size-xs);
+    min-width: 160px;
 
     &:focus {
       outline: none;
@@ -196,17 +196,20 @@ function handleSmartPriorityModeChange(event: Event): void {
 }
 
 .toggle-btn {
-  min-width: 36px;
-  height: 28px;
+  min-width: 28px;
+  height: 24px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-tertiary);
+  border-radius: 0;
+  background: var(--bg-card);
   color: var(--text-primary);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   cursor: pointer;
+  transition: all var(--transition-fast);
 
   &:hover {
     background: var(--bg-hover);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
   }
 }
 

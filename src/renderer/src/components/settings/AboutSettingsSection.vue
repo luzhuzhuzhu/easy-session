@@ -40,13 +40,13 @@ useI18n()
 .settings-section {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
+  border-radius: 0;
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
 
   h2 {
-    font-size: var(--font-size-lg);
-    margin-bottom: var(--spacing-md);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--spacing-xs);
     color: var(--text-secondary);
   }
 }
@@ -63,7 +63,7 @@ useI18n()
   gap: 2px;
   padding: var(--spacing-sm);
   background: var(--bg-primary);
-  border-radius: var(--radius-md);
+  border-radius: 0;
 }
 
 .about-label {
