@@ -6,10 +6,11 @@
       <span class="breadcrumb-current">{{ project?.name || '...' }}</span>
     </div>
 
-    <div v-if="!project" class="loading-state">{{ $t('config.loading') }}</div>
+    <div class="content-area">
+      <div v-if="!project" class="loading-state">{{ $t('config.loading') }}</div>
 
-    <template v-else>
-      <section class="overview-section">
+      <template v-else>
+        <section class="overview-section">
         <div class="overview-header">
           <input
             v-model="editName"
@@ -197,7 +198,8 @@
           </div>
         </div>
       </section>
-    </template>
+      </template>
+    </div>
 
     <CreateSessionDialog
       :visible="showCreateSessionDialog"
@@ -674,18 +676,22 @@ watch(promptTab, (_next, prev) => {
 
 <style scoped lang="scss">
 .project-detail-page {
-  padding: var(--spacing-xl);
-  max-width: 960px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 .breadcrumb {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-lg);
-  font-size: var(--font-size-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .breadcrumb-link {
@@ -697,6 +703,12 @@ watch(promptTab, (_next, prev) => {
 .breadcrumb-sep { color: var(--text-muted); }
 .breadcrumb-current { color: var(--text-primary); }
 
+.content-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+}
+
 .loading-state {
   text-align: center;
   padding: var(--spacing-xl);
@@ -704,7 +716,7 @@ watch(promptTab, (_next, prev) => {
 }
 
 .overview-section {
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-sm);
 }
 
 .overview-header {
@@ -719,7 +731,7 @@ watch(promptTab, (_next, prev) => {
   font-weight: 600;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   color: var(--text-primary);
   padding: 2px 6px;
   transition: border-color var(--transition-fast);
@@ -747,7 +759,7 @@ watch(promptTab, (_next, prev) => {
 
 .detect-badge {
   padding: 1px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
@@ -758,21 +770,21 @@ watch(promptTab, (_next, prev) => {
 .panel {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  margin-bottom: var(--spacing-md);
+  border-radius: 0;
+  margin-bottom: var(--spacing-sm);
 }
 
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md) var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-md);
   cursor: pointer;
   user-select: none;
-  &:hover { background: var(--bg-hover); border-radius: var(--radius-lg); }
+  &:hover { background: var(--bg-hover); }
 }
 
-.panel-title { font-weight: 600; font-size: var(--font-size-md); }
+.panel-title { font-weight: 600; font-size: var(--font-size-sm); }
 
 .panel-header-actions {
   display: flex;
@@ -786,7 +798,7 @@ watch(promptTab, (_next, prev) => {
   &.open { transform: rotate(90deg); }
 }
 
-.panel-body { padding: 0 var(--spacing-lg) var(--spacing-lg); }
+.panel-body { padding: 0 var(--spacing-md) var(--spacing-md); }
 
 .session-create-hint {
   margin: var(--spacing-sm) 0;
@@ -808,7 +820,7 @@ watch(promptTab, (_next, prev) => {
 
 .session-card {
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   background: var(--bg-secondary);
 }
 
@@ -895,7 +907,7 @@ watch(promptTab, (_next, prev) => {
 .options-json {
   margin: 0;
   padding: var(--spacing-sm);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   border: 1px solid var(--border-color);
   background: var(--bg-tertiary);
   color: var(--text-primary);
@@ -911,7 +923,7 @@ watch(promptTab, (_next, prev) => {
   background: var(--bg-tertiary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   font-size: var(--font-size-sm);
   font-family: var(--font-mono);
   resize: vertical;
@@ -926,7 +938,7 @@ watch(promptTab, (_next, prev) => {
 }
 
 .tab {
-  padding: 6px 12px;
+  padding: 4px 8px;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -961,7 +973,7 @@ watch(promptTab, (_next, prev) => {
     font-size: var(--font-size-xs);
     background: var(--bg-tertiary);
     padding: 2px 6px;
-    border-radius: var(--radius-sm);
+    border-radius: 0;
     word-break: break-all;
   }
 }
@@ -985,7 +997,7 @@ watch(promptTab, (_next, prev) => {
   justify-content: center;
   color: var(--text-muted);
   background: rgba(15, 20, 25, 0.32);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   backdrop-filter: blur(1px);
 }
 
@@ -1012,7 +1024,7 @@ watch(promptTab, (_next, prev) => {
   margin-top: var(--spacing-md);
   font-size: var(--font-size-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   &.success { color: var(--status-success); background: rgba(52, 211, 153, 0.1); }
   &.error { color: var(--status-error); background: rgba(248, 113, 113, 0.1); }
 }
@@ -1027,7 +1039,7 @@ watch(promptTab, (_next, prev) => {
 
 .skill-card {
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   background: var(--bg-secondary);
 }
 
