@@ -41,12 +41,12 @@ useI18n()
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 0;
-  padding: var(--spacing-sm);
-  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
 
   h2 {
-    font-size: var(--font-size-sm);
-    margin-bottom: var(--spacing-xs);
+    font-size: var(--font-size-lg);
+    margin-bottom: var(--spacing-md);
     color: var(--text-secondary);
   }
 }

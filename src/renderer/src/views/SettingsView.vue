@@ -610,18 +610,13 @@ onMounted(async () => {
 
 <style scoped lang="scss">
 .settings-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
+  padding: var(--spacing-xl);
+  max-width: 980px;
+  overflow-y: auto;
 
   h1 {
-    font-size: var(--font-size-lg);
-    padding: var(--spacing-sm) var(--spacing-lg);
-    border-bottom: 1px solid var(--border-color);
-    background: var(--bg-secondary);
-    margin: 0;
-    flex-shrink: 0;
+    font-size: var(--font-size-2xl);
+    margin-bottom: var(--spacing-xl);
   }
 }
 
@@ -629,12 +624,12 @@ onMounted(async () => {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 0;
-  padding: var(--spacing-sm);
-  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
 
   h2 {
-    font-size: var(--font-size-sm);
-    margin-bottom: var(--spacing-xs);
+    font-size: var(--font-size-lg);
+    margin-bottom: var(--spacing-md);
     color: var(--text-secondary);
   }
 }
@@ -677,15 +672,15 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-sm);
-  padding: 8px 0;
+  gap: var(--spacing-md);
+  padding: 10px 0;
 
   & + .setting-row {
     border-top: 1px solid rgba(45, 53, 72, 0.5);
   }
 
   label {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-md);
     color: var(--text-primary);
   }
 
@@ -695,9 +690,9 @@ onMounted(async () => {
     color: var(--text-primary);
     border: 1px solid var(--border-color);
     border-radius: 0;
-    padding: 4px 8px;
-    font-size: var(--font-size-xs);
-    min-width: 160px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    min-width: 200px;
 
     &:focus {
       outline: none;
@@ -993,20 +988,17 @@ onMounted(async () => {
 }
 
 .toggle-btn {
-  min-width: 28px;
-  height: 24px;
+  min-width: 36px;
+  height: 28px;
   border: 1px solid var(--border-color);
   border-radius: 0;
-  background: var(--bg-card);
+  background: var(--bg-tertiary);
   color: var(--text-primary);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
 
   &:hover {
     background: var(--bg-hover);
-    border-color: var(--accent-primary);
-    color: var(--accent-primary);
   }
 }
 

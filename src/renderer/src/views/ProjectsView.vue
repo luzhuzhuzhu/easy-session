@@ -528,6 +528,7 @@ watch(
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -585,11 +586,16 @@ watch(
 
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, auto);
+  align-content: start;
   gap: 8px;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px;
+  align-items: start;
 }
 
 .project-card {
@@ -599,6 +605,11 @@ watch(
   padding: var(--spacing-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
+  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  contain: layout paint style;
 
   &:hover {
     border-color: var(--border-light);
@@ -612,17 +623,19 @@ watch(
 .card-header {
   display: flex;
   justify-content: space-between;
-  gap: var(--spacing-sm);
-  align-items: flex-start;
-  margin-bottom: var(--spacing-sm);
+  gap: var(--spacing-xs);
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .card-title-wrap {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   min-width: 0;
+  flex: 1;
 }
 
 .card-name {
@@ -630,6 +643,9 @@ watch(
   font-weight: 600;
   color: var(--text-primary);
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-instance-badge {
@@ -640,6 +656,8 @@ watch(
   background: rgba(96, 165, 250, 0.12);
   color: var(--accent-primary);
   font-size: var(--font-size-xs);
+  white-space: nowrap;
+  flex-shrink: 0;
 
   &.local {
     background: rgba(148, 163, 184, 0.14);
@@ -655,6 +673,8 @@ watch(
   font-size: var(--font-size-xs);
   background: var(--bg-tertiary);
   color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 
   &.status-online {
     color: var(--status-success);
@@ -673,6 +693,7 @@ watch(
   gap: 2px;
   opacity: 0;
   transition: opacity var(--transition-fast);
+  flex-shrink: 0;
 }
 
 .icon-btn {
@@ -699,11 +720,13 @@ watch(
 .card-path {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: var(--spacing-sm);
   font-family: var(--font-mono);
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.45;
 }
 
 .card-footer {
@@ -711,11 +734,31 @@ watch(
   align-items: center;
   justify-content: flex-end;
   gap: var(--spacing-sm);
+  flex-shrink: 0;
+  margin-top: auto;
 }
 
 .card-meta {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
+}
+
+@media (min-width: 1600px) {
+  .project-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1320px) {
+  .project-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 920px) {
+  .project-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
 }
 
 .context-overlay {

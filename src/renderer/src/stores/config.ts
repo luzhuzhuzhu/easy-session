@@ -23,6 +23,10 @@ export const useConfigStore = defineStore('config', () => {
   const lastSaved = ref<string | null>(null)
   const activeTab = ref<'claude' | 'codex' | 'opencode'>('claude')
 
+  function setActiveTab(tab: 'claude' | 'codex' | 'opencode') {
+    activeTab.value = tab
+  }
+
   function beginLoading() {
     loadingCount.value += 1
     loading.value = loadingCount.value > 0
@@ -94,6 +98,7 @@ export const useConfigStore = defineStore('config', () => {
     loading,
     lastSaved,
     activeTab,
+    setActiveTab,
     loadClaudeConfig,
     saveClaudeConfig,
     loadCodexConfig,

@@ -1,6 +1,6 @@
 <template>
   <div class="config-editor-panel">
-    <div class="tabs">
+    <div v-if="!cli" class="tabs">
       <button class="tab" :class="{ active: configStore.activeTab === 'claude' }" @click="configStore.activeTab = 'claude'">
         {{ $t('config.claudeTab') }}
       </button>
@@ -50,6 +50,10 @@ import { useI18n } from 'vue-i18n'
 import { useConfigStore } from '@/stores/config'
 import { useToast } from '@/composables/useToast'
 
+const props = defineProps<{
+  cli?: 'claude' | 'codex' | 'opencode'
+}>()
+
 const { t } = useI18n()
 const configStore = useConfigStore()
 const toast = useToast()
@@ -64,15 +68,17 @@ const codexPath = '~/.codex/config.json'
 const opencodePath = '~/.config/opencode/opencode.json'
 
 const currentPath = computed(() => {
-  if (configStore.activeTab === 'claude') return claudePath
-  if (configStore.activeTab === 'codex') return codexPath
+  const tab = props.cli || configStore.activeTab
+  if (tab === 'claude') return claudePath
+  if (tab === 'codex') return codexPath
   return opencodePath
 })
 
 const currentConfigText = computed(() => {
-  const cfg = configStore.activeTab === 'claude'
+  const tab = props.cli || configStore.activeTab
+  const cfg = tab === 'claude'
     ? configStore.claudeConfig
-    : configStore.activeTab === 'codex'
+    : tab === 'codex'
       ? configStore.codexConfig
       : configStore.opencodeConfig
   return JSON.stringify(cfg, null, 2)
@@ -85,9 +91,10 @@ function syncEditor() {
 }
 
 async function loadCurrent(force = false) {
-  if (configStore.activeTab === 'claude') {
+  const tab = props.cli || configStore.activeTab
+  if (tab === 'claude') {
     await configStore.loadClaudeConfig(force)
-  } else if (configStore.activeTab === 'codex') {
+  } else if (tab === 'codex') {
     await configStore.loadCodexConfig(force)
   } else {
     await configStore.loadOpenCodeConfig(force)
@@ -100,9 +107,10 @@ async function handleSave() {
   message.value = ''
   try {
     const parsed = JSON.parse(editText.value)
-    if (configStore.activeTab === 'claude') {
+    const tab = props.cli || configStore.activeTab
+    if (tab === 'claude') {
       await configStore.saveClaudeConfig(parsed)
-    } else if (configStore.activeTab === 'codex') {
+    } else if (tab === 'codex') {
       await configStore.saveCodexConfig(parsed)
     } else {
       await configStore.saveOpenCodeConfig(parsed)
@@ -125,8 +133,10 @@ async function handleReload() {
 }
 
 watch(() => configStore.activeTab, () => {
-  message.value = ''
-  void loadCurrent()
+  if (!props.cli) {
+    message.value = ''
+    void loadCurrent()
+  }
 })
 
 watch(currentConfigText, (val) => {
@@ -140,7 +150,7 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .config-editor-panel {
-  margin-top: var(--spacing-sm);
+  margin-top: 0;
 }
 
 .tabs {
@@ -175,8 +185,8 @@ onMounted(() => {
 .config-panel {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
+  border-radius: 0;
+  padding: var(--spacing-md);
 }
 
 .file-path {
@@ -194,17 +204,18 @@ onMounted(() => {
     font-size: var(--font-size-xs);
     background: var(--bg-tertiary);
     padding: 2px 6px;
-    border-radius: var(--radius-sm);
+    border-radius: 0;
   }
 }
 
 .json-editor {
   width: 100%;
-  min-height: 360px;
+  min-height: 400px;
+  max-height: 500px;
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   padding: var(--spacing-md);
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
@@ -212,6 +223,7 @@ onMounted(() => {
   resize: vertical;
   tab-size: 2;
   transition: border-color var(--transition-fast);
+  overflow-y: auto;
 
   &:focus {
     outline: none;
@@ -235,7 +247,7 @@ onMounted(() => {
   justify-content: center;
   color: var(--text-muted);
   background: rgba(15, 20, 25, 0.32);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   backdrop-filter: blur(1px);
 }
 
@@ -255,7 +267,7 @@ onMounted(() => {
   margin-top: var(--spacing-md);
   font-size: var(--font-size-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-md);
+  border-radius: 0;
 
   &.success {
     color: var(--status-success);

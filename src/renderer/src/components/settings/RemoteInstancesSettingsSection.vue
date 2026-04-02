@@ -214,7 +214,7 @@ defineExpose({
 .settings-section {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-lg);
 
@@ -312,7 +312,7 @@ defineExpose({
 .remote-form-panel {
   background: linear-gradient(180deg, rgba(108, 158, 255, 0.06), rgba(108, 158, 255, 0.02));
   border: 1px solid rgba(108, 158, 255, 0.18);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
 }
@@ -338,7 +338,7 @@ defineExpose({
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
+    border-radius: 0;
     padding: 10px 12px;
     font-size: var(--font-size-sm);
 
@@ -382,7 +382,7 @@ defineExpose({
   text-align: center;
   color: var(--text-muted);
   border: 1px dashed var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
 }
 
 .remote-instance-list {
@@ -392,7 +392,7 @@ defineExpose({
 
 .remote-instance-card {
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   background: var(--bg-primary);
   padding: var(--spacing-md);
   display: flex;
@@ -491,7 +491,7 @@ defineExpose({
   gap: 6px;
   padding: 10px 12px;
   background: var(--bg-secondary);
-  border-radius: var(--radius-md);
+  border-radius: 0;
 }
 
 .meta-label {

@@ -1,11 +1,5 @@
 ﻿<template>
   <div class="project-detail-page">
-    <div class="breadcrumb">
-      <router-link to="/projects" class="breadcrumb-link">{{ $t('project.title') }}</router-link>
-      <span class="breadcrumb-sep">/</span>
-      <span class="breadcrumb-current">{{ project?.name || '...' }}</span>
-    </div>
-
     <div class="content-area">
       <div v-if="!project" class="loading-state">{{ $t('config.loading') }}</div>
 
@@ -681,27 +675,6 @@ watch(promptTab, (_next, prev) => {
   height: 100%;
   overflow: hidden;
 }
-
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.breadcrumb-link {
-  color: var(--accent-primary);
-  text-decoration: none;
-  &:hover { text-decoration: underline; }
-}
-
-.breadcrumb-sep { color: var(--text-muted); }
-.breadcrumb-current { color: var(--text-primary); }
 
 .content-area {
   flex: 1;

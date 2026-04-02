@@ -5,9 +5,14 @@
       <p>{{ $t('dashboard.description') }}</p>
     </div>
 
-<div class="cards">
-      <div class="card cli-card">
-        <h3>{{ $t('dashboard.claudeStatus') }}</h3>
+    <div class="cli-sections">
+      <div class="card cli-card clickable" @click="toggleCliConfig('claude')">
+        <div class="card-header">
+          <h3>{{ $t('dashboard.claudeStatus') }}</h3>
+          <svg class="chevron" :class="{ rotated: activeCli === 'claude' }" viewBox="0 0 16 16" width="12" height="12">
+            <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
+          </svg>
+        </div>
         <div class="cli-status">
           <span class="indicator" :class="statusClass(appStore.claudeAvailable, checking)"></span>
           <span class="status-text">{{ statusText(appStore.claudeAvailable, checking) }}</span>
@@ -17,8 +22,14 @@
           <div v-if="appStore.claudeInfo.version"><span class="label">{{ $t('dashboard.cliVersion') }}</span> {{ appStore.claudeInfo.version }}</div>
         </div>
       </div>
-      <div class="card cli-card">
-        <h3>{{ $t('dashboard.codexStatus') }}</h3>
+
+      <div class="card cli-card clickable" @click="toggleCliConfig('codex')">
+        <div class="card-header">
+          <h3>{{ $t('dashboard.codexStatus') }}</h3>
+          <svg class="chevron" :class="{ rotated: activeCli === 'codex' }" viewBox="0 0 16 16" width="12" height="12">
+            <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
+          </svg>
+        </div>
         <div class="cli-status">
           <span class="indicator" :class="statusClass(appStore.codexAvailable, checking)"></span>
           <span class="status-text">{{ statusText(appStore.codexAvailable, checking) }}</span>
@@ -28,8 +39,14 @@
           <div v-if="appStore.codexInfo.version"><span class="label">{{ $t('dashboard.cliVersion') }}</span> {{ appStore.codexInfo.version }}</div>
         </div>
       </div>
-      <div class="card cli-card">
-        <h3>{{ $t('dashboard.opencodeStatus') }}</h3>
+
+      <div class="card cli-card clickable" @click="toggleCliConfig('opencode')">
+        <div class="card-header">
+          <h3>{{ $t('dashboard.opencodeStatus') }}</h3>
+          <svg class="chevron" :class="{ rotated: activeCli === 'opencode' }" viewBox="0 0 16 16" width="12" height="12">
+            <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
+          </svg>
+        </div>
         <div class="cli-status">
           <span class="indicator" :class="statusClass(appStore.opencodeAvailable, checking)"></span>
           <span class="status-text">{{ statusText(appStore.opencodeAvailable, checking) }}</span>
@@ -41,23 +58,28 @@
       </div>
     </div>
 
-    <div class="cards">
-      <div class="card stat-card">
-        <h3>{{ $t('dashboard.activeProjects') }}</h3>
-        <span class="stat">{{ quickAccessProjectCount }}</span>
-      </div>
-      <div class="card stat-card">
-        <h3>{{ $t('dashboard.activeSessions') }}</h3>
-        <span class="stat">{{ runningSessions }}</span>
-      </div>
+    <div v-if="activeCli" class="fullwidth-config">
+      <ConfigEditorPanel :cli="activeCli" />
     </div>
 
-      <div v-if="quickAccessRecentProjects.length" class="recent-projects">
+    <div class="stats-and-recent">
+      <div class="stats-col">
+        <div class="card stat-card">
+          <h3>{{ $t('dashboard.activeProjects') }}</h3>
+          <span class="stat">{{ quickAccessProjectCount }}</span>
+        </div>
+        <div class="card stat-card">
+          <h3>{{ $t('dashboard.activeSessions') }}</h3>
+          <span class="stat">{{ runningSessions }}</span>
+        </div>
+      </div>
+
+      <div class="recent-projects">
         <h3>{{ $t('dashboard.recentProjects') }}</h3>
         <p v-if="projectsStore.unavailableRemoteProjectCount > 0" class="recent-note">
           {{ $t('dashboard.remoteUnavailableHint') }}
         </p>
-        <div class="recent-list">
+        <div v-if="quickAccessRecentProjects.length" class="recent-list">
           <div
             v-for="p in quickAccessRecentProjects"
             :key="p.globalProjectKey"
@@ -66,6 +88,19 @@
           >
             <span class="recent-name">{{ p.name }}</span>
             <span class="recent-path">{{ p.path }}</span>
+          </div>
+        </div>
+        <div v-else class="recent-empty">
+          <svg viewBox="0 0 16 16" width="32" height="32" opacity="0.3">
+            <path d="M2 4.5a1.5 1.5 0 0 1 1.5-1.5h3.2l2 2h5.3a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H3.5a1.5 1.5 0 0 1-1.5-1.5v-6z" fill="none" stroke="currentColor" stroke-width="1.2" />
+          </svg>
+          <p>{{ $t('dashboard.noRecentProjects') }}</p>
+          <button class="action-btn primary" @click="handleNewProject">
+            <svg viewBox="0 0 16 16" width="14" height="14">
+              <path d="M8 3.25v9.5M3.25 8h9.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
+            </svg>
+            {{ $t('dashboard.newProject') }}
+          </button>
         </div>
       </div>
     </div>
@@ -73,40 +108,19 @@
     <div class="quick-actions">
       <h3>{{ $t('dashboard.quickActions') }}</h3>
       <div class="actions">
-        <button class="action-btn" @click="handleNewProject">
-          <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+        <button class="action-btn primary" @click="handleNewProject">
+          <svg viewBox="0 0 16 16" width="14" height="14">
             <path d="M8 3.25v9.5M3.25 8h9.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
           </svg>
           {{ $t('dashboard.newProject') }}
         </button>
         <button class="action-btn" @click="$router.push('/sessions')">
-          <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+          <svg viewBox="0 0 16 16" width="14" height="14">
             <rect x="4" y="4" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1.6" />
           </svg>
           {{ $t('dashboard.newSession') }}
         </button>
-        <button class="action-btn" @click="openConfigPanel">
-          <svg viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
-            <circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.6" />
-            <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6" />
-          </svg>
-          {{ $t('dashboard.openConfig') }}
-        </button>
       </div>
-    </div>
-
-    <div class="config-merged">
-      <div class="config-merged-head">
-        <h3>{{ $t('config.title') }}</h3>
-        <button class="action-btn action-btn-small" @click="toggleConfigPanel">
-          <svg viewBox="0 0 16 16" aria-hidden="true" width="12" height="12">
-            <path v-if="configPanelOpen" d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
-            <path v-else d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
-          </svg>
-          {{ $t(configPanelOpen ? 'dashboard.hideConfig' : 'dashboard.showConfig') }}
-        </button>
-      </div>
-      <ConfigEditorPanel v-if="configPanelOpen" />
     </div>
   </div>
 </template>
@@ -119,6 +133,7 @@ import { useAppStore } from '@/stores/app'
 import { useProjectsStore } from '@/stores/projects'
 import { useSessionsStore } from '@/stores/sessions'
 import { useInstancesStore } from '@/stores/instances'
+import { useConfigStore } from '@/stores/config'
 import { selectFolder } from '@/api/local-project'
 import ConfigEditorPanel from '@/components/ConfigEditorPanel.vue'
 import { buildProjectRouteLocation } from '@/utils/project-routing'
@@ -130,8 +145,9 @@ const appStore = useAppStore()
 const projectsStore = useProjectsStore()
 const sessionsStore = useSessionsStore()
 const instancesStore = useInstancesStore()
+const configStore = useConfigStore()
 const checking = ref(true)
-const configPanelOpen = ref(false)
+const activeCli = ref<'claude' | 'codex' | 'opencode' | null>(null)
 
 const runningSessions = computed(() =>
   sessionsStore.unifiedSessions.filter((session) => session.status === 'running').length
@@ -155,27 +171,33 @@ function queryPanelValue(): string {
 }
 
 function syncPanelFromQuery(): void {
-  configPanelOpen.value = queryPanelValue() === 'advanced'
+  const panel = queryPanelValue()
+  if (panel === 'claude' || panel === 'codex' || panel === 'opencode') {
+    activeCli.value = panel
+  } else {
+    activeCli.value = null
+  }
 }
 
-function replacePanelQuery(open: boolean): void {
+function replacePanelQuery(cli: 'claude' | 'codex' | 'opencode' | null): void {
   const nextQuery: LocationQueryRaw = { ...route.query }
-  if (open) {
-    nextQuery.panel = 'advanced'
+  if (cli) {
+    nextQuery.panel = cli
   } else {
     delete nextQuery.panel
   }
   void router.replace({ path: '/dashboard', query: nextQuery })
 }
 
-function openConfigPanel(): void {
-  configPanelOpen.value = true
-  replacePanelQuery(true)
-}
-
-function toggleConfigPanel(): void {
-  configPanelOpen.value = !configPanelOpen.value
-  replacePanelQuery(configPanelOpen.value)
+function toggleCliConfig(cli: 'claude' | 'codex' | 'opencode') {
+  configStore.setActiveTab(cli)
+  if (activeCli.value === cli) {
+    activeCli.value = null
+    replacePanelQuery(null)
+  } else {
+    activeCli.value = cli
+    replacePanelQuery(cli)
+  }
 }
 
 async function handleNewProject() {
@@ -219,7 +241,7 @@ watch(
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .welcome {
@@ -239,34 +261,68 @@ watch(
   }
 }
 
-.cards {
+.cli-sections {
   display: flex;
-  gap: 8px;
-  padding: 8px;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
   flex-shrink: 0;
   overflow-x: auto;
+}
+
+.fullwidth-config {
+  margin: 0 var(--spacing-md);
+  padding-bottom: var(--spacing-md);
 }
 
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 0;
-  padding: var(--spacing-sm);
+  padding: var(--spacing-md);
   transition: all var(--transition-fast);
-  flex: 1;
-  min-width: 200px;
 
-  &:hover {
-    border-color: var(--border-light);
+  &.cli-card {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  &.clickable {
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--accent-primary);
+      background: var(--bg-hover);
+    }
   }
 
   h3 {
     font-size: var(--font-size-xs);
     color: var(--text-muted);
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 500;
+  }
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-sm);
+
+  h3 {
+    margin-bottom: 0;
+  }
+
+  .chevron {
+    color: var(--text-muted);
+    transition: transform var(--transition-fast);
+
+    &.rotated {
+      transform: rotate(180deg);
+      color: var(--accent-primary);
+    }
   }
 }
 
@@ -319,14 +375,45 @@ watch(
   div + div { margin-top: 4px; }
 }
 
-.stat {
-  font-size: var(--font-size-xl);
-  font-weight: 700;
-  color: var(--accent-primary);
+.stats-and-recent {
+  display: flex;
+  gap: var(--spacing-md);
+  padding: 0 var(--spacing-md) var(--spacing-md);
+  flex-shrink: 0;
+  overflow-x: auto;
+  align-items: stretch;
+}
+
+.stats-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  width: 200px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  flex: 1;
+
+  h3 {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin: 0;
+  }
+
+  .stat {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+  }
 }
 
 .recent-projects {
-  padding: 8px;
   flex: 1;
   overflow-y: auto;
 
@@ -340,7 +427,7 @@ watch(
 .recent-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .recent-note {
@@ -377,8 +464,24 @@ watch(
   font-family: var(--font-mono);
 }
 
+.recent-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl);
+  color: var(--text-muted);
+  text-align: center;
+
+  p {
+    font-size: var(--font-size-sm);
+    margin: 0;
+  }
+}
+
 .quick-actions {
-  padding: 8px;
+  padding: var(--spacing-md);
   border-top: 1px solid var(--border-color);
   flex-shrink: 0;
 
@@ -389,28 +492,9 @@ watch(
   }
 }
 
-.config-merged {
-  padding: 8px;
-  border-top: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-
-.config-merged-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--spacing-sm);
-
-  h3 {
-    font-size: var(--font-size-sm);
-    color: var(--text-secondary);
-    margin: 0;
-  }
-}
-
 .actions {
   display: flex;
-  gap: 6px;
+  gap: var(--spacing-sm);
   flex-wrap: wrap;
 }
 
@@ -434,12 +518,19 @@ watch(
     color: var(--accent-primary);
   }
 
+  &.primary {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--bg-primary);
+
+    &:hover {
+      background: var(--accent-primary);
+      opacity: 0.9;
+    }
+  }
+
   svg {
     flex-shrink: 0;
   }
-}
-
-.action-btn-small {
-  padding: 6px 12px;
 }
 </style>

@@ -43,7 +43,7 @@ useI18n()
 .settings-section {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-lg);
 
@@ -74,7 +74,7 @@ useI18n()
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
+    border-radius: 0;
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-sm);
     min-width: 200px;
