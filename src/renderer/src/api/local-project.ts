@@ -10,6 +10,7 @@ interface ProjectInspectorCacheEntry<T> {
 
 const projectInspectorReadCache = new Map<string, ProjectInspectorCacheEntry<unknown>>()
 const projectInspectorInFlight = new Map<string, Promise<unknown>>()
+const projectInspectorTargetVersions = new Map<string, number>()
 
 function getProjectInspectorTargetKey(target: ProjectInspectorTarget): string {
   if (target.projectId) {
@@ -28,9 +29,12 @@ function buildProjectInspectorCacheKey(
   target: ProjectInspectorTarget,
   parts: Array<string | number | undefined>
 ): string {
+  const targetKey = getProjectInspectorTargetKey(target)
+  const targetVersion = projectInspectorTargetVersions.get(targetKey) ?? 0
   return [
     scope,
-    getProjectInspectorTargetKey(target),
+    targetKey,
+    targetVersion,
     ...parts.map((part) => String(part ?? ''))
   ].join('::')
 }
@@ -89,6 +93,11 @@ function invalidateProjectInspectorCache(target?: ProjectInspectorTarget): void 
       projectInspectorInFlight.delete(key)
     }
   }
+}
+
+function bumpProjectInspectorTargetVersion(target: ProjectInspectorTarget): void {
+  const targetKey = getProjectInspectorTargetKey(target)
+  projectInspectorTargetVersions.set(targetKey, (projectInspectorTargetVersions.get(targetKey) ?? 0) + 1)
 }
 
 export interface Project {
@@ -407,42 +416,74 @@ export function getProjectGitBranches(target: ProjectInspectorTarget): Promise<P
 
 export function stageProjectFile(target: ProjectInspectorTarget, relativePath: string): Promise<void> {
   invalidateProjectInspectorCache(target)
-  return ipc.invoke<void>('project:gitStage', target, relativePath)
+  return ipc.invoke<void>('project:gitStage', target, relativePath).then((result) => {
+    bumpProjectInspectorTargetVersion(target)
+    invalidateProjectInspectorCache(target)
+    return result
+  })
 }
 
 export function unstageProjectFile(target: ProjectInspectorTarget, relativePath: string): Promise<void> {
   invalidateProjectInspectorCache(target)
-  return ipc.invoke<void>('project:gitUnstage', target, relativePath)
+  return ipc.invoke<void>('project:gitUnstage', target, relativePath).then((result) => {
+    bumpProjectInspectorTargetVersion(target)
+    invalidateProjectInspectorCache(target)
+    return result
+  })
 }
 
 export function discardProjectFile(target: ProjectInspectorTarget, relativePath: string): Promise<void> {
   invalidateProjectInspectorCache(target)
-  return ipc.invoke<void>('project:gitDiscard', target, relativePath)
+  return ipc.invoke<void>('project:gitDiscard', target, relativePath).then((result) => {
+    bumpProjectInspectorTargetVersion(target)
+    invalidateProjectInspectorCache(target)
+    return result
+  })
 }
 
 export function commitProjectChanges(target: ProjectInspectorTarget, message: string): Promise<void> {
   invalidateProjectInspectorCache(target)
-  return ipc.invoke<void>('project:gitCommit', target, message)
+  return ipc.invoke<void>('project:gitCommit', target, message).then((result) => {
+    bumpProjectInspectorTargetVersion(target)
+    invalidateProjectInspectorCache(target)
+    return result
+  })
 }
 
 export function checkoutBranch(target: ProjectInspectorTarget, branchName: string): Promise<void> {
   invalidateProjectInspectorCache(target)
-  return ipc.invoke<void>('project:gitCheckout', target, branchName)
+  return ipc.invoke<void>('project:gitCheckout', target, branchName).then((result) => {
+    bumpProjectInspectorTargetVersion(target)
+    invalidateProjectInspectorCache(target)
+    return result
+  })
 }
 
 export function fetchProjectGitRemote(target: ProjectInspectorTarget): Promise<void> {
   invalidateProjectInspectorCache(target)
-  return ipc.invoke<void>('project:gitFetch', target)
+  return ipc.invoke<void>('project:gitFetch', target).then((result) => {
+    bumpProjectInspectorTargetVersion(target)
+    invalidateProjectInspectorCache(target)
+    return result
+  })
 }
 
 export function pullProjectGitCurrentBranch(target: ProjectInspectorTarget): Promise<void> {
   invalidateProjectInspectorCache(target)
-  return ipc.invoke<void>('project:gitPull', target)
+  return ipc.invoke<void>('project:gitPull', target).then((result) => {
+    bumpProjectInspectorTargetVersion(target)
+    invalidateProjectInspectorCache(target)
+    return result
+  })
 }
 
 export function pushProjectGitCurrentBranch(target: ProjectInspectorTarget): Promise<void> {
   invalidateProjectInspectorCache(target)
-  return ipc.invoke<void>('project:gitPush', target)
+  return ipc.invoke<void>('project:gitPush', target).then((result) => {
+    bumpProjectInspectorTargetVersion(target)
+    invalidateProjectInspectorCache(target)
+    return result
+  })
 }
 
 export function getCommitChanges(target: ProjectInspectorTarget, commitHash: string): Promise<ProjectGitCommitChangesResult> {

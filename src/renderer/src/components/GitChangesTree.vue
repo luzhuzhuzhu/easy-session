@@ -22,6 +22,18 @@
                 <TreeIcon :name="isDirectoryCollapsed('staged', node.path) ? 'caret-collapsed' : 'caret-expanded'" :size="14" />
                 <TreeIcon :name="isDirectoryCollapsed('staged', node.path) ? 'directory' : 'directory-open'" :size="14" />
                 <span class="tree-item-path">{{ node.name }}</span>
+                <span class="tree-actions" @click.stop>
+                  <button
+                    class="tree-action-btn"
+                    type="button"
+                    :title="$t('inspector.unstageAction')"
+                    @click="handleUnstage(node.path)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M12 8H4M7.5 4.5L4 8l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </span>
               </button>
               <button
                 v-else
@@ -74,6 +86,28 @@
                 <TreeIcon :name="isDirectoryCollapsed('unstaged', node.path) ? 'caret-collapsed' : 'caret-expanded'" :size="14" />
                 <TreeIcon :name="isDirectoryCollapsed('unstaged', node.path) ? 'directory' : 'directory-open'" :size="14" />
                 <span class="tree-item-path">{{ node.name }}</span>
+                <span class="tree-actions" @click.stop>
+                  <button
+                    class="tree-action-btn"
+                    type="button"
+                    :title="$t('inspector.discardAction')"
+                    @click="handleDiscard(node.path)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                  </button>
+                  <button
+                    class="tree-action-btn primary"
+                    type="button"
+                    :title="$t('inspector.stageAction')"
+                    @click="handleStage(node.path)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M4 8h8M8.5 4.5L12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </span>
               </button>
               <button
                 v-else
@@ -121,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import TreeIcon from '@/components/tree/TreeIcon.vue'
 import VirtualTree from '@/components/tree/VirtualTree.vue'
 import type { ProjectGitStatusItem } from '@/api/local-project'
@@ -129,6 +163,7 @@ import type { ProjectGitStatusItem } from '@/api/local-project'
 defineOptions({ name: 'GitChangesTree' })
 
 type GroupKey = 'staged' | 'unstaged'
+const LARGE_GROUP_AUTO_COLLAPSE_THRESHOLD = 300
 
 interface ChangeTreeDirectoryNode {
   kind: 'directory'
@@ -186,10 +221,30 @@ const collapsedGroups = reactive<Record<GroupKey, boolean>>({
   unstaged: false
 })
 
-const collapsedDirectories = reactive<Record<GroupKey, string[]>>({
-  staged: [],
-  unstaged: []
+const collapsedDirectories = reactive<Record<GroupKey, Record<string, true>>>({
+  staged: {},
+  unstaged: {}
 })
+
+const directoryCollapseInitialized = reactive<Record<GroupKey, boolean>>({
+  staged: false,
+  unstaged: false
+})
+
+const groupTouched = reactive<Record<GroupKey, boolean>>({
+  staged: false,
+  unstaged: false
+})
+
+const directoryTouched = reactive<Record<GroupKey, boolean>>({
+  staged: false,
+  unstaged: false
+})
+
+const groupSignature = computed<Record<GroupKey, string>>(() => ({
+  staged: buildGroupSignature(stagedEntries.value),
+  unstaged: buildGroupSignature(unstagedEntries.value)
+}))
 
 const stagedEntries = computed(() => {
   return props.items
@@ -203,8 +258,32 @@ const unstagedEntries = computed(() => {
     .sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'))
 })
 
-const stagedVisibleNodes = computed(() => flattenTree(buildTree(stagedEntries.value), 'staged'))
-const unstagedVisibleNodes = computed(() => flattenTree(buildTree(unstagedEntries.value), 'unstaged'))
+const stagedTree = computed(() => buildTree(stagedEntries.value))
+const unstagedTree = computed(() => buildTree(unstagedEntries.value))
+
+const stagedVisibleNodes = computed(() => {
+  if (collapsedGroups.staged) return []
+  return flattenTree(stagedTree.value, 'staged')
+})
+
+const unstagedVisibleNodes = computed(() => {
+  if (collapsedGroups.unstaged) return []
+  return flattenTree(unstagedTree.value, 'unstaged')
+})
+
+watch(stagedTree, (tree) => {
+  initializeLargeGroupState('staged', stagedEntries.value.length, tree)
+}, { immediate: true })
+
+watch(unstagedTree, (tree) => {
+  initializeLargeGroupState('unstaged', unstagedEntries.value.length, tree)
+}, { immediate: true })
+
+watch(groupSignature, (next, prev) => {
+  const previous = prev ?? { staged: '', unstaged: '' }
+  resetGroupStateIfNeeded('staged', next.staged, previous.staged)
+  resetGroupStateIfNeeded('unstaged', next.unstaged, previous.unstaged)
+}, { immediate: true })
 
 function buildTree(items: ProjectGitStatusItem[]): ChangeTreeNode[] {
   const root = new Map<string, ChangeTreeNode>()
@@ -317,19 +396,26 @@ function isSelected(item: ProjectGitStatusItem, viewMode: 'staged' | 'unstaged')
 }
 
 function isDirectoryCollapsed(group: GroupKey, path: string): boolean {
-  return collapsedDirectories[group].includes(path)
+  return Boolean(collapsedDirectories[group][path])
 }
 
 function toggleGroup(group: GroupKey): void {
+  groupTouched[group] = true
   collapsedGroups[group] = !collapsedGroups[group]
 }
 
 function toggleDirectory(group: GroupKey, path: string): void {
+  directoryTouched[group] = true
   if (isDirectoryCollapsed(group, path)) {
-    collapsedDirectories[group] = collapsedDirectories[group].filter((item) => item !== path)
+    const next = { ...collapsedDirectories[group] }
+    delete next[path]
+    collapsedDirectories[group] = next
     return
   }
-  collapsedDirectories[group] = [...collapsedDirectories[group], path]
+  collapsedDirectories[group] = {
+    ...collapsedDirectories[group],
+    [path]: true
+  }
 }
 
 function handleSelect(item: ProjectGitStatusItem, viewMode: 'staged' | 'unstaged'): void {
@@ -368,6 +454,54 @@ function rowStyle(depth: number): Record<string, string> {
   return {
     paddingLeft: `${12 + depth * 14}px`
   }
+}
+
+function initializeLargeGroupState(group: GroupKey, itemCount: number, nodes: ChangeTreeNode[]): void {
+  if (!groupTouched[group] && itemCount > LARGE_GROUP_AUTO_COLLAPSE_THRESHOLD) {
+    collapsedGroups[group] = true
+  }
+
+  if (directoryCollapseInitialized[group] || directoryTouched[group]) {
+    return
+  }
+
+  if (itemCount > LARGE_GROUP_AUTO_COLLAPSE_THRESHOLD) {
+    const allDirectoryPaths = collectDirectoryPaths(nodes)
+    const next: Record<string, true> = {}
+    for (const path of allDirectoryPaths) {
+      next[path] = true
+    }
+    collapsedDirectories[group] = next
+  } else {
+    collapsedDirectories[group] = {}
+  }
+
+  directoryCollapseInitialized[group] = true
+}
+
+function collectDirectoryPaths(nodes: ChangeTreeNode[], paths: string[] = []): string[] {
+  for (const node of nodes) {
+    if (node.kind !== 'directory') continue
+    paths.push(node.path)
+    collectDirectoryPaths(Array.from(node.children.values()), paths)
+  }
+  return paths
+}
+
+function buildGroupSignature(items: ProjectGitStatusItem[]): string {
+  if (!items.length) return '0'
+  const first = items[0]?.path ?? ''
+  const last = items[items.length - 1]?.path ?? ''
+  return `${items.length}:${first}:${last}`
+}
+
+function resetGroupStateIfNeeded(group: GroupKey, nextSignature: string, prevSignature: string): void {
+  if (nextSignature === prevSignature) return
+  collapsedGroups[group] = false
+  collapsedDirectories[group] = {}
+  directoryCollapseInitialized[group] = false
+  groupTouched[group] = false
+  directoryTouched[group] = false
 }
 </script>
 
@@ -433,6 +567,11 @@ function rowStyle(depth: number): Record<string, string> {
 
 .tree-item--directory {
   @include tree.tree-item--directory;
+  grid-template-columns: 16px 16px minmax(0, 1fr) auto;
+}
+
+.tree-item--directory .tree-actions {
+  justify-self: end;
 }
 
 .tree-status-code {

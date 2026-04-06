@@ -217,12 +217,19 @@ export const useSessionsStore = defineStore('sessions', () => {
     await ensureRemoteStatusListener(instanceId)
     const gateway = await resolver.resolve(instanceId)
     const remoteSessions = await gateway.listSessions(instanceId, filter)
-    useInstancesStore().markRemoteFetchSuccess(instanceId)
+    const instancesStore = useInstancesStore()
+    instancesStore.markRemoteFetchSuccess(instanceId)
     remoteSessionsByInstance.value = {
       ...remoteSessionsByInstance.value,
       [instanceId]: remoteSessions
     }
     bumpSessionCollectionVersion()
+    try {
+      const capabilitySnapshot = await gateway.getCapabilities(instanceId)
+      instancesStore.syncRemoteCapabilities(instanceId, capabilitySnapshot)
+    } catch {
+      // 不让 capability 同步失败影响远程会话主链
+    }
     return remoteSessions
   }
 

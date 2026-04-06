@@ -4,6 +4,7 @@ import type { Project } from './project-types'
 import type { SessionFilter, SessionStatus } from './session-types'
 import type { OutputLine } from './session-output'
 import { RemoteInstanceManager } from './remote-instance-manager'
+import type { RemoteCapabilitiesResponse } from '../remote/types'
 import type { RemoteInstanceRecord } from './remote-instance-types'
 type RemoteProjectPromptCliType = 'claude' | 'codex'
 
@@ -77,6 +78,7 @@ export interface RemoteGatewayStatusEvent extends SessionStatusEventPayload {
 }
 
 export type RemoteGatewayInvokeMethod =
+  | 'getCapabilities'
   | 'createSession'
   | 'startSession'
   | 'pauseSession'
@@ -355,6 +357,10 @@ class RemoteGatewayClient {
       if (this.isHttpStatus(error, 404)) return false
       throw error
     }
+  }
+
+  async getCapabilities(): Promise<RemoteCapabilitiesResponse> {
+    return this.requestJson<RemoteCapabilitiesResponse>('/api/capabilities')
   }
 
   async listProjects(): Promise<Project[]> {
@@ -642,6 +648,8 @@ export class RemoteGatewayManager {
     const args = payload.args ?? []
 
     switch (payload.method) {
+      case 'getCapabilities':
+        return client.getCapabilities()
       case 'createSession':
         return client.createSession(args[0] as Record<string, unknown>)
       case 'startSession':

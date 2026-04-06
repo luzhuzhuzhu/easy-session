@@ -11,6 +11,7 @@ import {
   type UnifiedSession
 } from '../models/unified-resource'
 import type {
+  GatewayCapabilitySnapshot,
   Gateway,
   GatewayCreateProjectParams,
   GatewayCreateSessionParams,
@@ -63,6 +64,11 @@ interface RemoteStatusEventPayload {
   status: UnifiedSession['status']
 }
 
+interface RemoteCapabilitiesResponse {
+  passthroughOnly: boolean
+  capabilities: GatewayCapabilitySnapshot['capabilities']
+}
+
 function isSessionUnavailableMessage(message: string | null | undefined): boolean {
   if (!message) return false
   return (
@@ -72,6 +78,7 @@ function isSessionUnavailableMessage(message: string | null | undefined): boolea
 }
 
 type RemoteGatewayInvokeMethod =
+  | 'getCapabilities'
   | 'createSession'
   | 'startSession'
   | 'pauseSession'
@@ -298,6 +305,8 @@ export class RemoteGateway implements Gateway {
 
   private async invokeDirect<T>(method: RemoteGatewayInvokeMethod, ...args: unknown[]): Promise<T> {
     switch (method) {
+      case 'getCapabilities':
+        return this.requestJsonDirect<T>('/api/capabilities')
       case 'createSession':
         return this.requestJsonDirect<T>('/api/sessions', {
           method: 'POST',
@@ -512,6 +521,15 @@ export class RemoteGateway implements Gateway {
   async destroySession(instanceId: string, sessionId: string): Promise<boolean> {
     this.assertInstance(instanceId)
     return this.invoke<boolean>('destroySession', sessionId)
+  }
+
+  async getCapabilities(instanceId: string): Promise<GatewayCapabilitySnapshot> {
+    this.assertInstance(instanceId)
+    const response = await this.invoke<RemoteCapabilitiesResponse>('getCapabilities')
+    return {
+      passthroughOnly: !!response.passthroughOnly,
+      capabilities: { ...response.capabilities }
+    }
   }
 
   async listProjects(instanceId: string): Promise<UnifiedProject[]> {

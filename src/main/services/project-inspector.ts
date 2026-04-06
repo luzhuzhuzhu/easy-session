@@ -540,12 +540,17 @@ export class ProjectInspectorService {
     }
 
     const status = await this.getGitStatus(target)
-    const unstagedEntry = status.items.find((item) => item.path === normalizedRelativePath && !item.staged)
-    if (!unstagedEntry) {
+    const unstagedEntries = status.items.filter((item) => {
+      if (item.staged) return false
+      return item.path === normalizedRelativePath || item.path.startsWith(`${normalizedRelativePath}/`)
+    })
+    if (!unstagedEntries.length) {
       return
     }
 
-    await discardProjectGitFile(resolvedTarget.projectPath, normalizedRelativePath, unstagedEntry ?? null)
+    for (const entry of unstagedEntries) {
+      await discardProjectGitFile(resolvedTarget.projectPath, entry.path, entry)
+    }
   }
 
   async commitChanges(target: ProjectInspectorTarget, message: string): Promise<void> {

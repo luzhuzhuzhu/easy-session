@@ -1,6 +1,10 @@
 import type { OutputEvent, OutputLine, SessionFilter, SessionStatus } from '../api/session'
 import type { ProjectPromptCliType, ProjectPromptFile } from '../api/project'
-import type { UnifiedProject, UnifiedSession } from '../models/unified-resource'
+import type {
+  InstanceCapabilities,
+  UnifiedProject,
+  UnifiedSession
+} from '../models/unified-resource'
 
 export interface GatewayCreateSessionParams {
   type: 'claude' | 'codex' | 'opencode'
@@ -40,6 +44,11 @@ export interface GatewayStatusEvent {
   status: SessionStatus
 }
 
+export interface GatewayCapabilitySnapshot {
+  passthroughOnly: boolean
+  capabilities: InstanceCapabilities
+}
+
 export interface SessionGateway {
   createSession(instanceId: string, params: GatewayCreateSessionParams): Promise<UnifiedSession>
   startSession(instanceId: string, sessionId: string): Promise<UnifiedSession | null>
@@ -57,6 +66,7 @@ export interface SessionGateway {
   subscribeStatus(instanceId: string, listener: (event: GatewayStatusEvent) => void): () => void
   writeRaw(instanceId: string, sessionId: string, data: string): Promise<boolean>
   resize(instanceId: string, sessionId: string, cols: number, rows: number): Promise<void>
+  getCapabilities(instanceId: string): Promise<GatewayCapabilitySnapshot>
 }
 
 export interface ProjectGateway {

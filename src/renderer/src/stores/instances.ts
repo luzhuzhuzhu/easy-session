@@ -14,6 +14,7 @@ import {
 import {
   buildLocalInstance,
   LOCAL_INSTANCE_ID,
+  type InstanceCapabilities,
   type Instance,
   type LocalInstance,
   type RemoteInstance
@@ -250,6 +251,20 @@ export const useInstancesStore = defineStore('instances', () => {
     })
   }
 
+  function syncRemoteCapabilities(
+    id: string,
+    snapshot: { passthroughOnly: boolean; capabilities: InstanceCapabilities }
+  ): void {
+    if (id === LOCAL_INSTANCE_ID) return
+    const current = remoteInstances.value.find((instance) => instance.id === id)
+    if (!current) return
+    replaceRemoteInstance({
+      ...current,
+      passthroughOnly: snapshot.passthroughOnly,
+      capabilities: { ...snapshot.capabilities }
+    })
+  }
+
   function getInstance(id: string): Instance | null {
     return instanceIndex.value[id] ?? null
   }
@@ -274,6 +289,7 @@ export const useInstancesStore = defineStore('instances', () => {
     getRemoteToken,
     markRemoteFetchSuccess,
     markRemoteFetchFailure,
+    syncRemoteCapabilities,
     getInstance,
     clearRemoteState
   }

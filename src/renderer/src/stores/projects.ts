@@ -200,12 +200,19 @@ export const useProjectsStore = defineStore('projects', () => {
 
     const gateway = await resolver.resolve(instanceId)
     const remoteProjects = await gateway.listProjects(instanceId)
-    useInstancesStore().markRemoteFetchSuccess(instanceId)
+    const instancesStore = useInstancesStore()
+    instancesStore.markRemoteFetchSuccess(instanceId)
     remoteProjectsByInstance.value = {
       ...remoteProjectsByInstance.value,
       [instanceId]: remoteProjects
     }
     bumpProjectCollectionVersion()
+    try {
+      const capabilitySnapshot = await gateway.getCapabilities(instanceId)
+      instancesStore.syncRemoteCapabilities(instanceId, capabilitySnapshot)
+    } catch {
+      // 不让 capability 同步失败影响远程项目主链
+    }
     return remoteProjects
   }
 

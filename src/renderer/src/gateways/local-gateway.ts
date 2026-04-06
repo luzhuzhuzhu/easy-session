@@ -29,6 +29,7 @@ import {
 import { subscribeSessionOutput } from '../services/session-output-stream'
 import {
   buildGlobalSessionKey,
+  createFullCapabilities,
   LOCAL_INSTANCE_ID,
   toUnifiedProject,
   toUnifiedSession,
@@ -225,6 +226,14 @@ export class LocalGateway implements Gateway {
   async resize(instanceId: string, sessionId: string, cols: number, rows: number): Promise<void> {
     assertLocalInstance(instanceId)
     return resizeTerminal(sessionId, cols, rows)
+  }
+
+  async getCapabilities(instanceId: string) {
+    assertLocalInstance(instanceId)
+    return {
+      passthroughOnly: false,
+      capabilities: createFullCapabilities()
+    }
   }
 
   async clearOutput(instanceId: string, sessionId: string): Promise<void> {
