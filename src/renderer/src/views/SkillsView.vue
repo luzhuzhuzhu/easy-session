@@ -26,7 +26,7 @@
         <div class="detail-header">
           <h3>{{ selectedSkill.name }}</h3>
           <div class="detail-actions">
-            <button v-if="!selectedSkill.isBuiltin" class="btn btn-sm btn-danger" @click="handleDelete">{{ $t('skill.delete') }}</button>
+            <Button v-if="!selectedSkill.isBuiltin" size="sm" tone="danger" @click="handleDelete">{{ $t('skill.delete') }}</Button>
           </div>
         </div>
 
@@ -88,11 +88,14 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSkillsStore } from '@/stores/skills'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useToast } from '@/composables/useToast'
+import Button from '@/components/ui/Button.vue'
 import type { Skill } from '@/api/skill'
 
 const { t } = useI18n()
 const skillsStore = useSkillsStore()
+const confirmDialog = useConfirmDialog()
 const toast = useToast()
 
 const selectedSkill = ref<Skill | undefined>()
@@ -197,7 +200,15 @@ function toggleNode(key: string) {
 
 async function handleDelete() {
   if (!selectedSkill.value) return
-  if (!confirm(t('skill.confirmDelete'))) return
+  const confirmed = await confirmDialog.confirm({
+    title: t('skill.confirmDeleteTitle'),
+    message: t('skill.confirmDeleteMessage'),
+    details: t('skill.confirmDeleteDetails'),
+    confirmText: t('confirm.delete'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
   try {
     await skillsStore.deleteSkill(selectedSkill.value.id)
     selectedSkill.value = undefined
@@ -251,7 +262,7 @@ onMounted(async () => {
     font-size: var(--font-size-sm);
     padding: 8px 10px;
     margin-top: 2px;
-    background: rgba(108, 158, 255, 0.03);
+    background: color-mix(in srgb, var(--accent-primary) 4%, transparent);
     border-bottom: 1px solid var(--border-color);
     border-left: 3px solid transparent;
     &.claude { border-left-color: var(--accent-primary); }
@@ -315,8 +326,8 @@ onMounted(async () => {
   border-radius: 0;
   flex-shrink: 0;
   line-height: 14px;
-  &.builtin { color: var(--accent-primary); background: rgba(108, 158, 255, 0.1); }
-  &.custom { color: var(--accent-secondary); background: rgba(124, 77, 255, 0.1); }
+  &.builtin { color: var(--accent-primary); background: color-mix(in srgb, var(--accent-primary) 12%, transparent); }
+  &.custom { color: var(--accent-secondary); background: color-mix(in srgb, var(--accent-secondary) 12%, transparent); }
 }
 
 .skill-detail {
@@ -406,5 +417,4 @@ h4 { margin: 0 0 var(--spacing-md) 0; font-size: var(--font-size-sm); color: var
   padding: var(--spacing-xl);
 }
 
-// btn, btn-sm, btn-primary, btn-danger 已在 global.scss 中定义
 </style>

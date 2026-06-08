@@ -18,6 +18,7 @@ import {
 import type { InspectorProjectOption, InspectorTab } from './types'
 
 type InspectorTextGetter = (key: string) => string
+type GitSyncAction = 'fetch' | 'pull' | 'push'
 
 interface CreateInspectorGitHistoryDomainOptions {
   currentTarget: ComputedRef<ProjectInspectorTarget | null>
@@ -114,15 +115,86 @@ export function createInspectorGitHistoryDomain(options: CreateInspectorGitHisto
     }
   }
 
-  function normalizeGitSyncError(error: unknown): string {
+  function normalizeGitSyncError(error: unknown, action: GitSyncAction): string {
     const message = error instanceof Error ? error.message : String(error ?? '')
-    if (/Could not connect to server|Failed to connect to .* port 443/i.test(message)) {
-      return '无法连接远端 Git 服务器，请检查当前网络或代理设置'
+    const lower = message.toLowerCase()
+    const firstLine = message.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? ''
+    const rawDetails = firstLine.length > 180 ? `${firstLine.slice(0, 180)}...` : firstLine
+
+    const withDetails = (key: string) => {
+      const suggestion = options.t(key)
+      return rawDetails ? `${suggestion} (${rawDetails})` : suggestion
     }
-    if (/unable to access/i.test(message)) {
-      return '无法访问远端仓库，请检查仓库地址、网络或代理设置'
+
+    if (
+      lower.includes('not a git repository') ||
+      lower.includes('not a git repo') ||
+      lower.includes('does not appear to be a git repository')
+    ) {
+      return withDetails('inspector.errors.gitNonRepo')
     }
-    return message || options.t('inspector.errors.loadRootFailed')
+
+    if (
+      lower.includes('git: command not found') ||
+      lower.includes('spawn git enoent') ||
+      lower.includes('unable to find git') ||
+      lower.includes('not recognized as an internal or external command')
+    ) {
+      return withDetails('inspector.errors.gitMissing')
+    }
+
+    if (
+      lower.includes('no tracking information') ||
+      lower.includes('no upstream branch') ||
+      lower.includes('has no upstream branch') ||
+      lower.includes('the upstream branch of your current branch does not match')
+    ) {
+      return withDetails(action === 'push'
+        ? 'inspector.errors.gitNoUpstreamPush'
+        : 'inspector.errors.gitNoUpstreamPull')
+    }
+
+    if (
+      lower.includes('conflict') ||
+      lower.includes('unmerged files') ||
+      lower.includes('automatic merge failed') ||
+      lower.includes('fix conflicts')
+    ) {
+      return withDetails('inspector.errors.gitConflict')
+    }
+
+    if (
+      lower.includes('authentication failed') ||
+      lower.includes('permission denied') ||
+      lower.includes('could not read username') ||
+      lower.includes('could not read from remote repository') ||
+      lower.includes('repository not found')
+    ) {
+      return withDetails('inspector.errors.gitAuth')
+    }
+
+    if (
+      lower.includes('non-fast-forward') ||
+      lower.includes('fetch first') ||
+      lower.includes('rejected') ||
+      lower.includes('failed to push some refs')
+    ) {
+      return withDetails('inspector.errors.gitRejected')
+    }
+
+    if (
+      lower.includes('could not resolve host') ||
+      lower.includes('could not connect to server') ||
+      lower.includes('failed to connect') ||
+      lower.includes('unable to access') ||
+      lower.includes('timed out') ||
+      lower.includes('timeout') ||
+      lower.includes('network')
+    ) {
+      return withDetails('inspector.errors.gitNetwork')
+    }
+
+    return rawDetails || options.t('inspector.errors.loadRootFailed')
   }
 
   async function loadGitFileHistory(relativePath: string, append = false): Promise<void> {
@@ -192,7 +264,7 @@ export function createInspectorGitHistoryDomain(options: CreateInspectorGitHisto
       await fetchProjectGitRemote(target)
       await refreshGitHistoryContext()
     } catch (error) {
-      gitSyncError.value = normalizeGitSyncError(error)
+      gitSyncError.value = normalizeGitSyncError(error, 'fetch')
     } finally {
       syncingGitRemote.value = null
     }
@@ -208,7 +280,7 @@ export function createInspectorGitHistoryDomain(options: CreateInspectorGitHisto
       await options.loadRootState(true)
       await refreshGitHistoryContext()
     } catch (error) {
-      gitSyncError.value = normalizeGitSyncError(error)
+      gitSyncError.value = normalizeGitSyncError(error, 'pull')
     } finally {
       syncingGitRemote.value = null
     }
@@ -223,7 +295,7 @@ export function createInspectorGitHistoryDomain(options: CreateInspectorGitHisto
       await pushProjectGitCurrentBranch(target)
       await refreshGitHistoryContext()
     } catch (error) {
-      gitSyncError.value = normalizeGitSyncError(error)
+      gitSyncError.value = normalizeGitSyncError(error, 'push')
     } finally {
       syncingGitRemote.value = null
     }

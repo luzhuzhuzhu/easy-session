@@ -33,11 +33,25 @@ function isConnectivityStatus(status: number): boolean {
   return [502, 503, 504, 522, 523, 524, 525, 526, 530].includes(status)
 }
 
+function formatCloudflareConnectivityError(status: number): string | null {
+  switch (status) {
+    case 530:
+      return 'Cloudflare Quick Tunnel 不可用（530）。通常表示公网地址已失效、cloudflared 未运行，或被控端本机远程服务当前不可达。请在被控端重新开启 Quick Tunnel，并更新这里的 Base URL。'
+    case 523:
+      return 'Cloudflare 无法连接到被控端源站（523）。通常是 cloudflared 已断开、远程服务端口不可达，或 Quick Tunnel 地址指向了旧进程。请在被控端确认远程服务和 cloudflared 都在运行，然后重新测试实例。'
+    case 524:
+      return 'Cloudflare 已连到隧道，但被控端响应超时（524）。通常是远程服务卡住、CLI 请求耗时过长或本机负载过高。请检查被控端服务日志，必要时重启远程服务后重试。'
+    default:
+      return null
+  }
+}
+
 function formatRemoteHttpError(status: number, message: string | null, baseUrl: string): string {
   if (message) return message
 
-  if (status === 530 && isCloudflareQuickTunnelUrl(baseUrl)) {
-    return 'Cloudflare Quick Tunnel 不可用（530）。通常表示公网地址已失效、cloudflared 未运行，或被控端本机远程服务当前不可达。请在被控端重新开启 Quick Tunnel，并更新这里的 Base URL。'
+  if (isCloudflareQuickTunnelUrl(baseUrl)) {
+    const cloudflareMessage = formatCloudflareConnectivityError(status)
+    if (cloudflareMessage) return cloudflareMessage
   }
 
   if (isConnectivityStatus(status)) {

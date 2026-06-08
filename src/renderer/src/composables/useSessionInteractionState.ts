@@ -146,11 +146,7 @@ export function useSessionInteractionState(options: UseSessionInteractionStateOp
     await nextTick()
 
     if (payload) {
-      const createdSessionRef = options.sessionsStore.getSessionRefByGlobalKey(payload.globalSessionKey)
-      if (createdSessionRef) {
-        options.workspaceStore.openSessionRefInActivePane(createdSessionRef)
-        return
-      }
+      return
     }
 
     options.applyRouteSessionSelection()

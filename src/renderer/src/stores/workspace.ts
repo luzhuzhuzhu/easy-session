@@ -258,16 +258,14 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         globalSessionKey: tab.globalSessionKey
       }
 
+      const instance = instanceIndex[tab.instanceId]
       let availability: WorkspaceResolvedTabState['availability'] = 'ready'
-      if (!sessionIndex[tab.globalSessionKey]) {
-        const instance = instanceIndex[tab.instanceId]
-        if (tab.instanceId !== LOCAL_INSTANCE_ID && !remoteMountEnabled) {
-          availability = 'offline'
-        } else if (instance?.type === 'remote' && instance.status !== 'online') {
-          availability = 'offline'
-        } else {
-          availability = 'missing'
-        }
+      if (tab.instanceId !== LOCAL_INSTANCE_ID && !remoteMountEnabled) {
+        availability = 'offline'
+      } else if (instance?.type === 'remote' && instance.status !== 'online') {
+        availability = 'offline'
+      } else if (!sessionIndex[tab.globalSessionKey]) {
+        availability = 'missing'
       }
 
       next[tabId] = {

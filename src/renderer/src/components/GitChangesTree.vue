@@ -23,16 +23,13 @@
                 <TreeIcon :name="isDirectoryCollapsed('staged', node.path) ? 'directory' : 'directory-open'" :size="14" />
                 <span class="tree-item-path">{{ node.name }}</span>
                 <span class="tree-actions" @click.stop>
-                  <button
-                    class="tree-action-btn"
-                    type="button"
-                    :title="$t('inspector.unstageAction')"
+                  <IconButton
+                    :label="$t('inspector.unstageAction')"
+                    size="xs"
                     @click="handleUnstage(node.path)"
                   >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                      <path d="M12 8H4M7.5 4.5L4 8l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
+                    <UiIcon name="arrow-left" />
+                  </IconButton>
                 </span>
               </button>
               <button
@@ -50,16 +47,13 @@
                   <span v-if="buildSecondaryLabel(node.item)" class="tree-item-secondary">{{ buildSecondaryLabel(node.item) }}</span>
                 </span>
                 <span class="tree-actions" @click.stop>
-                  <button
-                    class="tree-action-btn"
-                    type="button"
-                    :title="$t('inspector.unstageAction')"
+                  <IconButton
+                    :label="$t('inspector.unstageAction')"
+                    size="xs"
                     @click="handleUnstage(node.item.path)"
                   >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                      <path d="M12 8H4M7.5 4.5L4 8l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
+                    <UiIcon name="arrow-left" />
+                  </IconButton>
                 </span>
               </button>
             </template>
@@ -87,26 +81,22 @@
                 <TreeIcon :name="isDirectoryCollapsed('unstaged', node.path) ? 'directory' : 'directory-open'" :size="14" />
                 <span class="tree-item-path">{{ node.name }}</span>
                 <span class="tree-actions" @click.stop>
-                  <button
-                    class="tree-action-btn"
-                    type="button"
-                    :title="$t('inspector.discardAction')"
+                  <IconButton
+                    :label="$t('inspector.discardAction')"
+                    size="xs"
+                    tone="danger"
                     @click="handleDiscard(node.path)"
                   >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    </svg>
-                  </button>
-                  <button
-                    class="tree-action-btn primary"
-                    type="button"
-                    :title="$t('inspector.stageAction')"
+                    <UiIcon name="x" />
+                  </IconButton>
+                  <IconButton
+                    :label="$t('inspector.stageAction')"
+                    size="xs"
+                    tone="primary"
                     @click="handleStage(node.path)"
                   >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 8h8M8.5 4.5L12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
+                    <UiIcon name="arrow-right" />
+                  </IconButton>
                 </span>
               </button>
               <button
@@ -124,26 +114,22 @@
                   <span v-if="buildSecondaryLabel(node.item)" class="tree-item-secondary">{{ buildSecondaryLabel(node.item) }}</span>
                 </span>
                 <span class="tree-actions" @click.stop>
-                  <button
-                    class="tree-action-btn"
-                    type="button"
-                    :title="$t('inspector.discardAction')"
+                  <IconButton
+                    :label="$t('inspector.discardAction')"
+                    size="xs"
+                    tone="danger"
                     @click="handleDiscard(node.item.path)"
                   >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    </svg>
-                  </button>
-                  <button
-                    class="tree-action-btn primary"
-                    type="button"
-                    :title="$t('inspector.stageAction')"
+                    <UiIcon name="x" />
+                  </IconButton>
+                  <IconButton
+                    :label="$t('inspector.stageAction')"
+                    size="xs"
+                    tone="primary"
                     @click="handleStage(node.item.path)"
                   >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 8h8M8.5 4.5L12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
+                    <UiIcon name="arrow-right" />
+                  </IconButton>
                 </span>
               </button>
             </template>
@@ -158,6 +144,8 @@
 import { computed, reactive, watch } from 'vue'
 import TreeIcon from '@/components/tree/TreeIcon.vue'
 import VirtualTree from '@/components/tree/VirtualTree.vue'
+import IconButton from '@/components/ui/IconButton.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import type { ProjectGitStatusItem } from '@/api/local-project'
 
 defineOptions({ name: 'GitChangesTree' })
@@ -599,10 +587,6 @@ function resetGroupStateIfNeeded(group: GroupKey, nextSignature: string, prevSig
 
 .tree-actions {
   @include tree.tree-actions;
-}
-
-.tree-action-btn {
-  @include tree.tree-action-btn;
 }
 
 .tree-item:hover .tree-actions,

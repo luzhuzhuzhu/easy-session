@@ -9,44 +9,49 @@
           <option value="opencode">OpenCode</option>
         </select>
         <div class="toolbar-actions">
-          <button class="toolbar-icon-btn toolbar-icon-btn-primary" :title="$t('session.create')" @click="emit('create')">
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M8 3.25v9.5M3.25 8h9.5" />
-            </svg>
-          </button>
-          <button
+          <IconButton
+            class="toolbar-icon-btn toolbar-icon-btn-primary"
+            tone="primary"
+            :label="$t('session.create')"
+            @click="emit('create')"
+          >
+            <UiIcon name="plus" />
+          </IconButton>
+          <IconButton
             v-if="desktopRemoteMountEnabled"
             class="toolbar-icon-btn"
-            type="button"
             :title="refreshingRemoteData ? $t('session.refreshingRemote') : $t('session.refreshRemote')"
+            :label="refreshingRemoteData ? $t('session.refreshingRemote') : $t('session.refreshRemote')"
             :disabled="refreshingRemoteData"
             @click="emit('refresh-remote')"
           >
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M13.5 7.25A5.5 5.5 0 1 1 11.96 3.4M13.5 2.5v3.5H10" />
-            </svg>
-          </button>
+            <UiIcon name="refresh" />
+          </IconButton>
         </div>
       </div>
     </div>
   </template>
   <div v-else class="collapsed-toolbar">
-    <button class="collapsed-create-btn" :title="$t('session.create')" @click="emit('create')">
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M8 3.25v9.5M3.25 8h9.5" />
-      </svg>
-    </button>
-    <button
+    <IconButton
+      class="collapsed-create-btn"
+      tone="primary"
+      block
+      :label="$t('session.create')"
+      @click="emit('create')"
+    >
+      <UiIcon name="plus" />
+    </IconButton>
+    <IconButton
       v-if="desktopRemoteMountEnabled"
       class="collapsed-create-btn"
-      :title="$t('session.refreshRemote')"
+      :title="remoteRefreshSummary || $t('session.refreshRemote')"
+      :label="$t('session.refreshRemote')"
       :disabled="refreshingRemoteData"
+      block
       @click="emit('refresh-remote')"
     >
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M13.5 7.25A5.5 5.5 0 1 1 11.96 3.4M13.5 2.5v3.5H10" />
-      </svg>
-    </button>
+      <UiIcon name="refresh" />
+    </IconButton>
     <select :value="filterType" class="collapsed-filter" :title="$t('session.filter')" @change="onFilterChange">
       <option value="">*</option>
       <option value="claude">C</option>
@@ -59,12 +64,15 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import IconButton from '@/components/ui/IconButton.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 
 defineProps<{
   isListCollapsed: boolean
   filterType: string
   desktopRemoteMountEnabled: boolean
   refreshingRemoteData: boolean
+  remoteRefreshSummary: string
 }>()
 
 const emit = defineEmits<{

@@ -17,37 +17,49 @@
         >
           {{ historySyncMessage }}
         </div>
+        <div v-if="historySyncDetails.length" class="history-sync-details">
+          <span
+            v-for="detail in historySyncDetails"
+            :key="detail.key"
+            class="history-sync-chip"
+            :class="`tone-${detail.tone}`"
+            :title="`${detail.label}: ${detail.value}`"
+          >
+            <span class="history-sync-chip-label">{{ detail.label }}</span>
+            <span class="history-sync-chip-value">{{ detail.value }}</span>
+          </span>
+        </div>
         <div class="history-sync-actions">
-          <button
-            class="history-sync-btn"
-            type="button"
+          <Button
+            size="sm"
             :disabled="!canFetchSync || syncingGitRemote !== null"
-            :title="$t('inspector.history.fetchAction')"
+            :title="syncActionTitle($t('inspector.history.fetchAction'))"
+            :aria-label="$t('inspector.history.fetchAction')"
             @click="emit('fetch')"
           >
             <span v-if="syncingGitRemote === 'fetch'">{{ $t('inspector.loading') }}</span>
             <span v-else>{{ $t('inspector.history.fetchAction') }}</span>
-          </button>
-          <button
-            class="history-sync-btn"
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             :disabled="!canPullSync || syncingGitRemote !== null"
-            :title="$t('inspector.history.pullAction')"
+            :title="syncActionTitle($t('inspector.history.pullAction'))"
+            :aria-label="$t('inspector.history.pullAction')"
             @click="emit('pull')"
           >
             <span v-if="syncingGitRemote === 'pull'">{{ $t('inspector.loading') }}</span>
             <span v-else>{{ $t('inspector.history.pullAction') }}</span>
-          </button>
-          <button
-            class="history-sync-btn"
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             :disabled="!canPushSync || syncingGitRemote !== null"
-            :title="$t('inspector.history.pushAction')"
+            :title="syncActionTitle($t('inspector.history.pushAction'))"
+            :aria-label="$t('inspector.history.pushAction')"
             @click="emit('push')"
           >
             <span v-if="syncingGitRemote === 'push'">{{ $t('inspector.loading') }}</span>
             <span v-else>{{ $t('inspector.history.pushAction') }}</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -125,6 +137,7 @@ import { defineAsyncComponent } from 'vue'
 import GitBranchSelect from '@/components/GitBranchSelect.vue'
 import GitHistoryTree from '@/components/GitHistoryTree.vue'
 import TextFileViewer from '@/components/TextFileViewer.vue'
+import Button from '@/components/ui/Button.vue'
 import type {
   ProjectGitBranchItem,
   ProjectGitCommitChangesResult,
@@ -133,7 +146,14 @@ import type {
 
 const DiffViewer = defineAsyncComponent(() => import('@/components/DiffViewer.vue'))
 
-defineProps<{
+type HistorySyncDetail = {
+  key: string
+  label: string
+  value: string
+  tone: 'default' | 'incoming' | 'outgoing' | 'warning'
+}
+
+const props = defineProps<{
   compact: boolean
   showBranchSelect: boolean
   currentBranch: string | null
@@ -141,6 +161,7 @@ defineProps<{
   branches: ProjectGitBranchItem[]
   loadingBranches: boolean
   historySyncMessage: string
+  historySyncDetails: HistorySyncDetail[]
   hasSyncError: boolean
   canFetchSync: boolean
   canPullSync: boolean
@@ -183,6 +204,11 @@ function changeStatusLetter(status: string): string {
     default: return 'M'
   }
 }
+
+function syncActionTitle(action: string): string {
+  const details = props.historySyncDetails.map((detail) => `${detail.label}: ${detail.value}`).join('\n')
+  return details ? `${action}\n${details}` : action
+}
 </script>
 
 <style scoped lang="scss">
@@ -213,6 +239,58 @@ function changeStatusLetter(status: string): string {
   background: color-mix(in srgb, var(--bg-secondary) 86%, var(--bg-primary) 14%);
 }
 
+.history-sync-details {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.history-sync-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 148px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 20px;
+  white-space: nowrap;
+
+  &.tone-incoming {
+    border-color: color-mix(in srgb, var(--accent-primary) 28%, var(--border-color));
+    color: var(--accent-primary);
+  }
+
+  &.tone-outgoing {
+    border-color: color-mix(in srgb, var(--warning-color) 34%, var(--border-color));
+    color: var(--warning-color);
+  }
+
+  &.tone-warning {
+    border-color: color-mix(in srgb, var(--error-color) 30%, var(--border-color));
+    color: var(--error-color);
+  }
+}
+
+.history-sync-chip-label {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.history-sync-chip-value {
+  min-width: 0;
+  overflow: hidden;
+  color: currentColor;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
 .history-sync-summary {
   min-width: 0;
   flex: 1;
@@ -233,31 +311,6 @@ function changeStatusLetter(status: string): string {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-}
-
-.history-sync-btn {
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
-  border-radius: 4px;
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-  transition:
-    background 140ms ease,
-    color 140ms ease,
-    border-color 140ms ease;
-
-  &:hover:not(:disabled) {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  &:disabled {
-    opacity: 0.48;
-    cursor: not-allowed;
-  }
 }
 
 .history-detail-panel {

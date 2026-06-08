@@ -57,7 +57,7 @@ a {
 
 // 选中文字
 ::selection {
-  background: rgba(108, 158, 255, 0.3);
+  background: color-mix(in srgb, var(--accent-primary) 30%, transparent);
   color: var(--text-primary);
 }
 
@@ -94,7 +94,8 @@ input, textarea, select {
 
 // 焦点可见性（键盘导航）
 :focus-visible {
-  outline: none;
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
   box-shadow: var(--focus-ring);
 }
 
@@ -121,6 +122,9 @@ code, pre {
   user-select: none;
 
   &:hover { background: var(--bg-hover); }
+  &:focus-visible {
+    border-color: var(--focus-ring-color);
+  }
   &:active { transform: scale(0.97); }
   &:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 }
@@ -144,7 +148,7 @@ code, pre {
   color: var(--status-error);
   border-color: var(--status-error);
 
-  &:hover { background: rgba(248, 113, 113, 0.1); }
+  &:hover { background: color-mix(in srgb, var(--status-error) 12%, transparent); }
 }
 
 // ========== 通用对话框 ==========
@@ -194,6 +198,9 @@ code, pre {
   transition: border-color var(--transition-fast);
 
   &:focus { border-color: var(--accent-primary); }
+  &:focus-visible {
+    border-color: var(--focus-ring-color);
+  }
 }
 
 .dialog-hint {
@@ -243,10 +250,29 @@ code, pre {
   font-size: var(--font-size-sm);
   cursor: pointer;
   text-align: left;
+  outline: none;
   transition: background var(--transition-fast);
 
   &:hover { background: var(--bg-hover); }
+  &:focus-visible {
+    outline: none;
+    background: color-mix(in srgb, var(--accent-primary) 18%, var(--bg-hover));
+    box-shadow: inset 2px 0 0 var(--accent-primary);
+  }
   &.danger { color: var(--status-error); }
+  &:disabled {
+    color: var(--text-muted);
+    cursor: not-allowed;
+    opacity: 0.62;
+  }
+  &:disabled:hover { background: none; }
+}
+
+.context-separator {
+  height: 1px;
+  margin: var(--spacing-xs) var(--spacing-sm);
+  background: var(--border-color);
+  opacity: 0.8;
 }
 
 // ========== 通用表单 ==========
@@ -262,6 +288,9 @@ code, pre {
   transition: border-color var(--transition-fast);
 
   &:focus { border-color: var(--accent-primary); }
+  &:focus-visible {
+    border-color: var(--focus-ring-color);
+  }
   &:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 
@@ -282,6 +311,9 @@ textarea.form-input { resize: vertical; font-family: inherit; }
   transition: border-color var(--transition-fast);
 
   &:focus { border-color: var(--accent-primary); }
+  &:focus-visible {
+    border-color: var(--focus-ring-color);
+  }
 }
 
 // ========== 通用徽章 ==========
@@ -296,9 +328,9 @@ textarea.form-input { resize: vertical; font-family: inherit; }
   font-weight: 700;
   flex-shrink: 0;
 
-  &.claude { background: rgba(108, 158, 255, 0.15); color: var(--accent-primary); }
-  &.codex { background: rgba(124, 77, 255, 0.15); color: var(--accent-secondary); }
-  &.opencode { background: rgba(96, 165, 250, 0.18); color: var(--status-info); }
+  &.claude { background: color-mix(in srgb, var(--accent-primary) 15%, transparent); color: var(--accent-primary); }
+  &.codex { background: color-mix(in srgb, var(--accent-secondary) 15%, transparent); color: var(--accent-secondary); }
+  &.opencode { background: color-mix(in srgb, var(--status-info) 16%, transparent); color: var(--status-info); }
   &.lg { width: 32px; height: 32px; font-size: var(--font-size-md); }
   &.sm { width: auto; height: auto; padding: 2px 8px; font-weight: 500; }
 }
@@ -310,11 +342,11 @@ textarea.form-input { resize: vertical; font-family: inherit; }
   font-weight: 600;
 
   &.idle { color: var(--text-muted); }
-  &.running { color: var(--status-success); background: rgba(52, 211, 153, 0.1); }
-  &.stopped { color: var(--status-warning); background: rgba(251, 191, 36, 0.1); }
-  &.paused { color: var(--status-warning); background: rgba(251, 191, 36, 0.1); }
-  &.error { color: var(--status-error); background: rgba(248, 113, 113, 0.1); }
-  &.completed { color: var(--accent-primary); background: rgba(108, 158, 255, 0.1); }
+  &.running { color: var(--status-success); background: color-mix(in srgb, var(--status-success) 12%, transparent); }
+  &.stopped { color: var(--status-warning); background: color-mix(in srgb, var(--status-warning) 12%, transparent); }
+  &.paused { color: var(--status-warning); background: color-mix(in srgb, var(--status-warning) 12%, transparent); }
+  &.error { color: var(--status-error); background: color-mix(in srgb, var(--status-error) 12%, transparent); }
+  &.completed { color: var(--accent-primary); background: color-mix(in srgb, var(--accent-primary) 12%, transparent); }
 }
 
 .status-dot {

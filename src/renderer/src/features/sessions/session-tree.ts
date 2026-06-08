@@ -26,6 +26,7 @@ export interface ProjectSessionGroup {
   instanceName: string
   instanceType: 'local' | 'remote'
   instanceStatus: 'unknown' | 'connecting' | 'online' | 'offline' | 'error'
+  instancePassthroughOnly: boolean
   instanceLastError: string | null
   instanceLatencyMs: number | null
   instanceLastCheckedAt: number | null
@@ -44,6 +45,7 @@ export interface InstanceTreeGroup {
   instanceName: string
   instanceType: 'local' | 'remote'
   instanceStatus: 'unknown' | 'connecting' | 'online' | 'offline' | 'error'
+  instancePassthroughOnly: boolean
   instanceLastError: string | null
   instanceLatencyMs: number | null
   instanceLastCheckedAt: number | null
@@ -229,6 +231,7 @@ function buildProjectSessionTreeWithCache(
     cached.instanceName = base.instanceName
     cached.instanceType = base.instanceType
     cached.instanceStatus = base.instanceStatus
+    cached.instancePassthroughOnly = base.instancePassthroughOnly
     cached.instanceLastError = base.instanceLastError
     cached.instanceLatencyMs = base.instanceLatencyMs
     cached.instanceLastCheckedAt = base.instanceLastCheckedAt
@@ -259,6 +262,7 @@ function buildProjectSessionTreeWithCache(
         instanceName: instance?.name ?? project.instanceId,
         instanceType: instance?.type ?? project.source,
         instanceStatus: instance?.type === 'remote' ? instance.status : 'online',
+        instancePassthroughOnly: instance?.type === 'remote' ? instance.passthroughOnly : false,
         instanceLastError: instance?.type === 'remote' ? instance.lastError : null,
         instanceLatencyMs: instance?.type === 'remote' ? instance.latencyMs : null,
         instanceLastCheckedAt: instance?.type === 'remote' ? instance.lastCheckedAt : null,
@@ -285,6 +289,7 @@ function buildProjectSessionTreeWithCache(
         instanceName: instance?.name ?? session.instanceId,
         instanceType: instance?.type ?? session.source,
         instanceStatus: instance?.type === 'remote' ? instance.status : 'online',
+        instancePassthroughOnly: instance?.type === 'remote' ? instance.passthroughOnly : false,
         instanceLastError: instance?.type === 'remote' ? instance.lastError : null,
         instanceLatencyMs: instance?.type === 'remote' ? instance.latencyMs : null,
         instanceLastCheckedAt: instance?.type === 'remote' ? instance.lastCheckedAt : null,
@@ -413,6 +418,7 @@ function buildInstanceTreeWithCache(
         instanceName: instance.name,
         instanceType: instance.type,
         instanceStatus: instance.type === 'remote' ? instance.status : 'online',
+        instancePassthroughOnly: instance.type === 'remote' ? instance.passthroughOnly : false,
         instanceLastError: instance.type === 'remote' ? instance.lastError : null,
         instanceLatencyMs: instance.type === 'remote' ? instance.latencyMs : null,
         instanceLastCheckedAt: instance.type === 'remote' ? instance.lastCheckedAt : null,
@@ -424,6 +430,7 @@ function buildInstanceTreeWithCache(
     cached.instanceName = instance.name
     cached.instanceType = instance.type
     cached.instanceStatus = instance.type === 'remote' ? instance.status : 'online'
+    cached.instancePassthroughOnly = instance.type === 'remote' ? instance.passthroughOnly : false
     cached.instanceLastError = instance.type === 'remote' ? instance.lastError : null
     cached.instanceLatencyMs = instance.type === 'remote' ? instance.latencyMs : null
     cached.instanceLastCheckedAt = instance.type === 'remote' ? instance.lastCheckedAt : null
@@ -441,6 +448,7 @@ function buildInstanceTreeWithCache(
       instanceName: group.instanceName,
       instanceType: group.instanceType,
       instanceStatus: group.instanceStatus,
+      instancePassthroughOnly: group.instancePassthroughOnly,
       instanceLastError: group.instanceLastError,
       instanceLatencyMs: group.instanceLatencyMs,
       instanceLastCheckedAt: group.instanceLastCheckedAt,

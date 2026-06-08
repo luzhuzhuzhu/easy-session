@@ -3,13 +3,25 @@
     <h2>{{ $t('settings.appearance') }}</h2>
     <div class="setting-row">
       <label>{{ $t('settings.theme') }}</label>
-      <select
-        :value="theme"
-        @change="handleThemeChange"
-      >
-        <option value="dark">{{ $t('settings.themeDark') }}</option>
-        <option value="light" disabled>{{ $t('settings.themeLight') }} ({{ $t('settings.comingSoon') }})</option>
-      </select>
+      <div class="theme-options" role="group" :aria-label="$t('settings.theme')">
+        <button
+          v-for="option in themeOptions"
+          :key="option.value"
+          class="theme-option"
+          :class="{ active: theme === option.value }"
+          type="button"
+          :aria-pressed="theme === option.value"
+          :disabled="option.disabled"
+          :title="$t(option.labelKey)"
+          @click="emit('update:theme', option.value)"
+        >
+          <span class="theme-swatch" :class="`theme-swatch-${option.value}`" aria-hidden="true">
+            <span></span>
+            <span></span>
+          </span>
+          <span>{{ $t(option.labelKey) }}</span>
+        </button>
+      </div>
     </div>
   </section>
 
@@ -39,9 +51,14 @@
     </div>
     <div class="setting-row">
       <label>{{ $t('settings.sessionsListPosition') }}</label>
-      <button class="toggle-btn" type="button" @click="$emit('toggle-sessions-list-position')">
-        {{ sessionsListPosition === 'left' ? 'L' : 'T' }}
-      </button>
+      <IconButton
+        :label="$t('settings.sessionsListPosition')"
+        :title="$t('settings.sessionsListPosition')"
+        size="md"
+        @click="$emit('toggle-sessions-list-position')"
+      >
+        <UiIcon :name="sessionsListPosition === 'left' ? 'list-left' : 'list-top'" />
+      </IconButton>
     </div>
     <div class="setting-row">
       <label>{{ $t('settings.sessionsPanelCollapsed') }}</label>
@@ -85,9 +102,12 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import IconButton from '@/components/ui/IconButton.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
+import type { AppTheme } from '@/stores/settings'
 
 defineProps<{
-  theme: 'dark' | 'light'
+  theme: AppTheme
   language: 'zh-CN' | 'en'
   sessionWakeConfirm: boolean
   sessionsListPosition: 'left' | 'top'
@@ -98,7 +118,7 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:theme': [value: 'dark' | 'light']
+  'update:theme': [value: AppTheme]
   'update:language': [value: 'zh-CN' | 'en']
   'update:session-wake-confirm': [value: boolean]
   'toggle-sessions-list-position': []
@@ -110,10 +130,10 @@ const emit = defineEmits<{
 
 useI18n()
 
-function handleThemeChange(event: Event): void {
-  const value = (event.target as HTMLSelectElement | null)?.value
-  emit('update:theme', value === 'light' ? 'light' : 'dark')
-}
+const themeOptions: Array<{ value: AppTheme; labelKey: string; disabled?: boolean }> = [
+  { value: 'chatgpt-dark', labelKey: 'settings.themeChatGPTDark' },
+  { value: 'gemini-dark', labelKey: 'settings.themeGeminiDark' }
+]
 
 function handleLanguageChange(event: Event): void {
   const value = (event.target as HTMLSelectElement | null)?.value
@@ -158,7 +178,7 @@ function handleSmartPriorityModeChange(event: Event): void {
   padding: 10px 0;
 
   & + .setting-row {
-    border-top: 1px solid rgba(45, 53, 72, 0.5);
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 62%, transparent);
   }
 
   label {
@@ -195,25 +215,80 @@ function handleSmartPriorityModeChange(event: Event): void {
   }
 }
 
-.toggle-btn {
-  min-width: 36px;
-  height: 28px;
+.theme-options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 520px;
+}
+
+.theme-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 5px 9px;
   border: 1px solid var(--border-color);
   border-radius: 0;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  font-size: var(--font-size-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
   cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
 
   &:hover {
+    border-color: var(--border-light);
     background: var(--bg-hover);
+    color: var(--text-primary);
   }
+
+  &.active {
+    border-color: color-mix(in srgb, var(--accent-primary) 58%, var(--border-color));
+    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-primary));
+    color: var(--text-primary);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
+  }
+}
+
+.theme-swatch {
+  display: inline-grid;
+  grid-template-columns: 14px 14px;
+  width: 28px;
+  height: 18px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border-light) 70%, transparent);
+  background: #111418;
+
+  span {
+    display: block;
+  }
+}
+
+.theme-swatch-chatgpt-dark {
+  background: #0d0d0d;
+  span:first-child { background: #171717; }
+  span:last-child { background: #f7f7f7; }
+}
+
+.theme-swatch-gemini-dark {
+  background: #131314;
+  span:first-child { background: #1f3760; }
+  span:last-child { background: #d3e3fd; }
 }
 
 @media (max-width: 960px) {
   .setting-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .theme-options {
+    justify-content: flex-start;
   }
 }
 </style>

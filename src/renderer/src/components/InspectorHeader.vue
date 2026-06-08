@@ -10,91 +10,85 @@
             :class="{ active: activeTab === tab.value }"
             type="button"
             :title="tab.label"
+            :aria-label="tab.label"
             @click="emit('set-active-tab', tab.value)"
           >
-            <svg v-if="tab.value === 'changes'" width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="3" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="3" cy="13" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <circle cx="13" cy="13" r="2" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M8 5v3M5 11l2-2m4 2l-2-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            <svg v-else-if="tab.value === 'files'" width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M2 3h5l2 2h5v8H2V3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-            </svg>
-            <svg v-else width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5"/>
-            </svg>
+            <UiIcon :name="tabIcon(tab.value)" />
           </button>
         </nav>
+        <div class="task-copy">
+          <div class="task-title">{{ taskTitle }}</div>
+          <div class="task-hint">{{ taskHint }}</div>
+        </div>
       </div>
 
       <div class="header-right">
-        <button
+        <IconButton
           v-if="!isHistoryTab"
-          class="mini-toggle-btn icon-btn"
-          :class="{ active: sidebarVisible }"
-          type="button"
+          :active="sidebarVisible"
+          :label="sidebarVisible ? t('inspector.hideSidebar') : t('inspector.showSidebar')"
           :title="sidebarVisible ? t('inspector.hideSidebar') : t('inspector.showSidebar')"
           @click="emit('toggle-sidebar-visible', !sidebarVisible)"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M2 3h12v10H2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-            <path d="M6 3v10" stroke="currentColor" stroke-width="1.5"/>
-          </svg>
-        </button>
-        <button
+          <UiIcon name="list-left" />
+        </IconButton>
+        <IconButton
           v-if="!isHistoryTab && sidebarVisible"
-          class="mini-toggle-btn icon-btn"
-          :class="{ active: sidebarAutoCollapse }"
-          type="button"
+          :active="sidebarAutoCollapse"
+          :label="t('inspector.sidebarAutoCollapse')"
           :title="t('inspector.sidebarAutoCollapse')"
           @click="emit('toggle-sidebar-auto-collapse', !sidebarAutoCollapse)"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M3 8h7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M8.5 4.5L12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
+          <UiIcon name="arrow-right" />
+        </IconButton>
         <div ref="zoomControlRef" class="viewer-zoom-control">
           <button
             class="mini-btn viewer-zoom-btn"
             type="button"
             :title="`${t('terminal.zoomPresets')} / ${t('terminal.resetZoom')}`"
+            :aria-label="`${t('terminal.zoomPresets')} / ${t('terminal.resetZoom')}`"
             @click.stop="toggleZoomMenu"
             @dblclick.stop="handleResetZoom"
           >
             {{ viewerZoomPercent }}%
           </button>
-          <div v-if="zoomMenuOpen" class="viewer-zoom-menu" @click.stop>
+          <div
+            v-if="zoomMenuOpen"
+            ref="zoomMenuRef"
+            class="viewer-zoom-menu"
+            role="menu"
+            tabindex="-1"
+            @click.stop
+            @keydown="handleZoomMenuKeydown"
+          >
             <button
               v-for="percent in ZOOM_PRESET_PERCENTS"
               :key="percent"
               class="viewer-zoom-item"
               :class="{ active: percent === viewerZoomPercent }"
               type="button"
+              role="menuitem"
               @click="handleSetZoom(percent)"
             >
               {{ percent }}%
             </button>
           </div>
         </div>
-        <button class="ghost-btn utility-btn icon-btn" type="button" :title="t('inspector.refresh')" @click="emit('refresh')">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M14 8a6 6 0 11-1.76-4.24M12 2v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <button
-          class="mini-toggle-btn icon-btn"
-          :class="{ active: autoFollowActivePaneProject }"
-          type="button"
+        <IconButton
+          :label="t('inspector.refresh')"
+          :title="t('inspector.refresh')"
+          @click="emit('refresh')"
+        >
+          <UiIcon name="refresh" />
+        </IconButton>
+        <IconButton
+          :active="autoFollowActivePaneProject"
+          :label="t('inspector.followActivePane')"
           :title="t('inspector.followActivePane')"
           @click="emit('toggle-follow', !autoFollowActivePaneProject)"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M6.5 9.5l3-3M9 4h2a3 3 0 010 6H9M7 12H5a3 3 0 010-6h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </button>
+          <UiIcon name="link" />
+        </IconButton>
         <select
           class="project-select compact-select"
           :title="projectSelectTitle"
@@ -119,6 +113,9 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useMenuKeyboard } from '@/composables/useMenuKeyboard'
+import IconButton from '@/components/ui/IconButton.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 
 type HeaderTab = {
   value: 'changes' | 'files' | 'history'
@@ -136,6 +133,8 @@ const ZOOM_PRESET_PERCENTS = [80, 90, 100, 110, 125, 150] as const
 defineProps<{
   tabs: readonly HeaderTab[]
   activeTab: HeaderTab['value']
+  taskTitle: string
+  taskHint: string
   sidebarVisible: boolean
   isHistoryTab: boolean
   sidebarAutoCollapse: boolean
@@ -161,6 +160,14 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const zoomMenuOpen = ref(false)
 const zoomControlRef = ref<HTMLElement | null>(null)
+const zoomMenuRef = ref<HTMLElement | null>(null)
+const { handleMenuKeydown: handleZoomMenuKeydown } = useMenuKeyboard({
+  menuRef: zoomMenuRef,
+  isOpen: () => zoomMenuOpen.value,
+  onClose: () => {
+    zoomMenuOpen.value = false
+  }
+})
 
 function toggleZoomMenu(): void {
   zoomMenuOpen.value = !zoomMenuOpen.value
@@ -180,6 +187,12 @@ function handleManualProjectChange(value: string): void {
   emit('manual-project-change', value)
 }
 
+function tabIcon(tab: HeaderTab['value']): 'git-graph' | 'folder' | 'history' {
+  if (tab === 'changes') return 'git-graph'
+  if (tab === 'files') return 'folder'
+  return 'history'
+}
+
 function handleDocumentPointerDown(event: PointerEvent): void {
   if (!zoomMenuOpen.value) return
   const host = zoomControlRef.value
@@ -188,20 +201,12 @@ function handleDocumentPointerDown(event: PointerEvent): void {
   }
 }
 
-function handleEscape(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    zoomMenuOpen.value = false
-  }
-}
-
 onMounted(() => {
   window.addEventListener('pointerdown', handleDocumentPointerDown)
-  window.addEventListener('keydown', handleEscape)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', handleDocumentPointerDown)
-  window.removeEventListener('keydown', handleEscape)
 })
 </script>
 
@@ -226,9 +231,10 @@ onBeforeUnmount(() => {
 
 .header-left {
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
 .header-right {
@@ -278,6 +284,39 @@ onBeforeUnmount(() => {
   }
 }
 
+.inline-tab-btn :deep(.ui-icon) {
+  width: 14px;
+  height: 14px;
+}
+
+.task-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.task-title {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-hint {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .viewer-zoom-control {
   position: relative;
   flex-shrink: 0;
@@ -316,14 +355,20 @@ onBeforeUnmount(() => {
     background: var(--bg-hover);
   }
 
+  &:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
   &.active {
     color: var(--accent-primary);
-    background: rgba(108, 158, 255, 0.12);
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
   }
 }
 
 .mini-btn,
-.ghost-btn,
 .project-select {
   height: 24px;
   border: 1px solid var(--border-color);
@@ -331,15 +376,10 @@ onBeforeUnmount(() => {
   color: var(--text-primary);
 }
 
-.mini-btn,
-.ghost-btn {
+.mini-btn {
   padding: 0 8px;
   cursor: pointer;
   font-size: 11px;
-}
-
-.ghost-btn {
-  background: transparent;
 }
 
 .project-select {
@@ -354,39 +394,4 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-.mini-toggle-btn {
-  height: 24px;
-  width: 28px;
-  padding: 0;
-  border: 1px solid var(--border-color);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  white-space: nowrap;
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &.active {
-    color: var(--accent-primary);
-    background: color-mix(in srgb, var(--bg-tertiary) 82%, var(--accent-primary) 18%);
-  }
-}
-
-.utility-btn {
-  border-color: transparent;
-  color: var(--text-secondary);
-  width: 28px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-    border-color: transparent;
-  }
-}
 </style>

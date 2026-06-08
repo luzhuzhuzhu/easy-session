@@ -4,12 +4,13 @@
     <div class="error-icon">⚠️</div>
     <p class="error-msg">{{ $t('error.componentCrash') }}</p>
     <p class="error-detail" v-if="errorMsg">{{ errorMsg }}</p>
-    <button class="btn btn-primary" @click="reset">{{ $t('error.retry') }}</button>
+    <Button tone="primary" @click="reset">{{ $t('error.retry') }}</Button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onErrorCaptured } from 'vue'
+import Button from '@/components/ui/Button.vue'
 
 const hasError = ref(false)
 const errorMsg = ref('')

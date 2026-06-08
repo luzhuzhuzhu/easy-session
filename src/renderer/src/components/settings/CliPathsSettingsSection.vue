@@ -72,7 +72,7 @@ useI18n()
   padding: 10px 0;
 
   & + .setting-row {
-    border-top: 1px solid rgba(45, 53, 72, 0.5);
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 62%, transparent);
   }
 
   label {

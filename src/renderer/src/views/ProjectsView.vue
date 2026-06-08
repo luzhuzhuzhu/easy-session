@@ -1,11 +1,14 @@
 <template>
   <div class="projects-page">
     <div class="toolbar">
-      <button class="icon-btn icon-btn-primary icon-btn-lg" :title="$t('project.add')" @click="handleAddProject">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M8 3.25v9.5M3.25 8h9.5" />
-        </svg>
-      </button>
+      <IconButton
+        size="md"
+        tone="primary"
+        :label="$t('project.add')"
+        @click="handleAddProject"
+      >
+        <UiIcon name="plus" />
+      </IconButton>
       <select v-model="createTargetInstanceId" class="sort-select" :title="$t('project.createTarget')">
         <option
           v-for="option in createTargetOptions"
@@ -42,11 +45,14 @@
       <div class="empty-icon">P</div>
       <p class="empty-title">{{ $t('project.noProjects') }}</p>
       <p class="empty-desc">{{ $t('project.addFirst') }}</p>
-      <button class="icon-btn icon-btn-primary icon-btn-lg" :title="$t('project.add')" @click="handleAddProject">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M8 3.25v9.5M3.25 8h9.5" />
-        </svg>
-      </button>
+      <IconButton
+        size="md"
+        tone="primary"
+        :label="$t('project.add')"
+        @click="handleAddProject"
+      >
+        <UiIcon name="plus" />
+      </IconButton>
     </div>
 
     <div v-else class="project-grid">
@@ -72,52 +78,47 @@
             </span>
           </div>
           <div class="card-actions" @click.stop>
-            <button class="icon-btn" :title="$t('project.settings')" @click="openProjectDetail(project)">
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1.6" />
-                <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6" />
-              </svg>
-            </button>
-            <button
+            <IconButton
+              size="xs"
+              :label="$t('project.settings')"
+              @click="openProjectDetail(project)"
+            >
+              <UiIcon name="settings" />
+            </IconButton>
+            <IconButton
               v-if="canCreateSession(project)"
-              class="icon-btn icon-btn-primary"
-              :title="$t('projectDetail.newSession')"
+              size="xs"
+              tone="primary"
+              :label="$t('projectDetail.newSession')"
               @click="openCreateSessionDialog(project)"
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M8 3.25v9.5M3.25 8h9.5" />
-              </svg>
-            </button>
-            <button
+              <UiIcon name="plus" />
+            </IconButton>
+            <IconButton
               v-if="canRenameProject(project)"
-              class="icon-btn"
-              :title="$t('project.rename')"
+              size="xs"
+              :label="$t('project.rename')"
               @click="handleRename(project)"
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M11.5 2.5l2 2M3 11v2h2l7-7-2-2-7 7z" fill="none" stroke="currentColor" stroke-width="1.6" />
-              </svg>
-            </button>
-            <button
+              <UiIcon name="edit" />
+            </IconButton>
+            <IconButton
               v-if="canOpenInExplorer(project)"
-              class="icon-btn"
-              :title="$t('project.openInExplorer')"
+              size="xs"
+              :label="$t('project.openInExplorer')"
               @click="openInExplorer(project.path)"
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M2 4h5l1 1h6v8H2V4z" fill="none" stroke="currentColor" stroke-width="1.6" />
-              </svg>
-            </button>
-            <button
+              <UiIcon name="folder" />
+            </IconButton>
+            <IconButton
               v-if="canRemoveProject(project)"
-              class="icon-btn danger"
-              :title="$t('project.remove')"
+              size="xs"
+              tone="danger"
+              :label="$t('project.remove')"
               @click="handleRemove(project)"
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M4 4l8 8M12 4l-8 8" />
-              </svg>
-            </button>
+              <UiIcon name="x" />
+            </IconButton>
           </div>
         </div>
         <div class="card-path">{{ project.path }}</div>
@@ -127,29 +128,39 @@
       </div>
     </div>
 
-    <div v-if="contextMenu.visible" class="context-overlay" @click="contextMenu.visible = false"></div>
-    <div v-if="contextMenu.visible" class="context-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }">
-      <button class="context-item" @click="handleContextSettings">{{ $t('project.settings') }}</button>
-      <button
+    <div v-if="contextMenu.visible" class="context-overlay" @click="closeContextMenu"></div>
+    <div
+      v-if="contextMenu.visible"
+      ref="contextMenuRef"
+      class="context-menu"
+      role="menu"
+      tabindex="-1"
+      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      @keydown="handleContextMenuKeydown"
+    >
+      <MenuItem :label="$t('project.settings')" @click="handleContextSettings">{{ $t('project.settings') }}</MenuItem>
+      <MenuItem
         v-if="contextProject && canCreateSession(contextProject)"
-        class="context-item"
+        :label="$t('projectDetail.newSession')"
         @click="handleContextCreateSession"
       >
         {{ $t('projectDetail.newSession') }}
-      </button>
-      <button v-if="contextProject && canRenameProject(contextProject)" class="context-item" @click="handleContextRename">
+      </MenuItem>
+      <MenuItem v-if="contextProject && canRenameProject(contextProject)" :label="$t('project.rename')" @click="handleContextRename">
         {{ $t('project.rename') }}
-      </button>
-      <button v-if="contextProject && canOpenInExplorer(contextProject)" class="context-item" @click="handleContextExplorer">
+      </MenuItem>
+      <MenuItem v-if="contextProject && canOpenInExplorer(contextProject)" :label="$t('project.openInExplorer')" @click="handleContextExplorer">
         {{ $t('project.openInExplorer') }}
-      </button>
-      <button
+      </MenuItem>
+      <div v-if="contextProject && canRemoveProject(contextProject)" class="context-separator" role="separator"></div>
+      <MenuItem
         v-if="contextProject && canRemoveProject(contextProject)"
-        class="context-item danger"
+        danger
+        :label="$t('project.remove')"
         @click="handleContextRemove"
       >
         {{ $t('project.remove') }}
-      </button>
+      </MenuItem>
     </div>
 
     <CreateSessionDialog
@@ -175,11 +186,16 @@ import { useProjectsStore, type UnifiedProject } from '@/stores/projects'
 import { useSessionsStore } from '@/stores/sessions'
 import { useSettingsStore } from '@/stores/settings'
 import { useInstancesStore } from '@/stores/instances'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { useMenuKeyboard } from '@/composables/useMenuKeyboard'
 import { useToast } from '@/composables/useToast'
 import { projectPriorityScore } from '@/utils/smart-priority'
 import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
 import { buildProjectRouteLocation } from '@/utils/project-routing'
 import CreateSessionDialog from '@/components/CreateSessionDialog.vue'
+import IconButton from '@/components/ui/IconButton.vue'
+import MenuItem from '@/components/ui/MenuItem.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -187,6 +203,7 @@ const projectsStore = useProjectsStore()
 const sessionsStore = useSessionsStore()
 const settingsStore = useSettingsStore()
 const instancesStore = useInstancesStore()
+const confirmDialog = useConfirmDialog()
 const toast = useToast()
 
 const searchQuery = ref('')
@@ -194,10 +211,16 @@ const instanceFilter = ref<'all' | string>('all')
 const createTargetInstanceId = ref<string>(LOCAL_INSTANCE_ID)
 const sortBy = ref<'name' | 'recent' | 'created'>('recent')
 const contextMenu = ref({ visible: false, x: 0, y: 0, project: null as UnifiedProject | null })
+const contextMenuRef = ref<HTMLElement | null>(null)
 const showCreateSessionDialog = ref(false)
 const sessionTargetProject = ref<UnifiedProject | null>(null)
 
 const contextProject = computed(() => contextMenu.value.project)
+const { handleMenuKeydown: handleContextMenuKeydown } = useMenuKeyboard({
+  menuRef: contextMenuRef,
+  isOpen: () => contextMenu.value.visible,
+  onClose: closeContextMenu
+})
 const createTargetOptions = computed(() =>
   instancesStore.instances
     .filter((instance) => instance.type === 'local' || instance.enabled)
@@ -372,7 +395,15 @@ async function handleAddProject() {
 }
 
 async function handleRemove(project: UnifiedProject) {
-  if (!confirm(t('project.confirmRemove'))) return
+  const confirmed = await confirmDialog.confirm({
+    title: t('project.confirmRemoveTitle'),
+    message: t('project.confirmRemoveMessage'),
+    details: t('project.confirmRemoveDetails'),
+    confirmText: t('confirm.remove'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
 
   try {
     await projectsStore.removeProjectRef({
@@ -435,6 +466,10 @@ function openInExplorer(path: string) {
 
 function openContextMenu(e: MouseEvent, project: UnifiedProject) {
   contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, project }
+}
+
+function closeContextMenu(): void {
+  contextMenu.value.visible = false
 }
 
 function handleContextSettings() {
@@ -653,7 +688,7 @@ watch(
   align-items: center;
   padding: 1px 6px;
   border-radius: 0;
-  background: rgba(96, 165, 250, 0.12);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
   color: var(--accent-primary);
   font-size: var(--font-size-xs);
   white-space: nowrap;
@@ -678,13 +713,13 @@ watch(
 
   &.status-online {
     color: var(--status-success);
-    background: rgba(52, 211, 153, 0.12);
+    background: color-mix(in srgb, var(--status-success) 12%, transparent);
   }
 
   &.status-offline,
   &.status-error {
     color: var(--status-error);
-    background: rgba(248, 113, 113, 0.12);
+    background: color-mix(in srgb, var(--status-error) 12%, transparent);
   }
 }
 
@@ -694,27 +729,6 @@ watch(
   opacity: 0;
   transition: opacity var(--transition-fast);
   flex-shrink: 0;
-}
-
-.icon-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 0;
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-  transition: all var(--transition-fast);
-
-  &:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  &.danger:hover {
-    background: rgba(248, 113, 113, 0.15);
-    color: var(--status-error);
-  }
 }
 
 .card-path {
@@ -778,22 +792,10 @@ watch(
   padding: 6px;
 }
 
-.context-item {
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  color: var(--text-primary);
-  padding: 8px 10px;
-  border-radius: 0;
-  cursor: pointer;
-
-  &:hover {
-    background: var(--bg-hover);
-  }
-
-  &.danger {
-    color: var(--status-error);
-  }
+.context-separator {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--border-color);
+  opacity: 0.8;
 }
 </style>

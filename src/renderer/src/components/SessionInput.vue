@@ -11,17 +11,19 @@
       @keydown.down.prevent="historyDown"
     />
     <span class="shortcut-hint">{{ t('session.input.history') }}</span>
-    <button
-      class="btn btn-primary btn-sm"
+    <Button
+      size="sm"
+      tone="primary"
       :disabled="disabled || !text.trim()"
       @click="handleSend"
-    >Enter</button>
+    >Enter</Button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Button from '@/components/ui/Button.vue'
 
 const { t } = useI18n()
 defineProps<{ disabled: boolean }>()
@@ -92,5 +94,4 @@ function historyDown() {
   border-radius: 3px;
 }
 
-// btn, btn-sm, btn-primary 已在 global.scss 中定义
 </style>

@@ -72,14 +72,14 @@
         </template>
       </VirtualTree>
       <div v-if="hasMore" class="load-more">
-        <button
-          class="load-more-btn"
-          type="button"
+        <Button
+          block
+          size="sm"
           :disabled="loading"
           @click="$emit('loadMore')"
         >
           {{ loading ? $t('inspector.loading') : $t('inspector.history.loadMore') }}
-        </button>
+        </Button>
       </div>
     </template>
   </div>
@@ -121,6 +121,7 @@
 import { computed, onBeforeUnmount, ref, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VirtualTree from '@/components/tree/VirtualTree.vue'
+import Button from '@/components/ui/Button.vue'
 import type { ProjectGitCommitItem, ProjectGitSwimlane } from '@/api/local-project'
 
 defineOptions({
@@ -764,25 +765,5 @@ onBeforeUnmount(() => {
 
 .load-more {
   padding: 10px 12px 4px;
-}
-
-.load-more-btn {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
 }
 </style>

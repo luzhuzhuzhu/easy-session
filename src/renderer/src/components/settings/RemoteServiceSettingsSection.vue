@@ -78,25 +78,23 @@
         </div>
 
         <div class="remote-form-actions">
-          <button
-            class="btn btn-primary btn-sm"
-            type="button"
+          <Button
+            size="sm"
+            tone="primary"
             :disabled="saving || !canSubmit"
             @click="$emit('save')"
           >
             {{ saving ? $t('settings.remoteServiceApplying') : $t('settings.remoteServiceApply') }}
-          </button>
-          <button
-            class="btn btn-sm"
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             :disabled="saving || !state"
             @click="$emit('reset-form')"
           >
             {{ $t('settings.remoteServiceResetForm') }}
-          </button>
-          <button
-            class="btn btn-sm"
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             :disabled="saving || resettingToken || !state?.customTokenConfigured"
             @click="$emit('reset-token')"
           >
@@ -105,18 +103,16 @@
                 ? $t('settings.remoteServiceResettingToken')
                 : $t('settings.remoteServiceResetToDefaultToken')
             }}
-          </button>
-          <button
-            class="btn btn-sm"
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             :disabled="copyingToken || !state"
             @click="$emit('copy-token')"
           >
             {{ copyingToken ? $t('settings.remoteServiceCopyingToken') : $t('settings.remoteServiceCopyToken') }}
-          </button>
-          <button
-            class="btn btn-sm"
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             :disabled="regeneratingToken"
             @click="$emit('regenerate-token')"
           >
@@ -125,7 +121,7 @@
                 ? $t('settings.remoteServiceRegeneratingToken')
                 : $t('settings.remoteServiceRegenerateDefaultToken')
             }}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -163,6 +159,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RemoteServiceState, RemoteServiceTokenMode, RemoteServiceTokenSource } from '@/api/remote-service'
+import Button from '@/components/ui/Button.vue'
 
 interface RemoteServiceSectionForm {
   enabled: boolean
@@ -251,21 +248,21 @@ defineExpose({
 
 .summary-pill.online {
   color: var(--accent-primary);
-  border-color: rgba(108, 158, 255, 0.35);
+  border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--border-color));
 }
 
 .remote-disabled-state {
   padding: var(--spacing-md);
   border: 1px dashed var(--border-color);
   border-radius: var(--radius-md);
-  background: rgba(108, 158, 255, 0.05);
+  background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
   color: var(--text-secondary);
   line-height: 1.6;
 }
 
 .remote-form-panel {
-  background: linear-gradient(180deg, rgba(108, 158, 255, 0.06), rgba(108, 158, 255, 0.02));
-  border: 1px solid rgba(108, 158, 255, 0.18);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), color-mix(in srgb, var(--accent-primary) 3%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, var(--border-color));
   border-radius: 0;
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);

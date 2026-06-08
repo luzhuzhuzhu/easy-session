@@ -7,12 +7,15 @@
       :filter-type="filterType"
       :is-list-collapsed="isListCollapsed"
       :is-top-layout="isTopLayout"
-      :desktop-remote-mount-enabled="settingsStore.settings.desktopRemoteMountEnabled"
-      :refreshing-remote-data="refreshingRemoteData"
-      :on-create="openCreateDialog"
-      :on-refresh-remote="handleRefreshRemoteData"
-      :on-toggle-list-position="toggleListPosition"
-      :on-toggle-list-collapsed="toggleListCollapsed"
+          :desktop-remote-mount-enabled="settingsStore.settings.desktopRemoteMountEnabled"
+          :refreshing-remote-data="refreshingRemoteData"
+          :remote-refresh-summary="remoteRefreshSummary"
+          :on-create="openCreateDialog"
+          :on-refresh-remote="handleRefreshRemoteData"
+          :on-open-projects="openProjectsPage"
+          :on-open-remote-settings="openRemoteSettings"
+          :on-toggle-list-position="toggleListPosition"
+          :on-toggle-list-collapsed="toggleListCollapsed"
       :on-session-click="handleSessionClick"
       :on-session-drag-start="handleSessionDragStart"
       :on-session-drag-over="handleSessionDragOver"
@@ -26,20 +29,53 @@
       @update:filter-type="filterType = $event"
     />
 
-    <div class="sessions-main-area">
-      <aside v-if="!isTopLayout" class="session-list-panel" :class="{ collapsed: isListCollapsed }">
+    <div ref="sessionsMainAreaRef" class="sessions-main-area">
+      <aside
+        v-if="!isTopLayout"
+        class="session-list-panel"
+        :class="{ collapsed: isEffectiveListCollapsed, 'auto-collapsed': isListAutoCollapsed }"
+      >
         <SessionSidebarControls
-          :is-list-collapsed="isListCollapsed"
+          :is-list-collapsed="isEffectiveListCollapsed"
           :filter-type="filterType"
           :desktop-remote-mount-enabled="settingsStore.settings.desktopRemoteMountEnabled"
           :refreshing-remote-data="refreshingRemoteData"
+          :remote-refresh-summary="remoteRefreshSummary"
           @create="openCreateDialog()"
           @refresh-remote="handleRefreshRemoteData"
           @update:filter-type="filterType = $event"
         />
 
-        <template v-if="!isListCollapsed">
-          <div class="session-tree-host">
+        <template v-if="!isEffectiveListCollapsed">
+          <div v-if="showSessionEmptyGuide" class="session-empty-guide">
+            <div class="session-empty-guide-icon" aria-hidden="true">
+              <UiIcon name="folder" />
+            </div>
+            <div class="session-empty-guide-copy">
+              <h2>{{ $t('session.emptyGuideTitle') }}</h2>
+              <p>{{ $t('session.emptyGuideDescription') }}</p>
+            </div>
+            <div class="session-empty-guide-actions">
+              <Button tone="primary" size="sm" @click="openProjectsPage">
+                {{ $t('session.emptyGuideAddProject') }}
+              </Button>
+              <Button size="sm" @click="openCreateDialog()">
+                {{ $t('session.emptyGuideCreateSession') }}
+              </Button>
+              <Button
+                v-if="settingsStore.settings.desktopRemoteMountEnabled"
+                size="sm"
+                :disabled="refreshingRemoteData"
+                @click="handleRefreshRemoteData"
+              >
+                {{ refreshingRemoteData ? $t('session.refreshingRemote') : $t('session.refreshRemote') }}
+              </Button>
+              <Button v-else size="sm" @click="openRemoteSettings">
+                {{ $t('session.emptyGuideEnableRemote') }}
+              </Button>
+            </div>
+          </div>
+          <div v-else class="session-tree-host">
             <SessionSidebarTree
               :nodes="sidebarTreeNodes"
               :active-global-session-key="sessionsStore.activeGlobalSessionKey"
@@ -64,14 +100,16 @@
         </template>
         <div v-else class="session-items compact">
         <template v-for="group in projectSessionTree" :key="group.key">
-          <div v-if="group.sessions.length > 0" class="compact-group-label" :title="group.projectName">
-            {{ group.projectName.charAt(0) }}
+          <div v-if="group.sessions.length > 0" class="compact-group-label" :title="formatCompactGroupTitle(group)">
+            <span aria-hidden="true">▣</span>
+            <span class="compact-group-count">{{ group.sessions.length }}</span>
           </div>
           <button
             v-for="s in group.sessions"
             :key="s.id"
             class="session-item compact"
             :class="{ active: sessionsStore.activeGlobalSessionKey === s.id }"
+            :title="formatCompactSessionTitle(s, group)"
             draggable="true"
             @click="handleSessionClick(s)"
             @dragstart="handleSessionDragStart($event, s)"
@@ -82,13 +120,20 @@
           >
             <span v-if="s.icon" class="session-icon">{{ s.icon }}</span>
             <span v-else class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : s.type === 'codex' ? 'X' : 'O' }}</span>
-            <span class="status-dot" :class="s.status"></span>
+            <span
+              class="status-dot"
+              :class="s.status"
+              role="img"
+              :title="$t(`session.status.${s.status}`)"
+              :aria-label="$t(`session.status.${s.status}`)"
+            ></span>
           </button>
         </template>
         </div>
 
         <SessionSidebarFooterControls
-          :is-list-collapsed="isListCollapsed"
+          :is-list-collapsed="isEffectiveListCollapsed"
+          :is-auto-collapsed="isListAutoCollapsed"
           :is-top-layout="isTopLayout"
           @toggle-list-position="toggleListPosition"
           @toggle-list-collapsed="toggleListCollapsed"
@@ -154,6 +199,7 @@
       :context-menu-y="contextMenu.y"
       :context-session="contextMenu.session"
       :context-session-capabilities="contextSessionCapabilities"
+      :context-session-passthrough-only="contextSessionPassthroughOnly"
       :show-rename-dialog="showRenameDialog"
       :rename-input="renameInput"
       :show-wake-dialog="showWakeDialog"
@@ -184,7 +230,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionsPageCoordination } from '@/composables/useSessionsPageCoordination'
@@ -197,7 +243,11 @@ import { useSettingsStore, type AppSettings } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useInstancesStore } from '@/stores/instances'
 import { useInspectorStore } from '@/stores/inspector'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useToast } from '@/composables/useToast'
+import { formatRemoteOperationError, formatSessionOperationTarget } from '@/utils/remote-operation-error'
+import Button from '@/components/ui/Button.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import CreateSessionDialog from '@/components/CreateSessionDialog.vue'
 import InspectorPanel from '@/components/InspectorPanel.vue'
 import SessionActionLayer from '@/components/SessionActionLayer.vue'
@@ -223,6 +273,7 @@ import {
   type UnifiedSession
 } from '@/models/unified-resource'
 import { buildProjectRouteLocation } from '@/utils/project-routing'
+import { buildSessionRestartConfirmCopy } from '@/utils/session-confirm'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -232,7 +283,8 @@ const projectsStore = useProjectsStore()
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 const instancesStore = useInstancesStore()
-useInspectorStore()
+const inspectorStore = useInspectorStore()
+const confirmDialog = useConfirmDialog()
 const toast = useToast()
 
 type SessionListItem = SessionTreeSessionItem
@@ -286,7 +338,7 @@ function createSessionListItemProjector() {
 function createProjectMetaProjector() {
   const cache = new Map<string, ProjectMeta>()
 
-  return (projects: typeof projectsStore.unifiedProjects.value): ProjectMeta[] => {
+  return (projects: typeof projectsStore.unifiedProjects): ProjectMeta[] => {
     const activeKeys = new Set<string>()
     const next = [...projects]
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -390,6 +442,40 @@ const activeSessionForDialog = computed(() => {
     : sessionsStore.activeUnifiedSession
   if (!activeSession || activeSession.instanceId !== LOCAL_INSTANCE_ID) return null
   return activeSession
+})
+
+const showSessionEmptyGuide = computed(() => {
+  return !filterType.value &&
+    projectsStore.unifiedProjects.length === 0 &&
+    sessionsStore.unifiedSessions.length === 0
+})
+
+const remoteRefreshSummary = computed(() => {
+  if (!settingsStore.settings.desktopRemoteMountEnabled) return ''
+
+  const remotes = instancesStore.remoteInstances
+  if (remotes.length === 0) {
+    return t('session.remoteRefreshNoInstances')
+  }
+
+  const lastCheckedAt = remotes
+    .map((instance) => instance.lastCheckedAt ?? 0)
+    .filter((value) => value > 0)
+    .sort((a, b) => b - a)[0] ?? 0
+  const failedCount = remotes.filter((instance) => instance.status === 'offline' || instance.status === 'error').length
+  const parts: string[] = []
+
+  if (lastCheckedAt > 0) {
+    parts.push(t('session.remoteLastRefresh', { time: formatClockTime(lastCheckedAt) }))
+  } else {
+    parts.push(t('session.remoteNotRefreshed'))
+  }
+
+  parts.push(failedCount > 0
+    ? t('session.remoteFailureCount', { count: failedCount })
+    : t('session.remoteAllHealthy'))
+
+  return parts.join(' · ')
 })
 
 function applyRouteSessionSelection() {
@@ -549,8 +635,57 @@ const {
   restartSession: (sessionRef) => restartSessionByRef(sessionRef)
 })
 
+const contextSessionInstance = computed(() =>
+  contextMenu.value.session ? instancesStore.getInstance(contextMenu.value.session.instanceId) : null
+)
+const contextSessionPassthroughOnly = computed(
+  () => contextSessionInstance.value?.type === 'remote' && contextSessionInstance.value.passthroughOnly
+)
+
 const isTopLayout = computed(() => settingsStore.settings.sessionsListPosition === 'top')
 const isListCollapsed = computed(() => settingsStore.settings.sessionsPanelCollapsed)
+const isNarrowSessionsLayout = ref(false)
+const isConstrainedSessionsLayout = ref(false)
+const isListAutoCollapsed = computed(
+  () =>
+    !isTopLayout.value &&
+    !isListCollapsed.value &&
+    (isNarrowSessionsLayout.value || (inspectorStore.panelOpen && isConstrainedSessionsLayout.value))
+)
+const isEffectiveListCollapsed = computed(() => isListCollapsed.value || isListAutoCollapsed.value)
+const sessionsMainAreaRef = ref<HTMLElement | null>(null)
+let narrowSessionsLayoutQuery: MediaQueryList | null = null
+let sessionsMainAreaResizeObserver: ResizeObserver | null = null
+
+function syncNarrowSessionsLayout(query: Pick<MediaQueryList, 'matches'>): void {
+  isNarrowSessionsLayout.value = query.matches
+}
+
+function syncConstrainedSessionsLayout(): void {
+  const width = sessionsMainAreaRef.value?.getBoundingClientRect().width ?? 0
+  isConstrainedSessionsLayout.value = width > 0 && width <= 1040
+}
+
+onMounted(() => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+
+  narrowSessionsLayoutQuery = window.matchMedia('(max-width: 1100px)')
+  syncNarrowSessionsLayout(narrowSessionsLayoutQuery)
+  narrowSessionsLayoutQuery.addEventListener('change', syncNarrowSessionsLayout)
+
+  syncConstrainedSessionsLayout()
+  sessionsMainAreaResizeObserver = new ResizeObserver(() => syncConstrainedSessionsLayout())
+  if (sessionsMainAreaRef.value) {
+    sessionsMainAreaResizeObserver.observe(sessionsMainAreaRef.value)
+  }
+})
+
+onUnmounted(() => {
+  narrowSessionsLayoutQuery?.removeEventListener('change', syncNarrowSessionsLayout)
+  narrowSessionsLayoutQuery = null
+  sessionsMainAreaResizeObserver?.disconnect()
+  sessionsMainAreaResizeObserver = null
+})
 const {
   paneZoomPercentById,
   pruneTerminalFontSizeByPane,
@@ -613,6 +748,40 @@ function openProject(group: ProjectSessionGroup) {
   )
 }
 
+function openProjectsPage(): void {
+  void router.push('/projects')
+}
+
+function openRemoteSettings(): void {
+  void router.push('/settings')
+}
+
+function formatClockTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function formatCompactGroupTitle(group: ProjectSessionGroup): string {
+  const lines = [group.projectName, group.projectPath]
+  if (group.instanceId !== LOCAL_INSTANCE_ID) {
+    lines.push(`${t('session.instanceRemote')}: ${group.instanceName}`)
+  }
+  lines.push(t('session.instanceCounts', { projects: 1, sessions: group.sessions.length }))
+  return lines.filter(Boolean).join('\n')
+}
+
+function formatCompactSessionTitle(session: SessionTreeSessionItem, group: ProjectSessionGroup): string {
+  return [
+    session.name,
+    group.projectName,
+    session.type,
+    t(`session.status.${session.status}`),
+    group.instanceId === LOCAL_INSTANCE_ID ? t('session.instanceLocal') : `${t('session.instanceRemote')}: ${group.instanceName}`
+  ].filter(Boolean).join('\n')
+}
+
 async function updateSessionUiSettings(partial: Partial<AppSettings>) {
   try {
     await settingsStore.update(partial)
@@ -631,29 +800,66 @@ async function toggleListCollapsed() {
 }
 
 async function restartSessionByRef(sessionRef: SessionRef, showSuccess = true) {
+  const session = sessionsStore.getUnifiedSession(sessionRef.globalSessionKey)
+  if (session?.status === 'running') {
+    const copy = buildSessionRestartConfirmCopy(session, t)
+    const confirmed = await confirmDialog.confirm({
+      title: copy.title,
+      message: copy.message,
+      details: copy.details,
+      confirmText: t('confirm.restart'),
+      cancelText: t('confirm.cancel'),
+      tone: 'danger'
+    })
+    if (!confirmed) return
+  }
+
   try {
     await sessionsStore.restartSessionRef(sessionRef)
     if (showSuccess) toast.success(t('toast.sessionRestarted'))
   } catch (e: unknown) {
-    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
+    toast.error(formatRemoteOperationError({
+      t,
+      instancesStore,
+      instanceId: sessionRef.instanceId,
+      action: t('session.restart'),
+      target: formatSessionOperationTarget(sessionRef, session?.name),
+      error: e
+    }))
   }
 }
 
 async function startSessionByRef(sessionRef: SessionRef, showSuccess = true) {
+  const session = sessionsStore.getUnifiedSession(sessionRef.globalSessionKey)
   try {
     await sessionsStore.startSessionRef(sessionRef)
     if (showSuccess) toast.success(t('toast.sessionStarted'))
   } catch (e: unknown) {
-    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
+    toast.error(formatRemoteOperationError({
+      t,
+      instancesStore,
+      instanceId: sessionRef.instanceId,
+      action: t('session.start'),
+      target: formatSessionOperationTarget(sessionRef, session?.name),
+      error: e
+    }))
   }
 }
 
 async function pauseSessionByRef(sessionRef: SessionRef, showSuccess = true) {
+  const session = sessionsStore.getUnifiedSession(sessionRef.globalSessionKey)
   try {
     await sessionsStore.pauseSessionRef(sessionRef)
     if (showSuccess) toast.success(t('toast.sessionPaused'))
   } catch (e: unknown) {
-    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
+    toast.error(formatRemoteOperationError({
+      t,
+      instancesStore,
+      instanceId: sessionRef.instanceId,
+      action: t('session.pause'),
+      target: formatSessionOperationTarget(sessionRef, session?.name),
+      error: e
+    }))
   }
 }
 
@@ -709,6 +915,59 @@ async function handleDestroy(sessionRef: SessionRef) {
   text-align: center;
   color: var(--text-muted);
   font-size: var(--font-size-sm);
+}
+
+.session-empty-guide {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 18px 16px;
+  overflow-y: auto;
+  color: var(--text-secondary);
+}
+
+.session-empty-guide-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--accent-primary);
+
+  .ui-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.session-empty-guide-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
+.session-empty-guide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .session-detail-panel {

@@ -1,6 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import i18n from '@/i18n'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import {
   stageProjectFile,
   unstageProjectFile,
@@ -33,6 +34,7 @@ export const useInspectorStore = defineStore('inspector', () => {
   const sessionsStore = useSessionsStore()
   const workspaceStore = useWorkspaceStore()
   const projectsStore = useProjectsStore()
+  const confirmDialog = useConfirmDialog()
 
   const panelOpen = ref(readStoredInspectorBoolean(INSPECTOR_PANEL_OPEN_KEY, false))
   const autoFollowActivePaneProject = ref(readStoredInspectorBoolean(INSPECTOR_AUTO_FOLLOW_KEY, true))
@@ -214,25 +216,37 @@ export const useInspectorStore = defineStore('inspector', () => {
     clearSelectedCommit
   } = gitHistoryDomain
 
-  async function stageFile(relativePath: string): Promise<void> {
+  async function stageFile(relativePath: string): Promise<boolean> {
     const target = currentTarget.value
-    if (!target) return
+    if (!target) return false
     await stageProjectFile(target, relativePath)
     await syncAfterGitMutation(relativePath, 'staged')
+    return true
   }
 
-  async function unstageFile(relativePath: string): Promise<void> {
+  async function unstageFile(relativePath: string): Promise<boolean> {
     const target = currentTarget.value
-    if (!target) return
+    if (!target) return false
     await unstageProjectFile(target, relativePath)
     await syncAfterGitMutation(relativePath, 'unstaged')
+    return true
   }
 
-  async function discardFile(relativePath: string): Promise<void> {
+  async function discardFile(relativePath: string): Promise<boolean> {
     const target = currentTarget.value
-    if (!target) return
+    if (!target) return false
+    const confirmed = await confirmDialog.confirm({
+      title: t('inspector.confirmDiscardTitle'),
+      message: t('inspector.confirmDiscardMessage'),
+      details: t('inspector.confirmDiscardDetails'),
+      confirmText: t('confirm.discard'),
+      cancelText: t('confirm.cancel'),
+      tone: 'danger'
+    })
+    if (!confirmed) return false
     await discardProjectFile(target, relativePath)
     await syncAfterGitMutation(relativePath, 'unstaged')
+    return true
   }
 
   watch(

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EasySession Normal CSS Style Preview</title>
+  <style>
+    :root {
+      --border-color: #3a4459;
+      --bg-primary: #0d121c;
+      --bg-secondary: #141a27;
+      --bg-tertiary: #1e2536;
+      --bg-hover: #2a3348;
+      --text-primary: #f3f7ff;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent-primary: #6c9eff;
+      --accent-secondary: #7c4dff;
+      --status-success: #34d399;
+      --status-warning: #fbbf24;
+      --status-error: #f87171;
+      --status-info: #60a5fa;
+      --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-size-xs: 11px;
+      --font-size-sm: 12px;
+      --font-size-md: 14px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 40px;
+      line-height: 1.6;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      font-size: 18px;
+      margin: 32px 0 16px;
+      color: var(--accent-primary);
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
+    }
+
+    h3 {
+      font-size: 14px;
+      margin: 24px 0 12px;
+      color: var(--text-secondary);
+    }
+
+    .section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      padding: 20px;
+      margin: 16px 0;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 12px 0;
+      flex-wrap: wrap;
+    }
+
+    .label {
+      color: var(--text-muted);
+      font-size: var(--font-size-sm);
+      min-width: 120px;
+    }
+
+    /* Action Buttons */
+    .pane-action-btn {
+      width: 28px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 140ms ease;
+    }
+
+    .pane-action-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .pane-action-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--text-muted);
+    }
+
+    .pane-action-btn:active {
+      transform: scale(0.96);
+    }
+
+    .pane-action-btn-primary {
+      background: var(--accent-primary);
+      border-color: var(--accent-primary);
+      color: var(--bg-primary);
+    }
+
+    .pane-action-btn-primary:hover {
+      opacity: 0.85;
+      background: var(--accent-primary);
+      border-color: var(--accent-primary);
+      color: var(--bg-primary);
+    }
+
+    .pane-action-btn-danger {
+      border-color: var(--status-error);
+      color: var(--status-error);
+    }
+
+    .pane-action-btn-danger:hover {
+      background: rgba(248, 113, 113, 0.15);
+      border-color: var(--status-error);
+      color: var(--status-error);
+    }
+
+    /* Status Tags */
+    .status-tag {
+      padding: 2px 8px;
+      border-radius: 0;
+      font-size: var(--font-size-xs);
+      font-weight: 600;
+    }
+
+    .status-tag.idle { color: var(--text-muted); }
+    .status-tag.running { color: var(--status-success); background: rgba(52, 211, 153, 0.1); }
+    .status-tag.stopped { color: var(--status-warning); background: rgba(251, 191, 36, 0.1); }
+    .status-tag.paused { color: var(--status-warning); background: rgba(251, 191, 36, 0.1); }
+    .status-tag.error { color: var(--status-error); background: rgba(248, 113, 113, 0.1); }
+
+    /* Type Badges */
+    .type-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 0;
+      font-size: var(--font-size-xs);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .type-badge.claude { background: rgba(108, 158, 255, 0.15); color: var(--accent-primary); }
+    .type-badge.codex { background: rgba(124, 77, 255, 0.15); color: var(--accent-secondary); }
+    .type-badge.opencode { background: rgba(96, 165, 250, 0.18); color: var(--status-info); }
+
+    /* Runtime Info */
+    .session-runtime-info {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 0;
+      border: 1px solid var(--border-color);
+      background: rgba(108, 158, 255, 0.08);
+      color: var(--text-secondary);
+      font-size: 11px;
+    }
+
+    .runtime-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .runtime-key {
+      width: 14px;
+      height: 14px;
+      border-radius: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(108, 158, 255, 0.22);
+      color: var(--accent-primary);
+      font-size: 8px;
+      font-weight: 700;
+    }
+
+    /* Zoom Control */
+    .pane-zoom-reset-btn {
+      height: 24px;
+      min-width: 48px;
+      padding: 0 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 140ms ease;
+    }
+
+    .pane-zoom-reset-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+      border-color: var(--text-muted);
+    }
+
+    /* Dropdown Menu */
+    .pane-zoom-menu {
+      display: inline-flex;
+      flex-direction: column;
+      min-width: 72px;
+      padding: 4px;
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      background: var(--bg-secondary);
+      margin-left: 8px;
+    }
+
+    .pane-zoom-item {
+      border: 0;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+      text-align: right;
+      border-radius: 0;
+      padding: 6px 8px;
+      cursor: pointer;
+    }
+
+    .pane-zoom-item:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+
+    .pane-zoom-item.active {
+      color: var(--accent-primary);
+      background: rgba(108, 158, 255, 0.12);
+    }
+
+    /* Header Demo */
+    .pane-header-demo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      min-width: 600px;
+    }
+
+    .pane-header-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .pane-session-name {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pane-header-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    /* Filter Select */
+    .filter-select {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      padding: 4px 8px;
+      font-size: var(--font-size-xs);
+    }
+
+    /* Tool Button */
+    .tool-btn {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      color: var(--text-secondary);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 140ms ease;
+    }
+
+    .tool-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+      border-color: var(--text-muted);
+    }
+
+    .tool-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .note {
+      font-size: var(--font-size-xs);
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>EasySession Normal CSS Style Guide</h1>
+  <p style="color: var(--text-muted); margin-bottom: 24px;">统一方形边角、SVG图标按钮设计规范</p>
+
+  <h2>Action Buttons</h2>
+  <div class="section">
+    <div class="row">
+      <span class="label">Default:</span>
+      <button class="pane-action-btn" title="Play">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M5 3l7 5-7 5V3z" fill="currentColor" />
+        </svg>
+      </button>
+      <button class="pane-action-btn" title="Pause">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="4" y="4" width="3" height="8" rx="0.5" fill="currentColor" />
+          <rect x="9" y="4" width="3" height="8" rx="0.5" fill="currentColor" />
+        </svg>
+      </button>
+      <button class="pane-action-btn" title="Restart">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M13.5 7A5.5 5.5 0 1 1 8 2.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
+          <path d="M13.5 2v5H8.5" fill="currentColor" />
+        </svg>
+      </button>
+      <button class="pane-action-btn" title="Plus">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 3.25v9.5M3.25 8h9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none" />
+        </svg>
+      </button>
+      <button class="pane-action-btn" title="Refresh">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M13.5 7.25A5.5 5.5 0 1 1 11.96 3.4M13.5 2.5v3.5H10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="row">
+      <span class="label">Primary:</span>
+      <button class="pane-action-btn pane-action-btn-primary" title="Start">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M5 3l7 5-7 5V3z" fill="currentColor" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="row">
+      <span class="label">Danger:</span>
+      <button class="pane-action-btn pane-action-btn-danger" title="Destroy">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="3" y="5" width="10" height="9" fill="currentColor" rx="1" />
+          <rect x="5" y="2" width="6" height="2" fill="currentColor" rx="0.5" />
+          <line x1="6.5" y1="7" x2="6.5" y2="11" stroke="var(--bg-tertiary)" stroke-width="1.5" />
+          <line x1="9.5" y1="7" x2="9.5" y2="11" stroke="var(--bg-tertiary)" stroke-width="1.5" />
+        </svg>
+      </button>
+    </div>
+
+    <p class="note">按钮尺寸: 28x24px, 图标尺寸: 14x14px, border-radius: 0</p>
+  </div>
+
+  <h2>Status Tags</h2>
+  <div class="section">
+    <div class="row">
+      <span class="status-tag idle">idle</span>
+      <span class="status-tag running">running</span>
+      <span class="status-tag stopped">stopped</span>
+      <span class="status-tag paused">paused</span>
+      <span class="status-tag error">error</span>
+    </div>
+  </div>
+
+  <h2>Type Badges</h2>
+  <div class="section">
+    <div class="row">
+      <span class="type-badge claude">C</span>
+      <span class="type-badge codex">X</span>
+      <span class="type-badge opencode">O</span>
+    </div>
+    <p class="note">Claude / Codex / OpenCode</p>
+  </div>
+
+  <h2>Runtime Info</h2>
+  <div class="section">
+    <div class="row">
+      <div class="session-runtime-info">
+        <span class="runtime-chip">
+          <span class="runtime-key">T</span>
+          <span>1h 23m 45s</span>
+        </span>
+        <span class="runtime-chip">
+          <span class="runtime-key">R</span>
+          <span>12m 30s</span>
+        </span>
+      </div>
+    </div>
+    <p class="note">T = Total Runtime, R = Current Run</p>
+  </div>
+
+  <h2>Zoom Control</h2>
+  <div class="section">
+    <div class="row">
+      <button class="pane-zoom-reset-btn">100%</button>
+      <div class="pane-zoom-menu">
+        <button class="pane-zoom-item">80%</button>
+        <button class="pane-zoom-item">90%</button>
+        <button class="pane-zoom-item active">100%</button>
+        <button class="pane-zoom-item">110%</button>
+        <button class="pane-zoom-item">125%</button>
+        <button class="pane-zoom-item">150%</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>Tool Buttons (Toolbar)</h2>
+  <div class="section">
+    <div class="row">
+      <button class="tool-btn" title="Create">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 3.25v9.5M3.25 8h9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none" />
+        </svg>
+      </button>
+      <button class="tool-btn" title="Refresh">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M13.5 7.25A5.5 5.5 0 1 1 11.96 3.4M13.5 2.5v3.5H10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+        </svg>
+      </button>
+      <select class="filter-select">
+        <option value="">Filter</option>
+        <option value="claude">Claude</option>
+        <option value="codex">Codex</option>
+        <option value="opencode">OpenCode</option>
+      </select>
+    </div>
+    <p class="note">Tool按钮尺寸: 24x24px, border-radius: 0</p>
+  </div>
+
+  <h2>Full Header Demo</h2>
+  <div class="section" style="padding: 0; overflow: auto;">
+    <div class="pane-header-demo">
+      <div class="pane-header-info">
+        <span class="type-badge claude">C</span>
+        <span class="pane-session-name">my-awesome-session</span>
+        <span class="status-tag running">running</span>
+        <div class="session-runtime-info">
+          <span class="runtime-chip">
+            <span class="runtime-key">T</span>
+            <span>2h 15m</span>
+          </span>
+          <span class="runtime-chip">
+            <span class="runtime-key">R</span>
+            <span>45m 30s</span>
+          </span>
+        </div>
+      </div>
+      <div class="pane-header-actions">
+        <button class="pane-zoom-reset-btn">100%</button>
+        <button class="pane-action-btn pane-action-btn-primary" title="Pause">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="4" y="4" width="3" height="8" rx="0.5" fill="currentColor" />
+            <rect x="9" y="4" width="3" height="8" rx="0.5" fill="currentColor" />
+          </svg>
+        </button>
+        <button class="pane-action-btn" title="Restart">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M13.5 7A5.5 5.5 0 1 1 8 2.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
+            <path d="M13.5 2v5H8.5" fill="currentColor" />
+          </svg>
+        </button>
+        <button class="pane-action-btn pane-action-btn-danger" title="Destroy">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="3" y="5" width="10" height="9" fill="currentColor" rx="1" />
+            <rect x="5" y="2" width="6" height="2" fill="currentColor" rx="0.5" />
+            <line x1="6.5" y1="7" x2="6.5" y2="11" stroke="var(--bg-tertiary)" stroke-width="1.5" />
+            <line x1="9.5" y1="7" x2="9.5" y2="11" stroke="var(--bg-tertiary)" stroke-width="1.5" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <h2>Idle Session Header</h2>
+  <div class="section" style="padding: 0; overflow: auto;">
+    <div class="pane-header-demo">
+      <div class="pane-header-info">
+        <span class="type-badge codex">X</span>
+        <span class="pane-session-name">another-session</span>
+        <span class="status-tag idle">idle</span>
+        <div class="session-runtime-info">
+          <span class="runtime-chip">
+            <span class="runtime-key">T</span>
+            <span>0s</span>
+          </span>
+          <span class="runtime-chip">
+            <span class="runtime-key">R</span>
+            <span>0s</span>
+          </span>
+        </div>
+      </div>
+      <div class="pane-header-actions">
+        <button class="pane-zoom-reset-btn">100%</button>
+        <button class="pane-action-btn pane-action-btn-primary" title="Start">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M5 3l7 5-7 5V3z" fill="currentColor" />
+          </svg>
+        </button>
+        <button class="pane-action-btn" title="Restart">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M13.5 7A5.5 5.5 0 1 1 8 2.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
+            <path d="M13.5 2v5H8.5" fill="currentColor" />
+          </svg>
+        </button>
+        <button class="pane-action-btn pane-action-btn-danger" title="Destroy">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="3" y="5" width="10" height="9" fill="currentColor" rx="1" />
+            <rect x="5" y="2" width="6" height="2" fill="currentColor" rx="0.5" />
+            <line x1="6.5" y1="7" x2="6.5" y2="11" stroke="var(--bg-tertiary)" stroke-width="1.5" />
+            <line x1="9.5" y1="7" x2="9.5" y2="11" stroke="var(--bg-tertiary)" stroke-width="1.5" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

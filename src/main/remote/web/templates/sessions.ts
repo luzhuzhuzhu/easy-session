@@ -166,8 +166,15 @@ export function sessionsTemplate(passthroughOnly: boolean): string {
           <h2 class="mobile-page-title">设置</h2>
         </header>
         <div class="mobile-page-content">
-          <div class="settings-section">
+            <div class="settings-section">
             <div class="settings-group">
+              <div class="settings-item">
+                <div>
+                  <div class="settings-item-label">入口类型</div>
+                  <div class="settings-item-hint">当前页面是手机 / 浏览器远程入口；桌面挂载在桌面端设置中管理</div>
+                </div>
+                <span class="settings-status-value">浏览器入口</span>
+              </div>
               <div class="settings-item">
                 <div>
                   <div class="settings-item-label">外观主题</div>

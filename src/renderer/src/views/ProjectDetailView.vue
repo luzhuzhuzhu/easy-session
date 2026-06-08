@@ -4,7 +4,20 @@
       <div v-if="!project" class="loading-state">{{ $t('config.loading') }}</div>
 
       <template v-else>
-        <section class="overview-section">
+        <nav class="project-detail-tabs" :aria-label="$t('projectDetail.tabsLabel')">
+          <button
+            v-for="tab in projectDetailTabs"
+            :key="tab.id"
+            class="project-detail-tab"
+            :class="{ active: activeProjectTab === tab.id }"
+            type="button"
+            @click="activeProjectTab = tab.id"
+          >
+            {{ tab.label }}
+          </button>
+        </nav>
+
+        <section v-show="activeProjectTab === 'overview'" class="overview-section">
         <div class="overview-header">
           <input
             v-model="editName"
@@ -24,23 +37,25 @@
             <span class="detect-badge" :class="{ found: detectResult.opencode }">.opencode/</span>
           </span>
         </div>
+        <div v-if="remoteCapabilityNotice" class="capability-notice">
+          {{ remoteCapabilityNotice }}
+        </div>
       </section>
 
-      <section class="panel">
-        <div class="panel-header" @click="sessionsOpen = !sessionsOpen">
+      <section v-show="activeProjectTab === 'sessions'" class="panel">
+        <div class="panel-header">
           <span class="panel-title">{{ $t('projectDetail.sessions') }} ({{ projectSessions.length }})</span>
-          <div class="panel-header-actions" @click.stop>
-            <button
+          <div class="panel-header-actions">
+            <Button
               v-if="canCreateSessions && project"
-              class="btn btn-sm"
+              size="sm"
               @click="openCreateSessionDialog"
             >
               {{ $t('projectDetail.newSession') }}
-            </button>
-            <span class="panel-toggle" :class="{ open: sessionsOpen }">&gt;</span>
+            </Button>
           </div>
         </div>
-        <div v-if="sessionsOpen" class="panel-body">
+        <div class="panel-body">
           <div v-if="canCreateSessions" class="session-create-hint">
             {{ $t('projectDetail.newSessionPausedHint') }}
           </div>
@@ -61,23 +76,22 @@
                 </div>
 
                 <div class="session-actions" @click.stop>
-                  <button class="btn btn-sm" @click="openSession(s)">{{ $t('projectDetail.enterSession') }}</button>
-                  <button
+                  <Button size="sm" @click="openSession(s)">{{ $t('projectDetail.enterSession') }}</Button>
+                  <Button
                     v-if="canStartSessions && s.status !== 'running'"
-                    class="btn btn-sm"
+                    size="sm"
                     @click="startSessionFromProject(s.sessionId)"
                   >
                     {{ $t('session.start') }}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     v-else-if="canPauseSessions"
-                    class="btn btn-sm"
+                    size="sm"
                     @click="pauseSessionFromProject(s.sessionId)"
                   >
                     {{ $t('session.pause') }}
-                  </button>
-                  <button v-if="canRestartSessions" class="btn btn-sm" @click="restartSessionFromProject(s.sessionId)">{{ $t('session.restart') }}</button>
-                  <button v-if="canDestroySessions" class="btn btn-sm btn-danger" @click="destroySessionFromProject(s.sessionId)">{{ $t('session.destroy') }}</button>
+                  </Button>
+                  <Button v-if="canRestartSessions" size="sm" @click="restartSessionFromProject(s.sessionId)">{{ $t('session.restart') }}</Button>
                 </div>
               </div>
 
@@ -98,8 +112,19 @@
                 </div>
 
                 <div class="options-wrap">
-                  <div class="options-title">{{ $t('projectDetail.sessionOptions') }}</div>
-                  <pre class="options-json">{{ JSON.stringify(s.options || {}, null, 2) }}</pre>
+                  <button class="options-toggle" type="button" @click="toggleSessionOptions(s.sessionId)">
+                    <span>{{ $t('projectDetail.sessionOptions') }}</span>
+                    <span class="panel-toggle" :class="{ open: isSessionOptionsVisible(s.sessionId) }">&gt;</span>
+                  </button>
+                  <pre v-if="isSessionOptionsVisible(s.sessionId)" class="options-json">{{ JSON.stringify(s.options || {}, null, 2) }}</pre>
+                </div>
+
+                <div v-if="canDestroySessions" class="session-danger-zone">
+                  <div>
+                    <strong>{{ $t('projectDetail.sessionDangerZone') }}</strong>
+                    <p>{{ $t('projectDetail.sessionDestroyHint') }}</p>
+                  </div>
+                  <Button size="sm" tone="danger" @click="destroySessionFromProject(s.sessionId)">{{ $t('session.destroy') }}</Button>
                 </div>
               </div>
             </div>
@@ -108,12 +133,11 @@
         </div>
       </section>
 
-      <section v-if="showPromptPanel" class="panel">
-        <div class="panel-header" @click="promptsOpen = !promptsOpen">
+      <section v-if="showPromptPanel" v-show="activeProjectTab === 'prompts'" class="panel">
+        <div class="panel-header">
           <span class="panel-title">{{ $t('projectDetail.prompts') }}</span>
-          <span class="panel-toggle" :class="{ open: promptsOpen }">&gt;</span>
         </div>
-        <div v-if="promptsOpen" class="panel-body">
+        <div class="panel-body">
           <div class="tabs prompt-tabs">
             <button class="tab" :class="{ active: promptTab === 'claude' }" @click="promptTab = 'claude'">
               {{ $t('projectDetail.promptClaudeTab') }}
@@ -143,31 +167,32 @@
           <div class="prompt-hints">
             <span v-if="!promptExists" class="empty-hint">{{ $t('projectDetail.promptMissing') }}</span>
             <span v-if="promptModified" class="modified-hint">{{ $t('config.modified') }}</span>
+            <span v-else-if="hasUnsavedPromptChanges" class="modified-hint">{{ $t('projectDetail.promptOtherTabModified') }}</span>
           </div>
 
           <div class="actions">
-            <button
-              class="btn btn-primary btn-sm"
+            <Button
+              size="sm"
+              tone="primary"
               :disabled="!canWritePrompt || !promptModified || promptSaving"
               @click="savePromptContent"
             >
               {{ $t('config.save') }}
-            </button>
-            <button class="btn btn-sm" :disabled="promptSaving" @click="reloadPromptContent">
+            </Button>
+            <Button size="sm" :disabled="promptSaving" @click="reloadPromptContent">
               {{ $t('config.reload') }}
-            </button>
+            </Button>
           </div>
 
           <div v-if="promptMessage" class="message" :class="promptMessageType">{{ promptMessage }}</div>
         </div>
       </section>
 
-      <section v-if="showSkillsPanel" class="panel">
-        <div class="panel-header" @click="skillsOpen = !skillsOpen">
+      <section v-if="showSkillsPanel" v-show="activeProjectTab === 'skills'" class="panel">
+        <div class="panel-header">
           <span class="panel-title">{{ $t('projectDetail.skills') }} ({{ projectSkills.length }})</span>
-          <span class="panel-toggle" :class="{ open: skillsOpen }">&gt;</span>
         </div>
-        <div v-if="skillsOpen" class="panel-body">
+        <div class="panel-body">
           <div v-if="projectSkills.length === 0" class="empty-hint">
             {{ $t('projectDetail.noSkills') }}
             <div class="skills-hint">{{ $t('projectDetail.skillsHint') }}</div>
@@ -184,8 +209,8 @@
                   </div>
                 </div>
                 <div class="skill-actions">
-                  <button class="btn btn-sm" @click="handleOpenSkillPath(sk.filePath)">{{ $t('projectDetail.openSkillPath') }}</button>
-                  <button v-if="!sk.isBuiltin" class="btn btn-sm btn-danger" @click="handleDeleteProjectSkill(sk)">{{ $t('skill.delete') }}</button>
+                  <Button size="sm" @click="handleOpenSkillPath(sk.filePath)">{{ $t('projectDetail.openSkillPath') }}</Button>
+                  <Button v-if="!sk.isBuiltin" size="sm" tone="danger" @click="handleDeleteProjectSkill(sk)">{{ $t('skill.delete') }}</Button>
                 </div>
               </div>
             </div>
@@ -212,13 +237,15 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useProjectsStore } from '@/stores/projects'
 import { useInstancesStore } from '@/stores/instances'
 import { useSessionsStore } from '@/stores/sessions'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useToast } from '@/composables/useToast'
 import CreateSessionDialog from '@/components/CreateSessionDialog.vue'
+import Button from '@/components/ui/Button.vue'
 import {
   listProjectSkills,
   deleteProjectSkill,
@@ -228,6 +255,8 @@ import {
 import { LOCAL_INSTANCE_ID, type ProjectRef, type UnifiedProject, type UnifiedSession } from '@/models/unified-resource'
 import type { ProjectPromptCliType } from '@/api/local-project'
 import { resolveProjectRouteRef } from '@/utils/project-routing'
+import { buildSessionDestroyConfirmCopy, buildSessionRestartConfirmCopy } from '@/utils/session-confirm'
+import { formatRemoteOperationError, formatSessionOperationTarget } from '@/utils/remote-operation-error'
 
 const route = useRoute()
 const router = useRouter()
@@ -235,20 +264,22 @@ const projectsStore = useProjectsStore()
 const instancesStore = useInstancesStore()
 const sessionsStore = useSessionsStore()
 const { t } = useI18n()
+const confirmDialog = useConfirmDialog()
 const toast = useToast()
 
 const project = ref<UnifiedProject | null>(null)
 const detectResult = ref<{ claude: boolean; codex: boolean; opencode: boolean } | null>(null)
 const projectSessions = ref<UnifiedSession[]>([])
 const editName = ref('')
-const sessionsOpen = ref(true)
 const showCreateSessionDialog = ref(false)
-const promptsOpen = ref(true)
 const expandedSessionId = ref<string | null>(null)
+const expandedSessionOptionsIds = ref<string[]>([])
 
-const skillsOpen = ref(true)
 const projectSkills = ref<Skill[]>([])
 
+type ProjectDetailTab = 'overview' | 'sessions' | 'prompts' | 'skills'
+
+const activeProjectTab = ref<ProjectDetailTab>('overview')
 const promptTab = ref<ProjectPromptCliType>('claude')
 const promptLoading = ref(false)
 const promptSaving = ref(false)
@@ -276,6 +307,31 @@ const canReadPrompt = computed(() => !!projectCapabilities.value?.projectPromptR
 const canWritePrompt = computed(() => !!projectCapabilities.value?.projectPromptWrite)
 const showPromptPanel = computed(() => canReadPrompt.value || canWritePrompt.value)
 const showSkillsPanel = computed(() => project.value?.instanceId === LOCAL_INSTANCE_ID)
+const projectDetailTabs = computed<Array<{ id: ProjectDetailTab; label: string }>>(() => {
+  const tabs: Array<{ id: ProjectDetailTab; label: string }> = [
+    { id: 'overview', label: t('projectDetail.overview') },
+    { id: 'sessions', label: t('projectDetail.sessions') }
+  ]
+  if (showPromptPanel.value) tabs.push({ id: 'prompts', label: t('projectDetail.prompts') })
+  if (showSkillsPanel.value) tabs.push({ id: 'skills', label: t('projectDetail.skills') })
+  return tabs
+})
+const remoteCapabilityNotice = computed(() => {
+  if (!project.value || project.value.instanceId === LOCAL_INSTANCE_ID) return ''
+  const capabilities = projectCapabilities.value
+  if (!capabilities) return t('projectDetail.remoteCapabilityUnknown')
+
+  const missing: string[] = []
+  if (!capabilities.projectUpdate) missing.push(t('projectDetail.capabilityRenameProject'))
+  if (!capabilities.sessionCreate) missing.push(t('projectDetail.capabilityCreateSession'))
+  if (!capabilities.projectPromptRead && !capabilities.projectPromptWrite) {
+    missing.push(t('projectDetail.capabilityProjectPrompt'))
+  }
+  missing.push(t('projectDetail.capabilityLocalSkills'))
+
+  if (!missing.length) return ''
+  return t('projectDetail.remoteCapabilityLimited', { capabilities: missing.join('、') })
+})
 
 type PromptTabCache = {
   loaded: boolean
@@ -289,6 +345,16 @@ type PromptTabCache = {
 const promptCache = ref<Record<ProjectPromptCliType, PromptTabCache>>({
   claude: { loaded: false, projectKey: '', path: '', exists: false, source: '', edit: '' },
   codex: { loaded: false, projectKey: '', path: '', exists: false, source: '', edit: '' }
+})
+
+const hasUnsavedPromptChanges = computed(() => {
+  if (!project.value) return false
+  if (promptModified.value) return true
+  return Object.values(promptCache.value).some((cached) => {
+    return cached.loaded &&
+      cached.projectKey === project.value?.globalProjectKey &&
+      cached.edit !== cached.source
+  })
 })
 
 const now = ref(Date.now())
@@ -353,6 +419,16 @@ function toggleSessionExpand(id: string) {
   expandedSessionId.value = expandedSessionId.value === id ? null : id
 }
 
+function isSessionOptionsVisible(id: string): boolean {
+  return expandedSessionOptionsIds.value.includes(id)
+}
+
+function toggleSessionOptions(id: string): void {
+  expandedSessionOptionsIds.value = isSessionOptionsVisible(id)
+    ? expandedSessionOptionsIds.value.filter((item) => item !== id)
+    : [...expandedSessionOptionsIds.value, id]
+}
+
 function openCreateSessionDialog() {
   showCreateSessionDialog.value = true
 }
@@ -367,11 +443,15 @@ async function reloadProjectSessions() {
   if (expandedSessionId.value && !projectSessions.value.some((item) => item.sessionId === expandedSessionId.value)) {
     expandedSessionId.value = null
   }
+  expandedSessionOptionsIds.value = expandedSessionOptionsIds.value.filter((id) =>
+    projectSessions.value.some((item) => item.sessionId === id)
+  )
 }
 
 async function startSessionFromProject(id: string) {
+  let target: UnifiedSession | undefined
   try {
-    const target = projectSessions.value.find((session) => session.sessionId === id)
+    target = projectSessions.value.find((session) => session.sessionId === id)
     if (!target) throw new Error('Session not found')
     await sessionsStore.startSessionRef({
       instanceId: target.instanceId,
@@ -381,13 +461,27 @@ async function startSessionFromProject(id: string) {
     await reloadProjectSessions()
     toast.success(t('toast.sessionStarted'))
   } catch (e: unknown) {
-    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
+    toast.error(formatRemoteOperationError({
+      t,
+      instancesStore,
+      instanceId: target?.instanceId || project.value?.instanceId || LOCAL_INSTANCE_ID,
+      action: t('session.start'),
+      target: target
+        ? formatSessionOperationTarget({
+            instanceId: target.instanceId,
+            sessionId: target.sessionId,
+            globalSessionKey: target.globalSessionKey
+          }, target.name)
+        : id,
+      error: e
+    }))
   }
 }
 
 async function pauseSessionFromProject(id: string) {
+  let target: UnifiedSession | undefined
   try {
-    const target = projectSessions.value.find((session) => session.sessionId === id)
+    target = projectSessions.value.find((session) => session.sessionId === id)
     if (!target) throw new Error('Session not found')
     await sessionsStore.pauseSessionRef({
       instanceId: target.instanceId,
@@ -397,14 +491,40 @@ async function pauseSessionFromProject(id: string) {
     await reloadProjectSessions()
     toast.success(t('toast.sessionPaused'))
   } catch (e: unknown) {
-    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
+    toast.error(formatRemoteOperationError({
+      t,
+      instancesStore,
+      instanceId: target?.instanceId || project.value?.instanceId || LOCAL_INSTANCE_ID,
+      action: t('session.pause'),
+      target: target
+        ? formatSessionOperationTarget({
+            instanceId: target.instanceId,
+            sessionId: target.sessionId,
+            globalSessionKey: target.globalSessionKey
+          }, target.name)
+        : id,
+      error: e
+    }))
   }
 }
 
 async function restartSessionFromProject(id: string) {
+  let target: UnifiedSession | undefined
   try {
-    const target = projectSessions.value.find((session) => session.sessionId === id)
+    target = projectSessions.value.find((session) => session.sessionId === id)
     if (!target) throw new Error('Session not found')
+    if (target.status === 'running') {
+      const copy = buildSessionRestartConfirmCopy(target, t)
+      const confirmed = await confirmDialog.confirm({
+        title: copy.title,
+        message: copy.message,
+        details: copy.details,
+        confirmText: t('confirm.restart'),
+        cancelText: t('confirm.cancel'),
+        tone: 'danger'
+      })
+      if (!confirmed) return
+    }
     await sessionsStore.restartSessionRef({
       instanceId: target.instanceId,
       sessionId: target.sessionId,
@@ -413,15 +533,40 @@ async function restartSessionFromProject(id: string) {
     await reloadProjectSessions()
     toast.success(t('toast.sessionRestarted'))
   } catch (e: unknown) {
-    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
+    toast.error(formatRemoteOperationError({
+      t,
+      instancesStore,
+      instanceId: target?.instanceId || project.value?.instanceId || LOCAL_INSTANCE_ID,
+      action: t('session.restart'),
+      target: target
+        ? formatSessionOperationTarget({
+            instanceId: target.instanceId,
+            sessionId: target.sessionId,
+            globalSessionKey: target.globalSessionKey
+          }, target.name)
+        : id,
+      error: e
+    }))
   }
 }
 
 async function destroySessionFromProject(id: string) {
-  if (!confirm(t('session.confirmDestroy'))) return
+  const target = projectSessions.value.find((session) => session.sessionId === id)
+  if (!target) {
+    toast.error(t('toast.operationFailed') + ': Session not found')
+    return
+  }
+  const copy = buildSessionDestroyConfirmCopy(target, t)
+  const confirmed = await confirmDialog.confirm({
+    title: copy.title,
+    message: copy.message,
+    details: copy.details,
+    confirmText: t('confirm.destroy'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
   try {
-    const target = projectSessions.value.find((session) => session.sessionId === id)
-    if (!target) throw new Error('Session not found')
     await sessionsStore.destroySessionRef({
       instanceId: target.instanceId,
       sessionId: target.sessionId,
@@ -430,7 +575,18 @@ async function destroySessionFromProject(id: string) {
     await reloadProjectSessions()
     toast.success(t('toast.sessionDestroyed'))
   } catch (e: unknown) {
-    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
+    toast.error(formatRemoteOperationError({
+      t,
+      instancesStore,
+      instanceId: target.instanceId,
+      action: t('session.destroy'),
+      target: formatSessionOperationTarget({
+        instanceId: target.instanceId,
+        sessionId: target.sessionId,
+        globalSessionKey: target.globalSessionKey
+      }, target.name),
+      error: e
+    }))
   }
 }
 
@@ -527,7 +683,32 @@ async function savePromptContent() {
 }
 
 async function reloadPromptContent() {
+  const confirmed = await confirmDiscardUnsavedPromptChanges()
+  if (!confirmed) return
   await loadPromptContent(true)
+}
+
+async function confirmDiscardUnsavedPromptChanges(): Promise<boolean> {
+  cacheCurrentPromptState(promptTab.value)
+  if (!hasUnsavedPromptChanges.value) return true
+
+  return confirmDialog.confirm({
+    title: t('projectDetail.promptUnsavedTitle'),
+    message: t('projectDetail.promptUnsavedMessage'),
+    details: promptFilePath.value
+      ? t('projectDetail.promptUnsavedDetails') + '\n' + promptFilePath.value
+      : t('projectDetail.promptUnsavedDetails'),
+    confirmText: t('confirm.continue'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent): void {
+  cacheCurrentPromptState(promptTab.value)
+  if (!hasUnsavedPromptChanges.value) return
+  event.preventDefault()
+  event.returnValue = ''
 }
 
 async function loadProjectSkills() {
@@ -539,7 +720,16 @@ async function loadProjectSkills() {
 }
 
 async function handleDeleteProjectSkill(skill: Skill) {
-  if (!project.value || project.value.instanceId !== LOCAL_INSTANCE_ID || !confirm(t('skill.confirmDelete'))) return
+  if (!project.value || project.value.instanceId !== LOCAL_INSTANCE_ID) return
+  const confirmed = await confirmDialog.confirm({
+    title: t('skill.confirmDeleteTitle'),
+    message: t('skill.confirmDeleteMessage'),
+    details: t('skill.confirmDeleteDetails'),
+    confirmText: t('confirm.delete'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
   try {
     await deleteProjectSkill(project.value.projectId, skill.id)
     await loadProjectSkills()
@@ -605,6 +795,7 @@ async function loadProject() {
     projectsStore.setActiveProjectRef(currentProjectRef)
     editName.value = p.name
     expandedSessionId.value = null
+    expandedSessionOptionsIds.value = []
     resetPromptCache()
 
     if (projectCapabilities.value?.projectDetect) {
@@ -622,6 +813,7 @@ async function loadProject() {
     } catch {
       projectSessions.value = []
       expandedSessionId.value = null
+      expandedSessionOptionsIds.value = []
     }
 
     if (showPromptPanel.value) {
@@ -648,10 +840,20 @@ onMounted(() => {
   timer = setInterval(() => {
     now.value = Date.now()
   }, 1000)
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeRouteLeave(async () => {
+  return confirmDiscardUnsavedPromptChanges()
+})
+
+onBeforeRouteUpdate(async () => {
+  return confirmDiscardUnsavedPromptChanges()
 })
 
 watch(() => [route.name, route.params.id, route.params.instanceId, route.params.projectId], () => {
@@ -665,6 +867,11 @@ watch(promptTab, (_next, prev) => {
   if (project.value) {
     void loadPromptContent()
   }
+})
+
+watch(projectDetailTabs, (tabs) => {
+  if (tabs.some((tab) => tab.id === activeProjectTab.value)) return
+  activeProjectTab.value = tabs[0]?.id ?? 'overview'
 })
 </script>
 
@@ -686,6 +893,37 @@ watch(promptTab, (_next, prev) => {
   text-align: center;
   padding: var(--spacing-xl);
   color: var(--text-muted);
+}
+
+.project-detail-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.project-detail-tab {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  position: relative;
+  bottom: -1px;
+
+  &:hover {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--bg-hover) 72%, transparent);
+  }
+
+  &.active {
+    color: var(--accent-primary);
+    border-bottom-color: var(--accent-primary);
+  }
 }
 
 .overview-section {
@@ -728,6 +966,16 @@ watch(promptTab, (_next, prev) => {
   padding-left: 8px;
 }
 
+.capability-notice {
+  margin-top: var(--spacing-sm);
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--status-warning) 30%, var(--border-color));
+  background: color-mix(in srgb, var(--status-warning) 8%, var(--bg-card));
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+
 .detect-badges { display: flex; gap: 4px; }
 
 .detect-badge {
@@ -737,7 +985,7 @@ watch(promptTab, (_next, prev) => {
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
   color: var(--text-muted);
-  &.found { color: var(--status-success); background: rgba(52, 211, 153, 0.1); }
+  &.found { color: var(--status-success); background: color-mix(in srgb, var(--status-success) 12%, transparent); }
 }
 
 .panel {
@@ -752,9 +1000,8 @@ watch(promptTab, (_next, prev) => {
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);
-  cursor: pointer;
+  cursor: default;
   user-select: none;
-  &:hover { background: var(--bg-hover); }
 }
 
 .panel-title { font-weight: 600; font-size: var(--font-size-sm); }
@@ -788,13 +1035,21 @@ watch(promptTab, (_next, prev) => {
 .session-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
 .session-card {
-  border: 1px solid var(--border-color);
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
   border-radius: 0;
-  background: var(--bg-secondary);
+  background: transparent;
+}
+
+.session-card:last-child {
+  border-bottom: 0;
 }
 
 .session-main {
@@ -802,7 +1057,7 @@ watch(promptTab, (_next, prev) => {
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-sm);
-  padding: var(--spacing-sm);
+  padding: 10px 0;
 }
 
 .session-main-left {
@@ -841,7 +1096,7 @@ watch(promptTab, (_next, prev) => {
 
 .session-expand {
   border-top: 1px solid var(--border-color);
-  padding: var(--spacing-sm);
+  padding: 10px 0 12px;
 }
 
 .detail-grid {
@@ -871,10 +1126,23 @@ watch(promptTab, (_next, prev) => {
   margin-top: var(--spacing-sm);
 }
 
-.options-title {
+.options-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
   font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
 }
 
 .options-json {
@@ -888,6 +1156,29 @@ watch(promptTab, (_next, prev) => {
   font-family: var(--font-mono);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.session-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border: 1px solid color-mix(in srgb, var(--status-error) 30%, var(--border-color));
+  background: color-mix(in srgb, var(--status-error) 7%, var(--bg-tertiary));
+
+  strong {
+    color: var(--status-error);
+    font-size: var(--font-size-xs);
+  }
+
+  p {
+    margin: 3px 0 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    line-height: 1.45;
+  }
 }
 
 .setting-textarea {
@@ -998,22 +1289,30 @@ watch(promptTab, (_next, prev) => {
   font-size: var(--font-size-sm);
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: 0;
-  &.success { color: var(--status-success); background: rgba(52, 211, 153, 0.1); }
-  &.error { color: var(--status-error); background: rgba(248, 113, 113, 0.1); }
+  &.success { color: var(--status-success); background: color-mix(in srgb, var(--status-success) 12%, transparent); }
+  &.error { color: var(--status-error); background: color-mix(in srgb, var(--status-error) 12%, transparent); }
 }
 
-// type-badge, btn, btn-sm, btn-primary, btn-danger are defined in global.scss
+// type-badge is defined in global.scss
 
 .skill-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
 .skill-card {
-  border: 1px solid var(--border-color);
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
   border-radius: 0;
-  background: var(--bg-secondary);
+  background: transparent;
+}
+
+.skill-card:last-child {
+  border-bottom: 0;
 }
 
 .skill-main {
@@ -1021,7 +1320,7 @@ watch(promptTab, (_next, prev) => {
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-sm);
-  padding: var(--spacing-sm);
+  padding: 10px 0;
 }
 
 .skill-info {

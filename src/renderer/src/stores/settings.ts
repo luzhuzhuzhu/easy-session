@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, toRaw } from 'vue'
 
 export interface AppSettings {
-  theme: 'dark' | 'light'
+  theme: AppTheme
   language: 'zh-CN' | 'en'
   claudePath: string
   codexPath: string
@@ -23,8 +23,35 @@ export interface AppSettings {
   manualSessionOrder: Record<string, string[]>
 }
 
+export type AppTheme =
+  | 'chatgpt-dark'
+  | 'gemini-dark'
+
+const supportedThemes = new Set<AppTheme>([
+  'chatgpt-dark',
+  'gemini-dark'
+])
+
+const legacyThemeAliases: Record<string, AppTheme> = {
+  dark: 'chatgpt-dark',
+  light: 'chatgpt-dark',
+  chatgpt: 'chatgpt-dark',
+  'chatgpt-light': 'chatgpt-dark',
+  'claude-light': 'chatgpt-dark',
+  'claude-dark': 'chatgpt-dark',
+  opencode: 'chatgpt-dark',
+  'opencode-light': 'chatgpt-dark',
+  'opencode-dark': 'chatgpt-dark',
+  gemini: 'gemini-dark',
+  'gemini-light': 'gemini-dark',
+  graphite: 'chatgpt-dark',
+  forest: 'chatgpt-dark',
+  amber: 'chatgpt-dark',
+  indigo: 'chatgpt-dark'
+}
+
 const defaults: AppSettings = {
-  theme: 'dark',
+  theme: 'chatgpt-dark',
   language: 'zh-CN',
   claudePath: '',
   codexPath: '',
@@ -92,8 +119,14 @@ function normalizeSettings(input: unknown): AppSettings {
     )
   }
 
+  const normalizeTheme = (value: unknown): AppTheme => {
+    if (typeof value !== 'string') return defaults.theme
+    if (supportedThemes.has(value as AppTheme)) return value as AppTheme
+    return legacyThemeAliases[value] ?? defaults.theme
+  }
+
   return {
-    theme: raw.theme === 'light' ? 'light' : defaults.theme,
+    theme: normalizeTheme(raw.theme),
     language: raw.language === 'en' ? 'en' : defaults.language,
     claudePath: normalizeString(raw.claudePath, defaults.claudePath),
     codexPath: normalizeString(raw.codexPath, defaults.codexPath),

@@ -1,24 +1,31 @@
 ﻿<template>
   <div class="terminal-output">
     <div class="terminal-toolbar">
-      <button
-        class="tool-btn"
+      <span v-if="showHistoryWindowHint" class="history-window-hint">
+        {{ historyWindowText }}
+      </span>
+      <ToolbarButton
         :disabled="loadingMoreHistory || loadingHistory || !hasMoreHistory"
         :title="$t('terminal.loadMoreHistory')"
+        :label="$t('terminal.loadMoreHistory')"
         @click="loadMoreHistory"
       >
-        HM
-      </button>
-      <button
-        class="tool-btn"
-        :class="{ active: autoScroll }"
+        <UiIcon name="arrow-up-to-line" />
+      </ToolbarButton>
+      <ToolbarButton
+        :active="autoScroll"
         :title="$t(autoScroll ? 'terminal.pauseScroll' : 'terminal.resumeScroll')"
+        :label="$t(autoScroll ? 'terminal.pauseScroll' : 'terminal.resumeScroll')"
         @click="toggleAutoScroll"
       >
-        {{ autoScroll ? 'AS' : 'PA' }}
-      </button>
-      <button class="tool-btn" :title="$t('terminal.copyAll')" @click="copyAll">CP</button>
-      <button class="tool-btn" :title="$t('terminal.clearOutput')" @click="handleClear">CL</button>
+        <UiIcon :name="autoScroll ? 'arrow-down-to-line' : 'play'" />
+      </ToolbarButton>
+      <ToolbarButton :label="$t('terminal.copyAll')" @click="copyAll">
+        <UiIcon name="copy" />
+      </ToolbarButton>
+      <ToolbarButton :label="$t('terminal.clearOutput')" tone="danger" @click="handleClear">
+        <UiIcon name="eraser" />
+      </ToolbarButton>
     </div>
     <div
       class="terminal-container"
@@ -27,6 +34,15 @@
       @contextmenu="handleContextMenu"
       @wheel.capture="handleWheel"
     ></div>
+    <div v-if="!autoScroll" class="terminal-scroll-state">
+      {{ $t('terminal.autoScrollPaused') }}
+    </div>
+    <div v-if="foregroundSyncing" class="terminal-sync-state">
+      {{ $t('terminal.syncingOutput') }}
+    </div>
+    <div v-if="terminalInputBlockedReason" class="terminal-input-state">
+      {{ terminalInputBlockedReason }}
+    </div>
   </div>
 </template>
 
@@ -36,8 +52,12 @@ import { useI18n } from 'vue-i18n'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import ToolbarButton from '@/components/ui/ToolbarButton.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import type { OutputLine } from '@/api/session'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useToast } from '@/composables/useToast'
+import { useInstancesStore } from '@/stores/instances'
 import { useSettingsStore } from '@/stores/settings'
 import { useSessionsStore } from '@/stores/sessions'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -47,7 +67,9 @@ import type { SessionRef } from '@/models/unified-resource'
 const props = defineProps<{ sessionRef?: SessionRef | null; processKey?: string | null; paneId?: string | null }>()
 const emit = defineEmits<{ clear: [] }>()
 const { t } = useI18n()
+const confirmDialog = useConfirmDialog()
 const toast = useToast()
+const instancesStore = useInstancesStore()
 const settingsStore = useSettingsStore()
 const sessionsStore = useSessionsStore()
 const workspaceStore = useWorkspaceStore()
@@ -87,6 +109,16 @@ let lastObservedHeight = -1
 const currentHistoryLoadLines = ref(HISTORY_LOAD_LINES)
 const hasMoreHistory = ref(true)
 const loadingMoreHistory = ref(false)
+const foregroundSyncing = ref(false)
+
+const showHistoryWindowHint = computed(() => loadingMoreHistory.value || currentHistoryLoadLines.value > HISTORY_LOAD_LINES)
+const historyWindowText = computed(() => {
+  const count = formatHistoryLineCount(currentHistoryLoadLines.value)
+  if (loadingMoreHistory.value) {
+    return t('terminal.historyWindowLoading', { count })
+  }
+  return t(hasMoreHistory.value ? 'terminal.historyWindowMore' : 'terminal.historyWindowAll', { count })
+})
 
 const historySnapshotCache = new Map<string, {
   lines: OutputLine[]
@@ -99,11 +131,52 @@ const isForegroundPane = computed(() => {
   return workspaceStore.layout.activePaneId === props.paneId
 })
 
-const currentSessionStatus = computed(() => {
+const currentSession = computed(() => {
   const globalSessionKey = props.sessionRef?.globalSessionKey
   if (!globalSessionKey) return null
-  return sessionsStore.getUnifiedSession(globalSessionKey)?.status ?? null
+  return sessionsStore.getUnifiedSession(globalSessionKey) ?? null
 })
+
+const currentSessionStatus = computed(() => currentSession.value?.status ?? null)
+const currentInstance = computed(() => {
+  const session = currentSession.value
+  if (!session) return null
+  return instancesStore.getInstance(session.instanceId) ?? null
+})
+
+const terminalInputBlockedReason = computed(() => {
+  if (!props.sessionRef) return ''
+
+  const session = currentSession.value
+  if (!session) return t('terminal.inputUnavailableMissing')
+
+  const instance = currentInstance.value
+  if (instance?.type === 'remote' && instance.status !== 'online') {
+    return t('terminal.inputUnavailableRemote', { status: t(`settings.remoteStatus.${instance.status}`) })
+  }
+
+  if (instance && !instance.capabilities.sessionInput) {
+    return t('terminal.inputUnavailablePermission')
+  }
+
+  if (session.status !== 'running') {
+    return t('terminal.inputUnavailableNotRunning')
+  }
+
+  if (!props.processKey) {
+    return t('terminal.inputUnavailableProcess')
+  }
+
+  return ''
+})
+
+function formatHistoryLineCount(lines: number): string {
+  if (lines >= 1000) {
+    const value = lines / 1000
+    return `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}k`
+  }
+  return String(lines)
+}
 
 function getLastSeq(history: OutputLine[]): number {
   let maxSeq = 0
@@ -273,8 +346,12 @@ async function safeWriteClipboard(text: string): Promise<boolean> {
 async function copySelectedText(showToastTip = false): Promise<boolean> {
   if (!term || !term.hasSelection()) return false
   const copied = await safeWriteClipboard(term.getSelection())
-  if (copied && showToastTip) {
-    toast.success(t('terminal.copySuccess'))
+  if (showToastTip) {
+    if (copied) {
+      toast.success(t('terminal.copySuccess'))
+    } else {
+      toast.error(t('terminal.copyFail'))
+    }
   }
   return copied
 }
@@ -421,6 +498,38 @@ function destroyTerminal(): void {
   lastSyncedRows = -1
 }
 
+function readCssVar(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return value || fallback
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const normalized = hex.trim().replace('#', '')
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return `rgba(143, 183, 173, ${alpha})`
+  }
+  const r = Number.parseInt(normalized.slice(0, 2), 16)
+  const g = Number.parseInt(normalized.slice(2, 4), 16)
+  const b = Number.parseInt(normalized.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+function buildTerminalTheme() {
+  const accent = readCssVar('--accent-primary', '#8fb7ad')
+  return {
+    background: readCssVar('--bg-primary', '#111418'),
+    foreground: readCssVar('--text-primary', '#e7e9e6'),
+    cursor: accent,
+    selectionBackground: hexToRgba(accent, 0.28)
+  }
+}
+
+function applyTerminalTheme(): void {
+  if (!term) return
+  term.options.theme = buildTerminalTheme()
+}
+
 function initTerminal(): void {
   destroyTerminal()
   if (!containerRef.value) return
@@ -434,7 +543,7 @@ function initTerminal(): void {
     fontSize: activePaneFontSize.value,
     fontFamily: 'Consolas, "Courier New", monospace',
     rightClickSelectsWord: true,
-    theme: { background: '#0f1419', foreground: '#d1d5db', cursor: '#6c9eff', selectionBackground: 'rgba(108, 158, 255, 0.3)' },
+    theme: buildTerminalTheme(),
     ...(isWindows ? { windowsPty: { backend: 'conpty' as const } } : {})
   })
 
@@ -502,12 +611,6 @@ function initTerminal(): void {
 
 function resetLocalBuffer(): void {
   lastRenderedSeq = 0
-}
-
-function writeLine(line: OutputLine): void {
-  if (!term) return
-  term.write(line.text)
-  lastRenderedSeq = line.seq ?? lastRenderedSeq
 }
 
 function isViewportAtBottom(): boolean {
@@ -631,10 +734,15 @@ async function syncForegroundFromWarmHistory(): Promise<void> {
 
   const token = ++loadToken
   loadingHistory = true
-  const replayed = await renderHistorySnapshot(cachedHistory, token, sessionKey, false)
-  loadingHistory = false
-  if (replayed) {
-    scheduleResize()
+  foregroundSyncing.value = true
+  try {
+    const replayed = await renderHistorySnapshot(cachedHistory, token, sessionKey, false)
+    if (replayed) {
+      scheduleResize()
+    }
+  } finally {
+    loadingHistory = false
+    foregroundSyncing.value = false
   }
 }
 
@@ -845,6 +953,8 @@ async function copyAll(): Promise<void> {
     term.clearSelection()
     if (await safeWriteClipboard(text)) {
       toast.success(t('terminal.copySuccess'))
+    } else {
+      toast.error(t('terminal.copyFail'))
     }
     return
   }
@@ -861,13 +971,25 @@ async function copyAll(): Promise<void> {
     )
     if (await safeWriteClipboard(history.map((line) => line.text).join(''))) {
       toast.success(t('terminal.copySuccess'))
+    } else {
+      toast.error(t('terminal.copyFail'))
     }
   } catch {
-    // Ignore fallback copy failure.
+    toast.error(t('terminal.copyFail'))
   }
 }
 
-function handleClear(): void {
+async function handleClear(): Promise<void> {
+  const confirmed = await confirmDialog.confirm({
+    title: t('terminal.confirmClearTitle'),
+    message: t('terminal.confirmClearMessage'),
+    details: t('terminal.confirmClearDetails'),
+    confirmText: t('confirm.clear'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
+
   term?.reset()
   emit('clear')
   resetLocalBuffer()
@@ -904,6 +1026,13 @@ watch(
   activePaneFontSize,
   (size) => {
     applyTermFontSize(size, true)
+  }
+)
+
+watch(
+  () => settingsStore.settings.theme,
+  () => {
+    requestAnimationFrame(applyTerminalTheme)
   }
 )
 
@@ -968,6 +1097,7 @@ onBeforeUnmount(() => {
   unlistenOutput = null
   subscribedGlobalSessionKey = null
   loadingHistory = false
+  foregroundSyncing.value = false
   pendingEvents.length = 0
   resizeObserver?.disconnect()
   destroyTerminal()
@@ -989,38 +1119,23 @@ onBeforeUnmount(() => {
   right: 12px;
   z-index: 10;
   display: flex;
+  align-items: center;
   gap: 4px;
 }
 
-.tool-btn {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-tertiary);
+.history-window-hint {
+  max-width: min(42vw, 280px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 8px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
   color: var(--text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-  opacity: 0.6;
-  transition: opacity var(--transition-fast);
-
-  &:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
-
-  &:hover {
-    opacity: 1;
-  }
-
-  &.active {
-    opacity: 1;
-    border-color: var(--accent-primary);
-    color: var(--accent-primary);
-  }
+  font-size: var(--font-size-xs);
+  line-height: 14px;
+  opacity: 0.86;
 }
 
 .terminal-container {
@@ -1029,5 +1144,62 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   padding: 4px 8px 8px;
   background: var(--bg-primary);
+}
+
+.terminal-scroll-state {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  z-index: 8;
+  max-width: min(36vw, 220px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  opacity: 0.86;
+  pointer-events: none;
+}
+
+.terminal-sync-state {
+  position: absolute;
+  right: 12px;
+  bottom: 38px;
+  z-index: 8;
+  max-width: min(36vw, 240px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 32%, var(--border-color));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-tertiary));
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.terminal-input-state {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  z-index: 8;
+  max-width: min(52vw, 520px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--status-warning) 28%, var(--border-color));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-tertiary) 88%, var(--status-warning));
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  opacity: 0.92;
+  pointer-events: none;
 }
 </style>

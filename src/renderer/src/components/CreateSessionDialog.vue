@@ -3,121 +3,184 @@
     <div class="dialog">
       <div class="dialog-header">
         <h3>{{ $t('session.create') }}</h3>
-        <button class="close-btn" @click="$emit('cancel')">&times;</button>
+        <button class="close-btn" type="button" :aria-label="$t('session.dialog.cancel')" @click="$emit('cancel')">&times;</button>
       </div>
 
       <form class="dialog-body" @submit.prevent="handleSubmit">
-        <div class="form-group">
-          <label>{{ $t('session.dialog.name') }}</label>
-          <div class="name-row">
-            <div class="icon-picker-wrap">
-              <button type="button" class="icon-pick-btn" @click="showEmojiPicker = !showEmojiPicker">
-                {{ form.icon || '😀' }}
-              </button>
-              <div v-if="showEmojiPicker" class="emoji-grid">
-                <button
-                  v-for="e in emojiList" :key="e" type="button" class="emoji-cell"
-                  :class="{ selected: form.icon === e }"
-                  @click="form.icon = e; showEmojiPicker = false"
-                >{{ e }}</button>
-                <button type="button" class="emoji-cell clear-cell" @click="form.icon = ''; showEmojiPicker = false">✕</button>
-              </div>
+        <section class="form-section">
+          <div class="form-section-head">
+            <span class="section-kicker">{{ $t('session.dialog.basicSettings') }}</span>
+          </div>
+
+          <div class="form-group">
+            <label>{{ $t('session.selectType') }}</label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input v-model="form.type" type="radio" value="claude" />
+                {{ $t('session.claude') }}
+              </label>
+              <label class="radio-label">
+                <input v-model="form.type" type="radio" value="codex" />
+                {{ $t('session.codex') }}
+              </label>
+              <label class="radio-label">
+                <input v-model="form.type" type="radio" value="opencode" />
+                {{ $t('session.opencode') }}
+              </label>
             </div>
-            <input v-model="form.name" type="text" :placeholder="defaultName" class="form-input" />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>{{ $t('session.selectType') }}</label>
-          <div class="radio-group">
-            <label class="radio-label">
-              <input v-model="form.type" type="radio" value="claude" />
-              {{ $t('session.claude') }}
-            </label>
-            <label class="radio-label">
-              <input v-model="form.type" type="radio" value="codex" />
-              {{ $t('session.codex') }}
-            </label>
-            <label class="radio-label">
-              <input v-model="form.type" type="radio" value="opencode" />
-              {{ $t('session.opencode') }}
-            </label>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>{{ $t('session.dialog.projectPath') }} *</label>
-          <div class="path-input">
-            <input v-model="form.projectPath" type="text" class="form-input" readonly />
-            <button
-              v-if="canBrowseProjectPath"
-              type="button"
-              class="btn btn-sm"
-              @click="selectFolder"
+            <div
+              class="cli-status-row"
+              :class="{
+                available: selectedCliStatus === 'available',
+                unavailable: selectedCliStatus === 'unavailable',
+                muted: selectedCliStatus === 'remote' || selectedCliStatus === 'checking'
+              }"
             >
-              {{ $t('session.dialog.browse') }}
-            </button>
+              <span>{{ selectedCliStatusLabel }}</span>
+              <button
+                v-if="selectedCliStatus === 'unavailable'"
+                type="button"
+                class="text-action"
+                @click="openCliSettings"
+              >
+                {{ $t('session.dialog.openCliSettings') }}
+              </button>
+            </div>
           </div>
-          <span v-if="pathError" class="error-text">{{ pathError }}</span>
-        </div>
 
-        <template v-if="form.type === 'codex'">
           <div class="form-group">
-            <label>{{ $t('session.dialog.approvalMode') }}</label>
-            <select v-model="codexOptions.permissionsMode" class="form-input">
-              <option value="read-only">Read Only</option>
-              <option value="default">Default</option>
-              <option value="full-access">Full Access</option>
-            </select>
+            <label>{{ $t('session.dialog.projectPath') }} *</label>
+            <div class="path-input">
+              <input v-model="form.projectPath" type="text" class="form-input" readonly />
+              <Button
+                v-if="canBrowseProjectPath"
+                size="sm"
+                @click="selectFolder"
+              >
+                {{ $t('session.dialog.browse') }}
+              </Button>
+            </div>
+            <span v-if="projectPathHint" class="path-hint">{{ projectPathHint }}</span>
+            <span v-if="pathError" class="error-text">{{ pathError }}</span>
           </div>
-        </template>
 
-        <template v-if="form.type === 'opencode'">
           <div class="form-group">
-            <label>{{ $t('session.dialog.opencodeModel') }}</label>
-            <input v-model="opencodeOptions.model" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeModelPlaceholder')" />
+            <label>{{ $t('session.dialog.name') }}</label>
+            <div class="name-row">
+              <div class="icon-picker-wrap">
+                <button
+                  type="button"
+                  class="icon-pick-btn"
+                  :aria-label="$t('session.dialog.pickIcon')"
+                  @click="showEmojiPicker = !showEmojiPicker"
+                >
+                  {{ form.icon || '😀' }}
+                </button>
+                <div v-if="showEmojiPicker" class="emoji-grid">
+                  <button
+                    v-for="e in emojiList" :key="e" type="button" class="emoji-cell"
+                    :class="{ selected: form.icon === e }"
+                    @click="form.icon = e; showEmojiPicker = false"
+                  >{{ e }}</button>
+                  <button
+                    type="button"
+                    class="emoji-cell clear-cell"
+                    :aria-label="$t('session.dialog.clearIcon')"
+                    @click="form.icon = ''; showEmojiPicker = false"
+                  >✕</button>
+                </div>
+              </div>
+              <input v-model="form.name" type="text" :placeholder="defaultName" class="form-input" />
+            </div>
           </div>
-          <div class="form-group">
-            <label>{{ $t('session.dialog.opencodeAgent') }}</label>
-            <input v-model="opencodeOptions.agent" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeAgentPlaceholder')" />
+
+          <div class="startup-mode-row">
+            <span class="startup-mode-label">{{ $t('session.dialog.startupMode') }}</span>
+            <span class="startup-mode-value">{{ startupModeLabel }}</span>
           </div>
-          <div class="form-group">
-            <label>{{ $t('session.dialog.opencodePrompt') }}</label>
-            <input v-model="opencodeOptions.prompt" type="text" class="form-input" :placeholder="$t('session.dialog.opencodePromptPlaceholder')" />
+        </section>
+
+        <section v-if="form.type === 'codex' || form.type === 'opencode'" class="form-section advanced-block">
+          <button
+            type="button"
+            class="advanced-toggle"
+            :aria-expanded="showAdvancedOptions"
+            @click="showAdvancedOptions = !showAdvancedOptions"
+          >
+            <span>{{ $t('session.dialog.advancedOptions') }}</span>
+            <span class="advanced-toggle-icon" :class="{ open: showAdvancedOptions }">&gt;</span>
+          </button>
+
+          <div v-if="showAdvancedOptions" class="advanced-fields">
+            <template v-if="form.type === 'codex'">
+              <div class="form-group">
+                <label>{{ $t('session.dialog.approvalMode') }}</label>
+                <select v-model="codexOptions.permissionsMode" class="form-input">
+                  <option value="read-only">Read Only</option>
+                  <option value="default">Default</option>
+                  <option value="full-access">Full Access</option>
+                </select>
+                <p v-if="codexOptions.permissionsMode === 'full-access'" class="warning-text">
+                  {{ $t('session.dialog.fullAccessHint') }}
+                </p>
+              </div>
+            </template>
+
+            <template v-if="form.type === 'opencode'">
+              <div class="form-group">
+                <label>{{ $t('session.dialog.opencodeModel') }}</label>
+                <input v-model="opencodeOptions.model" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeModelPlaceholder')" />
+              </div>
+              <div class="form-group">
+                <label>{{ $t('session.dialog.opencodeAgent') }}</label>
+                <input v-model="opencodeOptions.agent" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeAgentPlaceholder')" />
+              </div>
+              <div class="form-group">
+                <label>{{ $t('session.dialog.opencodePrompt') }}</label>
+                <input v-model="opencodeOptions.prompt" type="text" class="form-input" :placeholder="$t('session.dialog.opencodePromptPlaceholder')" />
+              </div>
+              <div class="form-group">
+                <label>{{ $t('session.dialog.opencodeSessionId') }}</label>
+                <input v-model="opencodeOptions.sessionId" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeSessionIdPlaceholder')" />
+              </div>
+              <div class="form-group">
+                <label>{{ $t('session.dialog.opencodeServerMode') }}</label>
+                <select v-model="opencodeOptions.serverMode" class="form-input">
+                  <option value="off">{{ $t('session.dialog.opencodeServerModeOff') }}</option>
+                  <option value="attach">{{ $t('session.dialog.opencodeServerModeAttach') }}</option>
+                </select>
+              </div>
+              <div class="form-group" v-if="opencodeOptions.serverMode === 'attach'">
+                <label>{{ $t('session.dialog.opencodeAttachUrl') }}</label>
+                <input v-model="opencodeOptions.attachUrl" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeAttachUrlPlaceholder')" />
+              </div>
+              <div class="form-row">
+                <label class="check-label">
+                  <input v-model="opencodeOptions.continueLast" type="checkbox" />
+                  {{ $t('session.dialog.opencodeContinueLast') }}
+                </label>
+                <label class="check-label">
+                  <input v-model="opencodeOptions.fork" type="checkbox" />
+                  {{ $t('session.dialog.opencodeFork') }}
+                </label>
+              </div>
+              <p v-if="opencodeOptions.sessionId && opencodeOptions.continueLast" class="warning-text">
+                {{ $t('session.dialog.opencodeConflictHint') }}
+              </p>
+            </template>
           </div>
-          <div class="form-group">
-            <label>{{ $t('session.dialog.opencodeSessionId') }}</label>
-            <input v-model="opencodeOptions.sessionId" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeSessionIdPlaceholder')" />
-          </div>
-          <div class="form-group">
-            <label>{{ $t('session.dialog.opencodeServerMode') }}</label>
-            <select v-model="opencodeOptions.serverMode" class="form-input">
-              <option value="off">{{ $t('session.dialog.opencodeServerModeOff') }}</option>
-              <option value="attach">{{ $t('session.dialog.opencodeServerModeAttach') }}</option>
-            </select>
-          </div>
-          <div class="form-group" v-if="opencodeOptions.serverMode === 'attach'">
-            <label>{{ $t('session.dialog.opencodeAttachUrl') }}</label>
-            <input v-model="opencodeOptions.attachUrl" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeAttachUrlPlaceholder')" />
-          </div>
-          <div class="form-row">
-            <label class="check-label">
-              <input v-model="opencodeOptions.continueLast" type="checkbox" />
-              {{ $t('session.dialog.opencodeContinueLast') }}
-            </label>
-            <label class="check-label">
-              <input v-model="opencodeOptions.fork" type="checkbox" />
-              {{ $t('session.dialog.opencodeFork') }}
-            </label>
-          </div>
-          <p v-if="opencodeOptions.sessionId && opencodeOptions.continueLast" class="warning-text">
-            {{ $t('session.dialog.opencodeConflictHint') }}
-          </p>
-        </template>
+        </section>
 
         <div class="dialog-footer">
-          <button type="button" class="btn" @click="$emit('cancel')">{{ $t('session.dialog.cancel') }}</button>
-          <button type="submit" class="btn btn-primary">{{ $t('session.dialog.confirm') }}</button>
+          <Button @click="$emit('cancel')">{{ $t('session.dialog.cancel') }}</Button>
+          <Button
+            type="submit"
+            tone="primary"
+            :disabled="!!createDisabledReason"
+            :title="createDisabledReason"
+          >
+            {{ $t('session.dialog.confirm') }}
+          </Button>
         </div>
       </form>
     </div>
@@ -127,9 +190,14 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useSessionsStore } from '@/stores/sessions'
 import { useSettingsStore } from '@/stores/settings'
+import { useAppStore } from '@/stores/app'
+import { useInstancesStore } from '@/stores/instances'
 import { useToast } from '@/composables/useToast'
+import { useOverlayStack } from '@/composables/useOverlayStack'
+import Button from '@/components/ui/Button.vue'
 import { ipc } from '@/api/ipc'
 import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
 
@@ -164,11 +232,20 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
 const sessionsStore = useSessionsStore()
 const settingsStore = useSettingsStore()
+const appStore = useAppStore()
+const instancesStore = useInstancesStore()
 const toast = useToast()
 
+useOverlayStack({
+  isOpen: () => props.visible,
+  onEscape: () => emit('cancel')
+})
+
 type CodexPermissionsMode = 'read-only' | 'default' | 'full-access'
+type CliStatus = 'checking' | 'available' | 'unavailable' | 'remote'
 
 const form = ref({ name: '', icon: '', type: 'claude' as 'claude' | 'codex' | 'opencode', projectPath: '' })
 const codexOptions = ref({ permissionsMode: 'default' as CodexPermissionsMode })
@@ -184,6 +261,8 @@ const opencodeOptions = ref({
 })
 const pathError = ref('')
 const showEmojiPicker = ref(false)
+const showAdvancedOptions = ref(false)
+const cliStatusLoading = ref(false)
 
 const emojiList = [
   '🤖','🧠','💡','🔥','⚡','🚀','🎯','🛠️',
@@ -203,6 +282,57 @@ const canBrowseProjectPath = computed(() => {
   return !props.lockProjectPath && (props.targetInstanceId || LOCAL_INSTANCE_ID) === LOCAL_INSTANCE_ID
 })
 
+const isLocalTarget = computed(() => (props.targetInstanceId || LOCAL_INSTANCE_ID) === LOCAL_INSTANCE_ID)
+const targetInstance = computed(() => instancesStore.getInstance(props.targetInstanceId || LOCAL_INSTANCE_ID))
+const targetCanCreateSession = computed(() => targetInstance.value?.capabilities.sessionCreate ?? true)
+const selectedCliDisplayName = computed(() => {
+  if (form.value.type === 'claude') return t('session.claude')
+  if (form.value.type === 'codex') return t('session.codex')
+  return t('session.opencode')
+})
+const selectedCliAvailable = computed(() => {
+  if (form.value.type === 'claude') return appStore.claudeAvailable
+  if (form.value.type === 'codex') return appStore.codexAvailable
+  return appStore.opencodeAvailable
+})
+const selectedCliStatus = computed<CliStatus>(() => {
+  if (!isLocalTarget.value) return 'remote'
+  if (cliStatusLoading.value) return 'checking'
+  return selectedCliAvailable.value ? 'available' : 'unavailable'
+})
+const selectedCliStatusLabel = computed(() => {
+  if (selectedCliStatus.value === 'remote') {
+    return t('session.dialog.remoteCliStatusHint')
+  }
+  if (selectedCliStatus.value === 'checking') {
+    return t('session.dialog.cliChecking', { cli: selectedCliDisplayName.value })
+  }
+  if (selectedCliStatus.value === 'available') {
+    return t('session.dialog.cliAvailable', { cli: selectedCliDisplayName.value })
+  }
+  return t('session.dialog.cliUnavailable', { cli: selectedCliDisplayName.value })
+})
+const startupModeLabel = computed(() => {
+  if (props.startPaused) {
+    return t('session.dialog.startupModePaused')
+  }
+  return props.activateOnCreate
+    ? t('session.dialog.startupModeActivate')
+    : t('session.dialog.startupModeManual')
+})
+const projectPathHint = computed(() => {
+  if (!props.lockProjectPath) return ''
+  return isLocalTarget.value
+    ? t('session.dialog.projectPathLockedLocal')
+    : t('session.dialog.projectPathLockedRemote')
+})
+const createDisabledReason = computed(() => {
+  if (!targetCanCreateSession.value) return t('session.dialog.targetCreateDisabled')
+  if (selectedCliStatus.value === 'checking') return t('session.dialog.cliChecking', { cli: selectedCliDisplayName.value })
+  if (selectedCliStatus.value === 'unavailable') return t('session.dialog.cliUnavailable', { cli: selectedCliDisplayName.value })
+  return ''
+})
+
 watch(
   () => props.visible,
   (visible) => {
@@ -214,6 +344,7 @@ watch(
       projectPath: props.targetProjectPath || props.defaultProjectPath || ''
     }
     showEmojiPicker.value = false
+    showAdvancedOptions.value = false
     codexOptions.value = { permissionsMode: 'default' }
     opencodeOptions.value = {
       model: '',
@@ -226,8 +357,26 @@ watch(
       serverMode: 'off'
     }
     pathError.value = ''
+    refreshCliStatus()
   }
 )
+
+async function refreshCliStatus(): Promise<void> {
+  if (!isLocalTarget.value) return
+  cliStatusLoading.value = true
+  try {
+    await appStore.checkCliStatus()
+  } catch {
+    // Status row will fall back to the unavailable state.
+  } finally {
+    cliStatusLoading.value = false
+  }
+}
+
+function openCliSettings(): void {
+  emit('cancel')
+  void router.push('/settings')
+}
 
 async function selectFolder() {
   if (!canBrowseProjectPath.value) return
@@ -242,6 +391,11 @@ async function selectFolder() {
 }
 
 async function handleSubmit() {
+  if (createDisabledReason.value) {
+    toast.warning(createDisabledReason.value)
+    return
+  }
+
   const instanceId = props.targetInstanceId || LOCAL_INSTANCE_ID
   const resolvedProjectPath = form.value.projectPath || props.targetProjectPath || ''
 
@@ -355,6 +509,25 @@ async function handleSubmit() {
   gap: var(--spacing-md);
 }
 
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.form-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-kicker {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
@@ -382,6 +555,44 @@ async function handleSubmit() {
   color: var(--text-primary);
 }
 
+.cli-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 26px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
+
+  &.available {
+    border-color: color-mix(in srgb, var(--success-color) 28%, var(--border-color));
+    color: var(--success-color);
+  }
+
+  &.unavailable {
+    border-color: color-mix(in srgb, var(--status-warning) 34%, var(--border-color));
+    color: var(--status-warning);
+  }
+}
+
+.text-action {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent-primary);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .form-row {
   display: flex;
   gap: var(--spacing-md);
@@ -399,6 +610,77 @@ async function handleSubmit() {
   margin: 0;
   font-size: var(--font-size-xs);
   color: var(--status-warning);
+}
+
+.path-hint {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.startup-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 22%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-primary) 7%, var(--bg-tertiary));
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+
+.startup-mode-label {
+  color: var(--text-muted);
+}
+
+.startup-mode-value {
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.advanced-block {
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-tertiary) 42%, transparent);
+}
+
+.create-flow-note {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+
+.advanced-toggle {
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  border: none;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+}
+
+.advanced-toggle-icon {
+  transition: transform var(--transition-fast);
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.advanced-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm);
+  border-top: 1px solid var(--border-color);
 }
 
 .path-input {
@@ -477,7 +759,7 @@ async function handleSubmit() {
   justify-content: center;
 
   &:hover { background: var(--bg-hover); }
-  &.selected { background: rgba(108, 158, 255, 0.15); }
+  &.selected { background: color-mix(in srgb, var(--accent-primary) 15%, transparent); }
 }
 
 .clear-cell {
@@ -485,5 +767,4 @@ async function handleSubmit() {
   font-size: 12px;
 }
 
-// btn, btn-sm and btn-primary are defined in global.scss
 </style>

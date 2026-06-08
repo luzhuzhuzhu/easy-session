@@ -220,6 +220,101 @@ describe('workspace store', () => {
     expect(workspaceStore.resolvedTabs['tab-remote']?.availability).toBe('offline')
   })
 
+  it('marks remote tabs offline even when a cached remote session still exists', async () => {
+    remoteInstanceApi.listRemoteInstances.mockResolvedValue([
+      {
+        id: 'remote-1',
+        type: 'remote',
+        name: 'office',
+        baseUrl: 'https://example.com',
+        enabled: true,
+        authRef: 'remote-1',
+        status: 'offline',
+        lastCheckedAt: 10,
+        passthroughOnly: false,
+        capabilities: {
+          projectsList: true,
+          projectRead: true,
+          projectCreate: true,
+          projectUpdate: true,
+          projectRemove: true,
+          projectOpen: true,
+          projectSessionsList: true,
+          projectDetect: true,
+          sessionsList: true,
+          sessionSubscribe: true,
+          sessionInput: true,
+          sessionResize: true,
+          sessionOutputHistory: true,
+          sessionCreate: true,
+          sessionStart: true,
+          sessionPause: true,
+          sessionRestart: true,
+          sessionDestroy: true,
+          projectPromptRead: true,
+          projectPromptWrite: true,
+          localPathOpen: false
+        },
+        lastError: 'token expired',
+        latencyMs: null
+      }
+    ])
+
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2,
+      root: {
+        type: 'leaf',
+        paneId: 'pane-1',
+        activeTabId: 'tab-remote',
+        tabs: ['tab-remote']
+      },
+      tabs: {
+        'tab-remote': {
+          id: 'tab-remote',
+          resourceType: 'session',
+          instanceId: 'remote-1',
+          sessionId: 'session-9',
+          globalSessionKey: 'remote-1:session-9',
+          pinned: false,
+          createdAt: 1
+        }
+      },
+      activePaneId: 'pane-1'
+    })
+
+    const instancesStore = useInstancesStore()
+    await instancesStore.fetchInstances()
+
+    const sessionsStore = useSessionsStore()
+    sessionsStore.remoteSessionsByInstance = {
+      'remote-1': [
+        {
+          instanceId: 'remote-1',
+          sessionId: 'session-9',
+          globalSessionKey: 'remote-1:session-9',
+          name: 'Cached Remote Session',
+          icon: null,
+          type: 'claude',
+          projectId: 'project-1',
+          projectPath: 'D:/remote/project',
+          status: 'running',
+          createdAt: 1,
+          lastActiveAt: 2,
+          processId: 'proc-9',
+          options: {},
+          parentId: null,
+          source: 'remote'
+        }
+      ]
+    }
+
+    const workspaceStore = useWorkspaceStore()
+    await workspaceStore.load()
+
+    expect(sessionsStore.sessionIndexByGlobalKey['remote-1:session-9']).toBeTruthy()
+    expect(workspaceStore.resolvedTabs['tab-remote']?.availability).toBe('offline')
+  })
+
   it('restores remote tab availability after instance comes back online', async () => {
     remoteInstanceApi.listRemoteInstances.mockResolvedValue([
       {

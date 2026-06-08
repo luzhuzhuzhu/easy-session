@@ -19,12 +19,45 @@
   }
 
   .top-empty-inline {
-    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 4px 8px;
     color: var(--text-muted);
     font-size: 12px;
     border: 1px dashed var(--border-color);
     border-radius: 0;
     background: var(--bg-tertiary);
+
+    span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    button {
+      flex-shrink: 0;
+      min-height: 22px;
+      padding: 2px 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 11px;
+
+      &:hover {
+        border-color: var(--border-light);
+        background: var(--bg-hover);
+        color: var(--text-primary);
+      }
+
+      &:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+    }
   }
 
   .top-actions {
@@ -119,6 +152,12 @@
     &:active {
       cursor: grabbing;
     }
+
+    &.drop-target {
+      border-color: var(--accent-primary);
+      background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-card));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 55%, transparent);
+    }
   }
 
   .top-group-label {
@@ -154,6 +193,12 @@
     &.active {
       background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
       border-color: color-mix(in srgb, var(--accent-primary) 78%, var(--border-color));
+    }
+
+    &.drop-target {
+      background: color-mix(in srgb, var(--accent-primary) 14%, var(--bg-hover));
+      border-color: var(--accent-primary);
+      box-shadow: inset 0 -2px 0 var(--accent-primary);
     }
   }
 
@@ -193,7 +238,8 @@
 
   .list-toolbar {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     gap: 6px;
     padding: 8px 10px;
     border-bottom: 1px solid var(--border-color);
@@ -357,6 +403,10 @@
   }
 
   .compact-group-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
     width: 100%;
     margin: 8px 0 6px;
     padding: 0 4px;
@@ -365,8 +415,15 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     line-height: 1;
-    text-align: left;
+    text-align: center;
     text-transform: uppercase;
+  }
+
+  .compact-group-count {
+    color: var(--text-secondary);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0;
   }
 }
 
@@ -457,14 +514,9 @@
       transform: rotate(90deg);
     }
 
-    svg {
+    .ui-icon {
       width: 14px;
       height: 14px;
-      fill: none;
-      stroke: currentColor;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-width: 1.8;
     }
   }
 
@@ -473,14 +525,9 @@
     height: 16px;
     color: var(--text-secondary);
 
-    svg {
+    .ui-icon {
       width: 16px;
       height: 16px;
-      fill: none;
-      stroke: currentColor;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-width: 1.5;
     }
   }
 
@@ -489,7 +536,7 @@
   }
 
   .instance-node-icon.remote {
-    color: #f59e0b;
+    color: var(--status-warning);
   }
 
   .instance-node {
@@ -573,7 +620,8 @@
   }
 
   .instance-type-badge,
-  .instance-status-badge {
+  .instance-status-badge,
+  .instance-mode-badge {
     display: inline-flex;
     align-items: center;
     min-width: 0;
@@ -583,7 +631,8 @@
   }
 
   .instance-type-badge,
-  .instance-status-badge {
+  .instance-status-badge,
+  .instance-mode-badge {
     flex-shrink: 0;
     padding: 2px 8px;
     font-weight: 700;
@@ -591,34 +640,44 @@
   }
 
   .instance-type-badge {
-    background: rgba(148, 163, 184, 0.18);
+    background: color-mix(in srgb, var(--text-muted) 18%, transparent);
     color: var(--text-secondary);
   }
 
   .instance-type-badge.remote {
-    background: rgba(245, 158, 11, 0.16);
-    color: #f59e0b;
+    background: color-mix(in srgb, var(--status-warning) 16%, transparent);
+    color: var(--status-warning);
   }
 
   .instance-status-badge {
-    background: rgba(148, 163, 184, 0.14);
+    background: color-mix(in srgb, var(--text-muted) 14%, transparent);
     color: var(--text-secondary);
   }
 
   .instance-status-badge.status-online {
-    background: rgba(34, 197, 94, 0.14);
-    color: #22c55e;
+    background: color-mix(in srgb, var(--status-success) 14%, transparent);
+    color: var(--status-success);
   }
 
   .instance-status-badge.status-offline,
   .instance-status-badge.status-error {
-    background: rgba(239, 68, 68, 0.14);
-    color: #ef4444;
+    background: color-mix(in srgb, var(--status-error) 14%, transparent);
+    color: var(--status-error);
   }
 
   .instance-status-badge.status-connecting {
-    background: rgba(59, 130, 246, 0.14);
-    color: #3b82f6;
+    background: color-mix(in srgb, var(--status-info) 14%, transparent);
+    color: var(--status-info);
+  }
+
+  .instance-mode-badge {
+    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-card));
+    color: var(--text-secondary);
+  }
+
+  .instance-mode-badge.passthrough {
+    background: color-mix(in srgb, var(--status-warning) 12%, transparent);
+    color: var(--status-warning);
   }
 
   .instance-count {
@@ -629,6 +688,18 @@
     overflow: hidden;
     font-size: 10px;
     font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .instance-error {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--status-error);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.25;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -657,6 +728,12 @@
       border-color: var(--border-light);
       box-shadow: inset 2px 0 0 var(--accent-primary);
     }
+  }
+
+  .sidebar-project-shell.drop-target .project-node {
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 9%, var(--bg-card));
+    box-shadow: inset 2px 0 0 var(--accent-primary);
   }
 
   .project-caret {
@@ -693,27 +770,6 @@
     opacity: 1;
   }
 
-  .project-action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 19px;
-    height: 19px;
-    border: 1px solid var(--border-light);
-    border-radius: 0;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: 10px;
-    line-height: 1;
-    transition: all var(--transition-fast);
-
-    &:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-  }
-
   .project-empty {
     padding: 8px 10px 10px;
     color: var(--text-muted);
@@ -746,6 +802,11 @@
     &.active {
       background: color-mix(in srgb, var(--bg-tertiary) 70%, var(--bg-card));
       box-shadow: none;
+    }
+
+    &.drop-target {
+      background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-card));
+      box-shadow: inset 2px 0 0 var(--accent-primary);
     }
 
     &:last-child {

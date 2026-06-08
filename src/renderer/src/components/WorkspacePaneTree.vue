@@ -78,7 +78,11 @@
   <div
     v-else
     class="workspace-pane"
-    :class="{ focused: activePaneId === node.paneId }"
+    :class="{
+      focused: activePaneId === node.paneId,
+      'drop-active': paneDropActive,
+      'drop-split': !!edgeDropDirection
+    }"
     @mousedown="handleFocusPane"
     @dragover.prevent="handlePaneDragOver"
     @dragleave="clearEdgeDrop"
@@ -86,12 +90,15 @@
     @contextmenu.prevent="openPaneMenu"
   >
     <div v-if="edgeDropDirection" class="edge-drop-indicator" :class="edgeDropDirection"></div>
+    <div v-if="paneDropActive" class="pane-drop-copy" :class="{ split: !!edgeDropDirection }">
+      {{ paneDropLabel }}
+    </div>
 
     <div class="pane-content">
       <template v-if="activeSession">
         <div
           class="pane-header"
-          :class="{ 'pane-header-drop': headerDropActive }"
+          :class="{ 'pane-header-drop': headerDropActive, 'pane-header-offline': activeTabOffline }"
           draggable="true"
           @dragstart="handleHeaderDragStart"
           @dragover.prevent="handleHeaderDragOver"
@@ -103,7 +110,21 @@
             <span v-if="activeSession.icon" class="session-icon">{{ activeSession.icon }}</span>
             <span v-else class="type-badge" :class="activeSession.type">{{ activeSession.type === 'claude' ? 'C' : activeSession.type === 'codex' ? 'X' : 'O' }}</span>
             <span class="pane-session-name">{{ activeSession.name }}</span>
-            <span class="status-tag" :class="activeSession.status">{{ activeSession.status }}</span>
+            <span
+              v-if="activeTabOffline"
+              class="status-tag offline"
+              :title="offlinePaneTitle"
+            >
+              {{ $t('settings.remoteStatus.offline') }}
+            </span>
+            <span
+              v-else
+              class="status-tag"
+              :class="activeSession.status"
+              :title="formatSessionStatus(activeSession.status)"
+            >
+              {{ formatSessionStatus(activeSession.status) }}
+            </span>
             <SessionRuntimeInfo class="pane-runtime-info" :session="activeSession" />
           </div>
           <div class="pane-header-actions">
@@ -112,98 +133,120 @@
                 class="pane-zoom-reset-btn"
                 type="button"
                 :title="`${t('terminal.zoomPresets')} / ${t('terminal.resetZoom')}`"
+                :aria-label="`${t('terminal.zoomPresets')} / ${t('terminal.resetZoom')}`"
                 @click.stop="toggleZoomMenu"
                 @dblclick.stop="handleResetPaneZoom"
               >
                 🔍 {{ activePaneZoomPercent }}%
               </button>
-              <div v-if="zoomMenuOpen" class="pane-zoom-menu" @click.stop>
+              <div
+                v-if="zoomMenuOpen"
+                ref="paneZoomMenuRef"
+                class="pane-zoom-menu"
+                role="menu"
+                tabindex="-1"
+                @click.stop
+                @keydown="handlePaneZoomMenuKeydown"
+              >
                 <button
                   v-for="percent in ZOOM_PRESET_PERCENTS"
                   :key="percent"
                   class="pane-zoom-item"
                   :class="{ active: percent === activePaneZoomPercent }"
                   type="button"
+                  role="menuitem"
                   @click="handleSetPaneZoom(percent)"
                 >
                   {{ percent }}%
                 </button>
               </div>
             </div>
-            <button
+            <IconButton
               v-if="canStartSession && activeSession.status !== 'running' && activeSessionRef"
-              class="pane-action-btn pane-action-btn-primary"
-              type="button"
-              :title="$t('session.start')"
+              tone="primary"
+              :label="$t('session.start')"
               @click="emit('start-session', activeSessionRef)"
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M5 3l7 5-7 5V3z" fill="currentColor" />
-              </svg>
-            </button>
-            <button
+              <UiIcon name="play" />
+            </IconButton>
+            <IconButton
               v-else-if="canPauseSession && activeSessionRef"
-              class="pane-action-btn"
-              type="button"
-              :title="$t('session.pause')"
+              :label="$t('session.pause')"
               @click="emit('pause-session', activeSessionRef)"
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <rect x="4" y="4" width="3" height="8" rx="0.5" fill="currentColor" />
-                <rect x="9" y="4" width="3" height="8" rx="0.5" fill="currentColor" />
-              </svg>
-            </button>
-            <button
+              <UiIcon name="pause" />
+            </IconButton>
+            <IconButton
               v-if="canRestartSession && activeSessionRef"
-              class="pane-action-btn"
-              type="button"
-              :title="$t('session.restart')"
+              :label="$t('session.restart')"
               @click="emit('restart-session', activeSessionRef)"
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M13.5 7A5.5 5.5 0 1 1 8 2.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
-                <path d="M13.5 2v5H8.5" fill="currentColor" />
-              </svg>
-            </button>
-            <button
+              <UiIcon name="refresh" />
+            </IconButton>
+            <IconButton
               v-if="canDestroySession && activeSessionRef"
-              class="pane-action-btn pane-action-btn-danger"
-              type="button"
-              :title="$t('session.destroy')"
+              tone="danger"
+              :label="$t('session.destroy')"
               @click="emit('destroy-session', activeSessionRef)"
             >
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <rect x="3" y="5" width="10" height="9" fill="currentColor" rx="1" />
-                <rect x="5" y="2" width="6" height="2" fill="currentColor" rx="0.5" />
-                <line x1="6.5" y1="7" x2="6.5" y2="11" stroke="var(--bg-tertiary)" stroke-width="1.5" />
-                <line x1="9.5" y1="7" x2="9.5" y2="11" stroke="var(--bg-tertiary)" stroke-width="1.5" />
-              </svg>
-            </button>
+              <UiIcon name="trash" />
+            </IconButton>
           </div>
         </div>
 
+        <div v-if="activeTabOffline" class="pane-unavailable offline">
+          <div class="pane-unavailable-icon" aria-hidden="true">
+            <UiIcon name="offline" />
+          </div>
+          <div class="pane-unavailable-copy">
+            <h3>{{ offlinePaneTitle }}</h3>
+            <p>{{ offlinePaneMessage }}</p>
+            <p v-if="offlinePaneDetails" class="pane-unavailable-detail">{{ offlinePaneDetails }}</p>
+            <Button class="pane-unavailable-action" size="sm" @click="openRemoteSettings">
+              {{ $t('session.remoteOpenSettings') }}
+            </Button>
+          </div>
+        </div>
         <TerminalOutput
+          v-else
           :session-ref="activeSessionRef"
           :process-key="activeSession.processId"
           :pane-id="node.paneId"
           @clear="activeSessionRef && emit('clear-output', activeSessionRef)"
         />
       </template>
+      <div v-else-if="activeResolvedTab?.availability === 'offline'" class="pane-unavailable offline">
+        <div class="pane-unavailable-icon" aria-hidden="true">
+          <UiIcon name="offline" />
+        </div>
+        <div class="pane-unavailable-copy">
+          <h3>{{ offlinePaneTitle }}</h3>
+          <p>{{ offlinePaneMessage }}</p>
+          <p v-if="offlinePaneDetails" class="pane-unavailable-detail">{{ offlinePaneDetails }}</p>
+          <Button class="pane-unavailable-action" size="sm" @click="openRemoteSettings">
+            {{ $t('session.remoteOpenSettings') }}
+          </Button>
+        </div>
+      </div>
       <div v-else class="pane-empty">{{ emptyPaneText }}</div>
     </div>
 
     <div v-if="paneMenu.visible" class="context-overlay" @click="closeMenus"></div>
     <div
       v-if="paneMenu.visible"
+      ref="paneMenuRef"
       class="context-menu"
+      role="menu"
+      tabindex="-1"
       :style="{ left: paneMenu.x + 'px', top: paneMenu.y + 'px' }"
+      @keydown="handlePaneMenuKeydown"
     >
-      <button class="context-item" @click="handlePaneMenuSplit('horizontal')">{{ $t('session.newRightPane') }}</button>
-      <button class="context-item" @click="handlePaneMenuSplit('vertical')">{{ $t('session.newBottomPane') }}</button>
-      <button class="context-item" @click="handlePaneMenuEvenSplit">{{ $t('session.evenSplit') }}</button>
-      <button class="context-item" @click="handlePaneMenuUndoLayout">{{ $t('session.undoLayout') }}</button>
-      <button class="context-item" @click="handlePaneMenuResetLayout">{{ $t('session.resetLayout') }}</button>
-      <button v-if="canClosePanes" class="context-item danger" @click="handlePaneMenuClose">{{ $t('session.closePane') }}</button>
+      <MenuItem :label="$t('session.newRightPane')" @click="handlePaneMenuSplit('horizontal')">{{ $t('session.newRightPane') }}</MenuItem>
+      <MenuItem :label="$t('session.newBottomPane')" @click="handlePaneMenuSplit('vertical')">{{ $t('session.newBottomPane') }}</MenuItem>
+      <MenuItem :label="$t('session.evenSplit')" @click="handlePaneMenuEvenSplit">{{ $t('session.evenSplit') }}</MenuItem>
+      <MenuItem :label="$t('session.undoLayout')" @click="handlePaneMenuUndoLayout">{{ $t('session.undoLayout') }}</MenuItem>
+      <MenuItem :label="$t('session.resetLayout')" @click="handlePaneMenuResetLayout">{{ $t('session.resetLayout') }}</MenuItem>
+      <MenuItem v-if="canClosePanes" danger :label="$t('session.closePane')" @click="handlePaneMenuClose">{{ $t('session.closePane') }}</MenuItem>
     </div>
   </div>
 </template>
@@ -211,6 +254,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import type {
   WorkspaceLayoutNode,
   WorkspaceSplitDirection,
@@ -218,12 +262,18 @@ import type {
 } from '@/api/workspace'
 import TerminalOutput from '@/components/TerminalOutput.vue'
 import SessionRuntimeInfo from '@/components/SessionRuntimeInfo.vue'
+import Button from '@/components/ui/Button.vue'
+import IconButton from '@/components/ui/IconButton.vue'
+import MenuItem from '@/components/ui/MenuItem.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
+import { useMenuKeyboard } from '@/composables/useMenuKeyboard'
 import { useInstancesStore } from '@/stores/instances'
 import type { SessionRef, UnifiedSession } from '@/models/unified-resource'
 import type { WorkspaceResolvedTabState } from '@/stores/workspace'
 
 defineOptions({ name: 'WorkspacePaneTree' })
 const { t } = useI18n()
+const router = useRouter()
 
 const props = defineProps<{
   nodePath: string
@@ -264,13 +314,28 @@ const emit = defineEmits<{
 }>()
 
 const edgeDropDirection = ref<WorkspaceSplitDirection | null>(null)
+const paneDropActive = ref(false)
 const paneMenu = ref({ visible: false, x: 0, y: 0 })
+const paneMenuRef = ref<HTMLElement | null>(null)
 const isResizingSplit = ref(false)
 const headerDropActive = ref(false)
 const zoomMenuOpen = ref(false)
 const zoomControlRef = ref<HTMLElement | null>(null)
+const paneZoomMenuRef = ref<HTMLElement | null>(null)
 const ZOOM_PRESET_PERCENTS = [80, 90, 100, 110, 125, 150] as const
 const instancesStore = useInstancesStore()
+const { handleMenuKeydown: handlePaneMenuKeydown } = useMenuKeyboard({
+  menuRef: paneMenuRef,
+  isOpen: () => paneMenu.value.visible,
+  onClose: closeMenus
+})
+const { handleMenuKeydown: handlePaneZoomMenuKeydown } = useMenuKeyboard({
+  menuRef: paneZoomMenuRef,
+  isOpen: () => zoomMenuOpen.value,
+  onClose: () => {
+    zoomMenuOpen.value = false
+  }
+})
 
 const firstChildStyle = computed(() => {
   if (props.node.type !== 'split') return {}
@@ -310,16 +375,22 @@ const activeInstanceCapabilities = computed(() => {
   if (!session) return null
   return instancesStore.getInstance(session.instanceId)?.capabilities ?? null
 })
-const canStartSession = computed(() => !!activeInstanceCapabilities.value?.sessionStart)
-const canPauseSession = computed(() => !!activeInstanceCapabilities.value?.sessionPause)
-const canRestartSession = computed(() => !!activeInstanceCapabilities.value?.sessionRestart)
-const canDestroySession = computed(() => !!activeInstanceCapabilities.value?.sessionDestroy)
+const activeTabInstance = computed(() => {
+  const tab = activeResolvedTab.value
+  if (!tab) return null
+  return instancesStore.getInstance(tab.instanceId)
+})
+const activeTabOffline = computed(() => activeResolvedTab.value?.availability === 'offline')
+const canStartSession = computed(() => !activeTabOffline.value && !!activeInstanceCapabilities.value?.sessionStart)
+const canPauseSession = computed(() => !activeTabOffline.value && !!activeInstanceCapabilities.value?.sessionPause)
+const canRestartSession = computed(() => !activeTabOffline.value && !!activeInstanceCapabilities.value?.sessionRestart)
+const canDestroySession = computed(() => !activeTabOffline.value && !!activeInstanceCapabilities.value?.sessionDestroy)
 const emptyPaneText = computed(() => {
   if (activeResolvedTab.value?.availability === 'offline') {
-    return 'Remote offline'
+    return t('session.remoteOfflinePane')
   }
   if (activeResolvedTab.value?.availability === 'missing') {
-    return 'Session missing'
+    return t('session.missingPaneSession')
   }
   return t('session.noActive')
 })
@@ -327,6 +398,46 @@ const activePaneZoomPercent = computed<number>(() => {
   if (props.node.type !== 'leaf') return 100
   return props.paneZoomPercentById[props.node.paneId] ?? 100
 })
+const paneDropLabel = computed(() => {
+  if (edgeDropDirection.value === 'horizontal') return t('session.dropSplitRight')
+  if (edgeDropDirection.value === 'vertical') return t('session.dropSplitBottom')
+  return t('session.dropOpenInPane')
+})
+
+const offlinePaneTitle = computed(() => {
+  const instance = activeTabInstance.value
+  if (instance?.type === 'remote') {
+    return t('session.remoteOfflinePaneTitle', { instance: instance.name })
+  }
+  return t('session.remoteOfflinePane')
+})
+
+const offlinePaneMessage = computed(() => {
+  const instance = activeTabInstance.value
+  if (instance?.type === 'remote') {
+    return t('session.remoteOfflinePaneMessage', {
+      status: t(`settings.remoteStatus.${instance.status}`)
+    })
+  }
+  return t('session.remoteOfflinePane')
+})
+
+const offlinePaneDetails = computed(() => {
+  const instance = activeTabInstance.value
+  if (instance?.type !== 'remote') return ''
+  if (instance.lastError) {
+    return t('session.remoteOfflinePaneDetails', { error: instance.lastError })
+  }
+  return t('session.remoteOfflinePaneRetryHint')
+})
+
+function formatSessionStatus(status: UnifiedSession['status']): string {
+  return t(`session.status.${status}`)
+}
+
+function openRemoteSettings(): void {
+  void router.push('/settings?category=remote')
+}
 
 function handleFocusPane(): void {
   if (props.node.type !== 'leaf') return
@@ -557,11 +668,13 @@ function handlePaneDragOver(e: DragEvent): void {
   const payload = readWorkspaceDragPayload(e)
   if (!payload) {
     edgeDropDirection.value = null
+    paneDropActive.value = false
     return
   }
 
   const host = e.currentTarget as HTMLElement | null
   if (!host) return
+  paneDropActive.value = true
   queueEdgeUpdate(host, e.clientX, e.clientY)
 }
 
@@ -575,6 +688,7 @@ function clearEdgeDrop(e: DragEvent): void {
   }
   pendingEdgeUpdate = null
   edgeDropDirection.value = null
+  paneDropActive.value = false
 }
 
 function handlePaneEdgeDrop(e: DragEvent): void {
@@ -582,7 +696,11 @@ function handlePaneEdgeDrop(e: DragEvent): void {
   e.preventDefault()
   e.stopPropagation()
   const payload = readWorkspaceDragPayload(e)
-  if (!payload) return
+  if (!payload) {
+    edgeDropDirection.value = null
+    paneDropActive.value = false
+    return
+  }
 
   if (edgeDropDirection.value) {
     if (payload.type === 'tab') {
@@ -614,6 +732,7 @@ function handlePaneEdgeDrop(e: DragEvent): void {
     }
   }
   edgeDropDirection.value = null
+  paneDropActive.value = false
 }
 
 function closeMenus(): void {
@@ -722,12 +841,12 @@ watch(
 }
 
 .splitter:hover {
-  background: rgba(108, 158, 255, 0.65);
-  box-shadow: 0 0 0 1px rgba(108, 158, 255, 0.35);
+  background: color-mix(in srgb, var(--accent-primary) 65%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 35%, transparent);
 }
 
 .workspace-split.resizing .splitter {
-  background: rgba(108, 158, 255, 0.8);
+  background: color-mix(in srgb, var(--accent-primary) 80%, transparent);
 }
 
 .workspace-split.vertical .splitter {
@@ -758,6 +877,15 @@ watch(
   &.focused {
     border-color: #6b7280;
   }
+
+  &.drop-active {
+    border-color: color-mix(in srgb, var(--accent-primary) 72%, var(--border-color));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 54%, transparent);
+  }
+
+  &.drop-split {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 64%, transparent);
+  }
 }
 
 .pane-tabs {
@@ -786,7 +914,7 @@ watch(
   &.active {
     color: var(--text-primary);
     border-color: var(--accent-primary);
-    background: rgba(108, 158, 255, 0.12);
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
   }
 }
 
@@ -856,8 +984,13 @@ watch(
   }
 
   &.pane-header-drop {
-    background: rgba(108, 158, 255, 0.1);
-    box-shadow: inset 0 0 0 1px rgba(108, 158, 255, 0.45);
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 45%, transparent);
+  }
+
+  &.pane-header-offline {
+    background: color-mix(in srgb, var(--status-warning) 8%, transparent);
+    border-bottom-color: color-mix(in srgb, var(--status-warning) 32%, var(--border-color));
   }
 }
 
@@ -945,9 +1078,16 @@ watch(
     background: var(--bg-hover);
   }
 
+  &:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
   &.active {
     color: var(--accent-primary);
-    background: rgba(108, 158, 255, 0.12);
+    background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
   }
 }
 
@@ -955,6 +1095,11 @@ watch(
   white-space: nowrap;
   flex-shrink: 0;
   border-radius: 0;
+}
+
+.pane-header-info :deep(.status-tag.offline) {
+  color: var(--status-warning);
+  background: color-mix(in srgb, var(--status-warning) 12%, transparent);
 }
 
 .pane-header-info :deep(.type-badge) {
@@ -971,62 +1116,8 @@ watch(
   flex-shrink: 0;
 }
 
-.pane-header-actions :deep(.btn) {
-  white-space: nowrap;
-}
-
-.pane-action-btn {
-  width: 28px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid var(--border-color);
+.pane-header-actions :deep(.icon-button) {
   border-radius: 0;
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 140ms ease;
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  &:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-    border-color: var(--text-muted);
-  }
-
-  &:active {
-    transform: scale(0.96);
-  }
-}
-
-.pane-action-btn-primary {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: var(--bg-primary);
-
-  &:hover {
-    opacity: 0.85;
-    background: var(--accent-primary);
-    border-color: var(--accent-primary);
-    color: var(--bg-primary);
-  }
-}
-
-.pane-action-btn-danger {
-  border-color: var(--status-error);
-  color: var(--status-error);
-
-  &:hover {
-    background: rgba(248, 113, 113, 0.15);
-    border-color: var(--status-error);
-    color: var(--status-error);
-  }
 }
 
 .pane-empty {
@@ -1036,6 +1127,77 @@ watch(
   justify-content: center;
   color: var(--text-muted);
   font-size: var(--font-size-sm);
+}
+
+.pane-unavailable {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 24px;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.pane-unavailable-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--status-warning) 36%, var(--border-color));
+  background: color-mix(in srgb, var(--status-warning) 8%, transparent);
+  color: var(--status-warning);
+
+  .ui-icon {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.pane-unavailable-copy {
+  max-width: 520px;
+  min-width: 0;
+
+  h3 {
+    margin: 0 0 6px;
+    color: var(--text-primary);
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .pane-unavailable-detail {
+    margin-top: 8px;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+  }
+}
+
+.pane-unavailable-action {
+  margin-top: 14px;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 42%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-tertiary));
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 16%, var(--bg-tertiary));
+  }
 }
 
 .session-icon {
@@ -1049,8 +1211,8 @@ watch(
 .edge-drop-indicator {
   position: absolute;
   pointer-events: none;
-  z-index: 2;
-  border: 2px solid rgba(108, 158, 255, 0.75);
+  z-index: 3;
+  border: 2px solid color-mix(in srgb, var(--accent-primary) 75%, transparent);
   border-radius: var(--radius-sm);
   transition: opacity 120ms ease;
 
@@ -1066,6 +1228,29 @@ watch(
     right: 4px;
     bottom: 4px;
     height: 28%;
+  }
+}
+
+.pane-drop-copy {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  max-width: min(72%, 260px);
+  transform: translate(-50%, -50%);
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 48%, var(--border-color));
+  background: color-mix(in srgb, var(--bg-primary) 90%, var(--accent-primary) 10%);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: var(--shadow-md);
+
+  &.split {
+    color: var(--accent-primary);
   }
 }
 

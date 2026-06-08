@@ -21,8 +21,8 @@ export function loginTemplate(_defaultBaseUrl: string): string {
         </div>
 
         <div class="auth-head">
-          <h1 class="page-title">远程登录</h1>
-          <p class="page-copy">在浏览器中安全访问您的远程会话，支持实时终端交互与会话管理。</p>
+          <h1 class="page-title">浏览器远程入口</h1>
+          <p class="page-copy">在手机或浏览器中安全访问这台机器的会话；桌面多实例挂载请在 EasySession 桌面端设置。</p>
         </div>
 
         <form id="loginForm" class="auth-form">

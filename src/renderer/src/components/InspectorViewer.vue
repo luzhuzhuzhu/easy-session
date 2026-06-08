@@ -22,18 +22,16 @@
     </div>
 
     <div class="viewer-content">
-      <button
+      <IconButton
         v-if="selectedRelativePath"
         class="viewer-refresh-btn"
-        type="button"
+        :label="$t('inspector.refreshFile')"
+        size="sm"
         :disabled="loadingDiff || loadingPreview"
-        :title="$t('inspector.refreshFile')"
         @click="emit('refresh-current-file')"
       >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-          <path d="M14 8a6 6 0 11-1.76-4.24M12 2v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
+        <UiIcon name="refresh" />
+      </IconButton>
 
       <DiffViewer
         v-if="currentViewerMode === 'diff'"
@@ -60,22 +58,28 @@
       />
 
       <div v-if="showCommitBox" class="commit-box">
-        <input
-          :value="commitMessage"
-          type="text"
-          class="commit-input"
-          :placeholder="$t('inspector.commitPlaceholder')"
-          @input="emit('update:commit-message', ($event.target as HTMLInputElement).value)"
-          @keydown.ctrl.enter="emit('commit')"
-        />
-        <button
-          class="commit-btn"
-          type="button"
-          :disabled="!commitMessage.trim() || committing"
-          @click="emit('commit')"
-        >
-          {{ $t('inspector.commitButton') }}
-        </button>
+        <div class="commit-copy">
+          <span v-if="commitSummary" class="commit-summary">{{ commitSummary }}</span>
+          <span v-if="commitHint" class="commit-hint">{{ commitHint }}</span>
+        </div>
+        <div class="commit-controls">
+          <input
+            :value="commitMessage"
+            type="text"
+            class="commit-input"
+            :placeholder="$t('inspector.commitPlaceholder')"
+            @input="emit('update:commit-message', ($event.target as HTMLInputElement).value)"
+            @keydown.ctrl.enter="emit('commit')"
+          />
+          <Button
+            tone="primary"
+            size="sm"
+            :disabled="!commitMessage.trim() || committing"
+            @click="emit('commit')"
+          >
+            {{ $t('inspector.commitButton') }}
+          </Button>
+        </div>
       </div>
     </div>
   </section>
@@ -86,6 +90,9 @@ import { defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { InspectorViewerMode } from '@/features/inspector/types'
 import TextFileViewer from '@/components/TextFileViewer.vue'
+import Button from '@/components/ui/Button.vue'
+import IconButton from '@/components/ui/IconButton.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 
 const DiffViewer = defineAsyncComponent(() => import('@/components/DiffViewer.vue'))
 const MarkdownPreview = defineAsyncComponent(() => import('@/components/MarkdownPreview.vue'))
@@ -105,6 +112,8 @@ defineProps<{
   filePreviewAbsolutePath?: string | null
   showCommitBox: boolean
   commitMessage: string
+  commitSummary: string
+  commitHint: string
   committing: boolean
 }>()
 
@@ -208,28 +217,12 @@ useI18n()
   top: 8px;
   right: 8px;
   z-index: 10;
-  height: 26px;
-  width: 26px;
-  padding: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
   background: var(--bg-secondary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   opacity: 0;
-  transition: opacity 160ms ease, color 140ms ease, background 140ms ease;
-
-  &:hover:not(:disabled) {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
+  transition: opacity 160ms ease, color 140ms ease, background 140ms ease, border-color 140ms ease;
 
   &:disabled {
     opacity: 0.4;
-    cursor: not-allowed;
   }
 }
 
@@ -243,14 +236,48 @@ useI18n()
   left: 0;
   right: 0;
   display: flex;
+  flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
   border-top: 1px solid var(--border-color);
   background: var(--bg-secondary);
 }
 
+.commit-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.commit-summary,
+.commit-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.commit-summary {
+  color: var(--text-secondary);
+}
+
+.commit-hint {
+  color: var(--status-warning);
+}
+
+.commit-controls {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
 .commit-input {
   flex: 1;
+  min-width: 0;
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--border-color);
@@ -266,28 +293,6 @@ useI18n()
 
   &::placeholder {
     color: var(--text-muted);
-  }
-}
-
-.commit-btn {
-  height: 28px;
-  padding: 0 14px;
-  border: 1px solid var(--accent-primary);
-  border-radius: 4px;
-  background: var(--accent-primary);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 140ms ease;
-
-  &:hover:not(:disabled) {
-    filter: brightness(1.1);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 }
 </style>

@@ -15,21 +15,22 @@
         :class="{ open: inspectorStore.panelOpen, closed: !inspectorStore.panelOpen }"
         type="button"
         :title="inspectorStore.panelOpen ? $t('inspector.close') : $t('inspector.open')"
+        :aria-label="inspectorStore.panelOpen ? $t('inspector.close') : $t('inspector.open')"
         @click="inspectorStore.setPanelOpen(!inspectorStore.panelOpen)"
       >
-        <svg class="edge-toggle-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M10 4L6 8L10 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <UiIcon class="edge-toggle-icon" name="chevron-left" />
       </button>
     </div>
 
     <template v-if="inspectorStore.panelOpen">
       <div class="resize-handle" @pointerdown="startResize" />
 
-      <InspectorHeader
-        :tabs="tabs"
-        :active-tab="inspectorStore.activeTab"
-        :sidebar-visible="inspectorStore.sidebarVisible"
+        <InspectorHeader
+          :tabs="tabs"
+          :active-tab="inspectorStore.activeTab"
+          :task-title="inspectorTaskTitle"
+          :task-hint="inspectorTaskHint"
+          :sidebar-visible="inspectorStore.sidebarVisible"
         :is-history-tab="isHistoryTab"
         :sidebar-auto-collapse="inspectorStore.sidebarAutoCollapse"
         :viewer-zoom-percent="viewerZoomPercent"
@@ -73,6 +74,7 @@
             :branches="inspectorStore.gitBranches?.branches ?? []"
             :loading-branches="inspectorStore.loadingBranches"
             :history-sync-message="historySyncMessage"
+            :history-sync-details="historySyncDetails"
             :has-sync-error="!!inspectorStore.gitSyncError"
             :can-fetch-sync="canFetchHistorySync"
             :can-pull-sync="canPullHistorySync"
@@ -93,8 +95,8 @@
             :show-commit-changes="showCommitChanges"
             @select-branch="handleBranchSelect"
             @fetch="inspectorStore.fetchGitRemote()"
-            @pull="inspectorStore.pullGitCurrentBranch()"
-            @push="inspectorStore.pushGitCurrentBranch()"
+            @pull="handlePullGitCurrentBranch"
+            @push="handlePushGitCurrentBranch"
             @select-history="handleHistorySelect"
             @load-more="inspectorStore.loadMoreGitLog"
             @start-resize="startSidebarResize"
@@ -118,6 +120,7 @@
             :selected-relative-path="inspectorStore.selectedRelativePath"
             :selected-view-mode="inspectorStore.selectedChangeViewMode"
             :changes-message="changesMessage"
+            :change-action-message="changeActionMessage"
             :loading-root="inspectorStore.loadingRoot"
             :tree-index="inspectorStore.fileTreeByParent"
             :loading-directories="inspectorStore.loadingDirectories"
@@ -125,9 +128,9 @@
             @pointer-enter="handleSidebarPointerEnter"
             @pointer-leave="handleSidebarPointerLeave"
             @select-change="handleChangeSelect"
-            @stage="inspectorStore.stageFile"
-            @unstage="inspectorStore.unstageFile"
-            @discard="inspectorStore.discardFile"
+            @stage="handleStageFile"
+            @unstage="handleUnstageFile"
+            @discard="handleDiscardFile"
             @toggle-directory="inspectorStore.toggleDirectory"
             @select-file="inspectorStore.selectFile"
             @start-resize="startSidebarResize"
@@ -148,6 +151,8 @@
             :file-preview-absolute-path="inspectorStore.filePreview?.absolutePath ?? null"
             :show-commit-box="showCommitBox"
             :commit-message="commitMessage"
+            :commit-summary="commitSummary"
+            :commit-hint="commitHint"
             :committing="committing"
             @viewer-wheel="handleViewerWheel"
             @refresh-current-file="handleRefreshCurrentFile"
@@ -167,6 +172,9 @@ import InspectorHeader from '@/components/InspectorHeader.vue'
 import InspectorHistoryWorkspace from '@/components/InspectorHistoryWorkspace.vue'
 import InspectorSidebar from '@/components/InspectorSidebar.vue'
 import InspectorViewer from '@/components/InspectorViewer.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { useToast } from '@/composables/useToast'
 import { useInspectorStore } from '@/stores/inspector'
 
 defineOptions({ name: 'InspectorPanel' })
@@ -190,7 +198,17 @@ const VIEWER_MIN_ZOOM = 80
 const VIEWER_MAX_ZOOM = 150
 const VIEWER_DEFAULT_ZOOM = 100
 
+type HistorySyncDetailTone = 'default' | 'incoming' | 'outgoing' | 'warning'
+type HistorySyncDetail = {
+  key: string
+  label: string
+  value: string
+  tone: HistorySyncDetailTone
+}
+
 const { t } = useI18n()
+const confirmDialog = useConfirmDialog()
+const toast = useToast()
 const inspectorStore = useInspectorStore()
 const panelRef = ref<HTMLElement | null>(null)
 const panelBodyRef = ref<HTMLElement | null>(null)
@@ -204,6 +222,7 @@ const sidebarPointerInside = ref(false)
 const sidebarResizeLocked = ref(false)
 const commitMessage = ref('')
 const committing = ref(false)
+const changeActionMessage = ref('')
 
 let resizeObserver: ResizeObserver | null = null
 let stopResize: (() => void) | null = null
@@ -230,16 +249,28 @@ const panelStyle = computed(() => {
 
 const isCompactPanel = computed(() => actualPanelWidth.value < INSPECTOR_COMPACT_WIDTH)
 const isHistoryTab = computed(() => inspectorStore.activeTab === 'history')
+const inspectorTaskTitle = computed(() => {
+  if (inspectorStore.activeTab === 'changes') return t('inspector.task.changesTitle')
+  if (inspectorStore.activeTab === 'files') return t('inspector.task.filesTitle')
+  return t('inspector.task.historyTitle')
+})
+const inspectorTaskHint = computed(() => {
+  if (inspectorStore.activeTab === 'changes') return t('inspector.task.changesHint')
+  if (inspectorStore.activeTab === 'files') return t('inspector.task.filesHint')
+  return t('inspector.task.historyHint')
+})
 const isSidebarExpanded = computed(() => {
   if (!inspectorStore.sidebarVisible) return false
   if (!inspectorStore.sidebarAutoCollapse) return true
   return sidebarHovered.value
 })
+const effectiveSidebarWidth = computed(() => clampSidebarWidth(sidebarWidth.value))
+const effectiveSidebarHeight = computed(() => clampSidebarHeight(sidebarHeight.value))
 const panelBodyStyle = computed(() => {
   if (isHistoryTab.value) {
     return {
-      '--history-stage-width': `${sidebarWidth.value}px`,
-      '--history-stage-height': `${sidebarHeight.value}px`
+      '--history-stage-width': `${effectiveSidebarWidth.value}px`,
+      '--history-stage-height': `${effectiveSidebarHeight.value}px`
     }
   }
 
@@ -251,8 +282,8 @@ const panelBodyStyle = computed(() => {
   }
 
   const sidebarSize = isCompactPanel.value
-    ? `${isSidebarExpanded.value ? Math.max(sidebarHeight.value, INSPECTOR_SIDEBAR_MIN_HEIGHT) : 0}px`
-    : `${isSidebarExpanded.value ? Math.max(sidebarWidth.value, INSPECTOR_SIDEBAR_MIN_WIDTH) : 0}px`
+    ? `${isSidebarExpanded.value ? effectiveSidebarHeight.value : 0}px`
+    : `${isSidebarExpanded.value ? effectiveSidebarWidth.value : 0}px`
 
   return isCompactPanel.value
     ? {
@@ -353,6 +384,32 @@ const historySyncMessage = computed(() => {
   return inspectorStore.gitSyncError || historySyncSummary.value
 })
 
+const historySyncDetails = computed(() => {
+  const branch = currentSyncBranch.value
+  if (!branch) return []
+
+  const details: HistorySyncDetail[] = [
+    { key: 'branch', label: t('inspector.history.syncCurrentBranch'), value: branch.name, tone: 'default' }
+  ]
+
+  if (branch.upstream) {
+    const remoteName = branch.upstream.split('/')[0] || branch.upstream
+    details.push(
+      { key: 'remote', label: t('inspector.history.syncRemote'), value: remoteName, tone: 'default' },
+      { key: 'upstream', label: t('inspector.history.syncUpstream'), value: branch.upstream, tone: 'default' },
+      { key: 'behind', label: t('inspector.history.syncBehind'), value: String(branch.behind), tone: branch.behind > 0 ? 'incoming' : 'default' },
+      { key: 'ahead', label: t('inspector.history.syncAhead'), value: String(branch.ahead), tone: branch.ahead > 0 ? 'outgoing' : 'default' }
+    )
+    if (branch.ahead === 0 && branch.behind === 0) {
+      details.push({ key: 'clean', label: t('inspector.history.syncState'), value: t('inspector.history.syncClean'), tone: 'default' })
+    }
+  } else {
+    details.push({ key: 'upstream', label: t('inspector.history.syncUpstream'), value: t('inspector.history.syncNoUpstream'), tone: 'warning' })
+  }
+
+  return details
+})
+
 const canFetchHistorySync = computed(() => {
   return inspectorStore.gitState === 'ready'
 })
@@ -396,8 +453,21 @@ const historyDetailMessage = computed(() => {
 const showCommitBox = computed(() => {
   if (inspectorStore.activeTab !== 'changes') return false
   if (inspectorStore.gitState !== 'ready') return false
-  const stagedCount = inspectorStore.gitStatus?.items.filter((item) => item.staged).length ?? 0
-  return stagedCount > 0
+  return stagedChangeCount.value > 0
+})
+
+const stagedChangeCount = computed(() => {
+  return inspectorStore.gitStatus?.items.filter((item) => item.staged).length ?? 0
+})
+
+const commitSummary = computed(() => {
+  if (!showCommitBox.value) return ''
+  return t('inspector.commitSummary', { count: stagedChangeCount.value })
+})
+
+const commitHint = computed(() => {
+  if (!showCommitBox.value || commitMessage.value.trim()) return ''
+  return t('inspector.commitMessageRequired')
 })
 
 const showCommitChanges = computed(() => {
@@ -497,7 +567,7 @@ function handleSidebarPointerLeave(): void {
 
 function clampSidebarWidth(width: number): number {
   const minWidth = isHistoryTab.value ? INSPECTOR_HISTORY_STAGE_MIN_WIDTH : INSPECTOR_SIDEBAR_MIN_WIDTH
-  const panelBoundsWidth = panelRef.value?.getBoundingClientRect().width ?? panelWidth.value
+  const panelBoundsWidth = actualPanelWidth.value || panelWidth.value
   const maxByPanel = Math.max(
     minWidth,
     Math.min(INSPECTOR_SIDEBAR_MAX_WIDTH, panelBoundsWidth - 180)
@@ -559,8 +629,69 @@ function handleRefreshCurrentFile(): void {
   inspectorStore.refreshCurrentFile()
 }
 
+async function handlePullGitCurrentBranch(): Promise<void> {
+  const confirmed = await confirmDialog.confirm({
+    title: t('inspector.confirmPullTitle'),
+    message: t('inspector.confirmPullMessage'),
+    details: t('inspector.confirmPullDetails'),
+    confirmText: t('confirm.pull'),
+    cancelText: t('confirm.cancel'),
+    tone: 'default'
+  })
+  if (!confirmed) return
+  await inspectorStore.pullGitCurrentBranch()
+}
+
+async function handlePushGitCurrentBranch(): Promise<void> {
+  const confirmed = await confirmDialog.confirm({
+    title: t('inspector.confirmPushTitle'),
+    message: t('inspector.confirmPushMessage'),
+    details: t('inspector.confirmPushDetails'),
+    confirmText: t('confirm.push'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
+  await inspectorStore.pushGitCurrentBranch()
+}
+
 function handleChangeSelect(payload: { relativePath: string; viewMode: 'staged' | 'unstaged' }): void {
   inspectorStore.selectChangedFile(payload.relativePath, payload.viewMode)
+}
+
+function formatPathForFeedback(path: string): string {
+  const parts = path.split('/').filter(Boolean)
+  return parts.length > 1 ? parts.slice(-2).join('/') : path
+}
+
+async function runChangeMutation(
+  relativePath: string,
+  successKey: string,
+  action: (path: string) => Promise<boolean>
+): Promise<void> {
+  try {
+    const changed = await action(relativePath)
+    if (!changed) return
+    const message = t(successKey, { path: formatPathForFeedback(relativePath) })
+    changeActionMessage.value = message
+    toast.success(message)
+  } catch (error: unknown) {
+    const message = t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error))
+    changeActionMessage.value = message
+    toast.error(message)
+  }
+}
+
+async function handleStageFile(relativePath: string): Promise<void> {
+  await runChangeMutation(relativePath, 'inspector.stageSuccess', inspectorStore.stageFile)
+}
+
+async function handleUnstageFile(relativePath: string): Promise<void> {
+  await runChangeMutation(relativePath, 'inspector.unstageSuccess', inspectorStore.unstageFile)
+}
+
+async function handleDiscardFile(relativePath: string): Promise<void> {
+  await runChangeMutation(relativePath, 'inspector.discardSuccess', inspectorStore.discardFile)
 }
 
 async function handleCommit(): Promise<void> {
@@ -635,10 +766,10 @@ function startSidebarResize(event: PointerEvent): void {
   const startX = event.clientX
   const startY = event.clientY
   const startSize = isHistoryTab.value
-    ? (isCompactPanel.value ? sidebarHeight.value : sidebarWidth.value)
+    ? (isCompactPanel.value ? effectiveSidebarHeight.value : effectiveSidebarWidth.value)
     : isCompactPanel.value
-      ? sidebarHeight.value
-      : sidebarWidth.value
+      ? effectiveSidebarHeight.value
+      : effectiveSidebarWidth.value
 
   const handlePointerMove = (moveEvent: PointerEvent) => {
     if (isHistoryTab.value) {
@@ -755,9 +886,10 @@ onBeforeUnmount(() => {
   overflow: visible;
 
   &.collapsed {
-    width: 6px;
-    min-width: 6px;
-    flex-basis: 6px;
+    width: 0;
+    min-width: 0;
+    flex-basis: 0;
+    border-left: 0;
     background: transparent;
   }
 }
@@ -832,7 +964,7 @@ onBeforeUnmount(() => {
   color: var(--text-primary);
   background: var(--bg-hover);
   border-color: var(--accent-primary);
-  box-shadow: -2px 0 12px rgba(108, 158, 255, 0.15);
+  box-shadow: -2px 0 12px color-mix(in srgb, var(--accent-primary) 15%, transparent);
 }
 
 .edge-toggle-icon {

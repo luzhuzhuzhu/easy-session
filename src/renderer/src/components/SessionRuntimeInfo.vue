@@ -156,7 +156,7 @@ const runtimeTitle = computed(() => {
   padding: 2px 6px;
   border-radius: 0;
   border: 1px solid var(--border-color);
-  background: rgba(108, 158, 255, 0.08);
+  background: color-mix(in srgb, var(--accent-primary) 9%, transparent);
   color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.2;
@@ -177,7 +177,7 @@ const runtimeTitle = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(108, 158, 255, 0.22);
+  background: color-mix(in srgb, var(--accent-primary) 22%, transparent);
   color: var(--accent-primary);
   font-size: 8px;
   font-weight: 700;

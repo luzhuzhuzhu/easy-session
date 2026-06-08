@@ -6,6 +6,9 @@
     @pointerleave="emit('pointer-leave')"
   >
     <div class="sidebar-scroll">
+      <div v-if="changeActionMessage" class="sidebar-action-feedback">
+        {{ changeActionMessage }}
+      </div>
       <GitChangesTree
         v-if="activeTab === 'changes'"
         :items="gitStatusItems"
@@ -61,6 +64,7 @@ defineProps<{
   selectedRelativePath: string | null
   selectedViewMode: 'staged' | 'unstaged' | 'auto'
   changesMessage: string | null
+  changeActionMessage: string
   loadingRoot: boolean
   treeIndex: Record<string, ProjectFileTreeEntry[]>
   loadingDirectories: Record<string, boolean>
@@ -110,6 +114,16 @@ useI18n()
   padding: 14px 16px;
   color: var(--text-muted);
   font-size: var(--font-size-sm);
+}
+
+.sidebar-action-feedback {
+  margin: 8px 8px 0;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 24%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-card));
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .sidebar-resize-handle {

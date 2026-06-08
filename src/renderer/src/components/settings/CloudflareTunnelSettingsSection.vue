@@ -49,9 +49,8 @@
         </div>
 
         <div class="remote-form-actions">
-          <button
-            class="btn btn-sm"
-            type="button"
+          <Button
+            size="sm"
             :disabled="savingConfig"
             @click="$emit('save-config')"
           >
@@ -60,10 +59,10 @@
                 ? $t('settings.cloudflareTunnelConfigSaving')
                 : $t('settings.cloudflareTunnelConfigSave')
             }}
-          </button>
-          <button
-            class="btn btn-primary btn-sm"
-            type="button"
+          </Button>
+          <Button
+            size="sm"
+            tone="primary"
             :disabled="starting || !canStart || !!state?.running"
             @click="$emit('start')"
           >
@@ -72,10 +71,9 @@
                 ? $t('settings.cloudflareTunnelStarting')
                 : $t('settings.cloudflareTunnelStart')
             }}
-          </button>
-          <button
-            class="btn btn-sm"
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             :disabled="stopping || !state?.running"
             @click="$emit('stop')"
           >
@@ -84,10 +82,9 @@
                 ? $t('settings.cloudflareTunnelStopping')
                 : $t('settings.cloudflareTunnelStop')
             }}
-          </button>
-          <button
-            class="btn btn-sm"
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             :disabled="copyingUrl || !state?.publicUrl"
             @click="$emit('copy-url')"
           >
@@ -96,12 +93,30 @@
                 ? $t('settings.cloudflareTunnelUrlCopying')
                 : $t('settings.cloudflareTunnelCopyUrl')
             }}
-          </button>
+          </Button>
         </div>
       </div>
 
       <div v-if="showRemoteServiceWarning" class="remote-disabled-state remote-service-env-note">
         {{ $t('settings.cloudflareTunnelRequiresRemoteService') }}
+      </div>
+
+      <div v-if="state?.lastError" class="cloudflare-troubleshooting">
+        <div class="cloudflare-troubleshooting-head">
+          <span>{{ $t('settings.cloudflareTunnelTroubleshootingTitle') }}</span>
+          <span v-if="state.lastFailureCategory" class="failure-category">
+            {{ $t(`settings.remoteNetworkFailureCategoryValue.${state.lastFailureCategory}`) }}
+          </span>
+        </div>
+        <p class="last-error">{{ state.lastError }}</p>
+        <p class="cloudflare-advice">
+          {{ $t(`settings.remoteNetworkCloudflareAdviceValue.${state.lastFailureCategory || 'unknown'}`) }}
+        </p>
+        <ol class="troubleshooting-steps">
+          <li>{{ $t('settings.cloudflareTunnelTroubleshootingService') }}</li>
+          <li>{{ $t('settings.cloudflareTunnelTroubleshootingBinary') }}</li>
+          <li>{{ $t('settings.cloudflareTunnelTroubleshootingNetwork') }}</li>
+        </ol>
       </div>
 
       <div v-if="state" class="remote-card-grid">
@@ -134,6 +149,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CloudflareTunnelState } from '@/api/cloudflare-tunnel'
+import Button from '@/components/ui/Button.vue'
 
 defineProps<{
   active: boolean
@@ -212,21 +228,21 @@ defineExpose({
 
 .summary-pill.online {
   color: var(--accent-primary);
-  border-color: rgba(108, 158, 255, 0.35);
+  border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--border-color));
 }
 
 .remote-disabled-state {
   padding: var(--spacing-md);
   border: 1px dashed var(--border-color);
   border-radius: var(--radius-md);
-  background: rgba(108, 158, 255, 0.05);
+  background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
   color: var(--text-secondary);
   line-height: 1.6;
 }
 
 .remote-form-panel {
-  background: linear-gradient(180deg, rgba(108, 158, 255, 0.06), rgba(108, 158, 255, 0.02));
-  border: 1px solid rgba(108, 158, 255, 0.18);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), color-mix(in srgb, var(--accent-primary) 3%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, var(--border-color));
   border-radius: 0;
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
@@ -281,6 +297,55 @@ defineExpose({
 
 .remote-service-env-note {
   margin-bottom: var(--spacing-md);
+}
+
+.cloudflare-troubleshooting {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid color-mix(in srgb, var(--status-warning) 34%, var(--border-color));
+  background: color-mix(in srgb, var(--status-warning) 8%, var(--bg-secondary));
+  color: var(--text-secondary);
+}
+
+.cloudflare-troubleshooting-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.failure-category {
+  flex-shrink: 0;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--status-warning) 38%, var(--border-color));
+  color: var(--status-warning);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.last-error,
+.cloudflare-advice {
+  margin: 0 0 8px;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.last-error {
+  color: var(--status-warning);
+  font-family: var(--font-mono);
+}
+
+.troubleshooting-steps {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.55;
 }
 
 .remote-card-grid {

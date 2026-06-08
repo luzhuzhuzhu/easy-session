@@ -7,13 +7,9 @@
       type="button"
       :disabled="loading"
       @click="toggleDropdown"
+      @keydown.arrow-down.prevent="openDropdown"
     >
-      <svg class="branch-icon" width="14" height="14" viewBox="0 0 16 16" fill="none">
-        <path d="M4 4v8M4 8c0-2 1-3 3-3h2c2 0 3-1 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        <circle cx="4" cy="4" r="1.5" fill="currentColor"/>
-        <circle cx="12" cy="2" r="1.5" fill="currentColor"/>
-        <circle cx="4" cy="12" r="1.5" fill="currentColor"/>
-      </svg>
+      <UiIcon class="branch-icon" name="branch" />
       <span class="branch-name">{{ displayBranchName }}</span>
     </button>
     <Teleport to="body">
@@ -21,8 +17,11 @@
         v-if="isOpen"
         ref="dropdownRef"
         class="branch-dropdown"
+        role="menu"
+        tabindex="-1"
         :style="dropdownStyle"
         @click.stop
+        @keydown="handleDropdownKeydown"
       >
         <div class="dropdown-header">
           <span class="dropdown-title">{{ $t('inspector.branches.title') }}</span>
@@ -37,14 +36,10 @@
               viewed: branch.name === props.viewedBranch
             }"
             type="button"
+            role="menuitem"
             @click="handleBranchClick(branch)"
           >
-            <svg class="item-icon" width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <path d="M4 4v8M4 8c0-2 1-3 3-3h2c2 0 3-1 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <circle cx="4" cy="4" r="1.5" fill="currentColor"/>
-              <circle cx="12" cy="2" r="1.5" fill="currentColor"/>
-              <circle cx="4" cy="12" r="1.5" fill="currentColor"/>
-            </svg>
+            <UiIcon class="item-icon" name="branch" />
             <span class="item-name">{{ branch.name }}</span>
             <span v-if="branch.name === props.viewedBranch" class="item-badge viewed-badge">
               {{ $t('inspector.branches.viewing') }}
@@ -56,26 +51,16 @@
               <span v-if="branch.ahead > 0">↑{{ branch.ahead }}</span>
               <span v-if="branch.behind > 0">↓{{ branch.behind }}</span>
             </span>
-            <svg
+            <UiIcon
               v-if="branch.name === props.viewedBranch"
               class="check-icon viewed-check"
-              width="12"
-              height="12"
-              viewBox="0 0 16 16"
-              fill="none"
-            >
-              <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            <svg
+              name="check"
+            />
+            <UiIcon
               v-else-if="branch.isCurrent"
               class="check-icon current-check"
-              width="12"
-              height="12"
-              viewBox="0 0 16 16"
-              fill="none"
-            >
-              <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+              name="check"
+            />
           </button>
           <div v-if="remoteBranches.length > 0" class="dropdown-divider">
             <span>{{ $t('inspector.branches.remoteBranches') }}</span>
@@ -86,26 +71,19 @@
             class="branch-item remote"
             :class="{ viewed: branch.name === props.viewedBranch }"
             type="button"
+            role="menuitem"
             @click="handleBranchClick(branch)"
           >
-            <svg class="item-icon" width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5"/>
-            </svg>
+            <UiIcon class="item-icon" name="globe" />
             <span class="item-name">{{ branch.name }}</span>
             <span v-if="branch.name === props.viewedBranch" class="item-badge viewed-badge">
               {{ $t('inspector.branches.viewing') }}
             </span>
-            <svg
+            <UiIcon
               v-if="branch.name === props.viewedBranch"
               class="check-icon viewed-check"
-              width="12"
-              height="12"
-              viewBox="0 0 16 16"
-              fill="none"
-            >
-              <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+              name="check"
+            />
           </button>
         </div>
       </div>
@@ -116,6 +94,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ProjectGitBranchItem } from '@/api/local-project'
+import { useMenuKeyboard } from '@/composables/useMenuKeyboard'
+import UiIcon from '@/components/ui/UiIcon.vue'
 
 defineOptions({ name: 'GitBranchSelect' })
 
@@ -134,6 +114,12 @@ const triggerRef = ref<HTMLElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const isOpen = ref(false)
 const dropdownStyle = ref<Record<string, string>>({})
+const { handleMenuKeydown: handleDropdownKeydown } = useMenuKeyboard({
+  menuRef: dropdownRef,
+  isOpen: () => isOpen.value,
+  onClose: () => closeDropdown(true),
+  itemSelector: '.branch-item:not(:disabled)'
+})
 
 const displayBranchName = computed(() => props.viewedBranch || props.currentBranch || '--')
 
@@ -154,8 +140,11 @@ function openDropdown(): void {
   updateDropdownPosition()
 }
 
-function closeDropdown(): void {
+function closeDropdown(restoreFocus = false): void {
   isOpen.value = false
+  if (restoreFocus) {
+    triggerRef.value?.focus({ preventScroll: true })
+  }
 }
 
 function updateDropdownPosition(): void {
@@ -196,12 +185,6 @@ function handleClickOutside(event: MouseEvent): void {
   }
 }
 
-function handleEscape(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && isOpen.value) {
-    closeDropdown()
-  }
-}
-
 watch(
   () => [props.currentBranch, props.viewedBranch],
   () => {
@@ -213,12 +196,10 @@ watch(
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
-  document.addEventListener('keydown', handleEscape)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
-  document.removeEventListener('keydown', handleEscape)
 })
 </script>
 
@@ -259,6 +240,8 @@ onBeforeUnmount(() => {
 .branch-icon {
   color: var(--text-secondary);
   flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 
 .branch-name {
@@ -313,6 +296,12 @@ onBeforeUnmount(() => {
     background: var(--bg-hover);
   }
 
+  &:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+    background: var(--bg-hover);
+  }
+
   &.current {
     .item-name {
       color: var(--accent-primary);
@@ -333,6 +322,8 @@ onBeforeUnmount(() => {
 .item-icon {
   flex-shrink: 0;
   color: var(--text-muted);
+  width: 12px;
+  height: 12px;
 }
 
 .item-name {
@@ -370,6 +361,8 @@ onBeforeUnmount(() => {
 
 .check-icon {
   flex-shrink: 0;
+  width: 12px;
+  height: 12px;
 }
 
 .viewed-check {

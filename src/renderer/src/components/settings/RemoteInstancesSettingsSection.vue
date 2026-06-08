@@ -70,9 +70,9 @@
           </div>
 
           <div class="remote-form-actions">
-            <button
-              class="btn btn-primary btn-sm"
-              type="button"
+            <Button
+              size="sm"
+              tone="primary"
               :disabled="saving || !canSubmit"
               @click="$emit('save')"
             >
@@ -81,16 +81,15 @@
                   ? $t('settings.remoteSaving')
                   : (isEditing ? $t('settings.remoteUpdate') : $t('settings.remoteAdd'))
               }}
-            </button>
-            <button
+            </Button>
+            <Button
               v-if="isEditing"
-              class="btn btn-sm"
-              type="button"
+              size="sm"
               :disabled="saving"
               @click="$emit('cancel-edit')"
             >
               {{ $t('settings.remoteCancelEdit') }}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -121,22 +120,21 @@
                 <p class="remote-card-url">{{ instance.baseUrl }}</p>
               </div>
               <div class="remote-card-actions">
-                <button
-                  class="btn btn-sm"
-                  type="button"
+                <Button
+                  size="sm"
                   :disabled="busyInstanceIds.includes(instance.id)"
                   @click="$emit('edit-instance', instance)"
                 >
                   {{ $t('settings.remoteEdit') }}
-                </button>
-                <button
-                  class="btn btn-danger btn-sm"
-                  type="button"
+                </Button>
+                <Button
+                  size="sm"
+                  tone="danger"
                   :disabled="busyInstanceIds.includes(instance.id)"
                   @click="$emit('delete-instance', instance.id)"
                 >
                   {{ $t('settings.remoteDelete') }}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -169,6 +167,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RemoteInstance } from '@/models/unified-resource'
+import Button from '@/components/ui/Button.vue'
 
 interface RemoteFormState {
   id: string | null
@@ -256,7 +255,7 @@ defineExpose({
 
 .summary-pill.online {
   color: var(--accent-primary);
-  border-color: rgba(108, 158, 255, 0.35);
+  border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--border-color));
 }
 
 .setting-row {
@@ -304,14 +303,14 @@ defineExpose({
   padding: var(--spacing-md);
   border: 1px dashed var(--border-color);
   border-radius: var(--radius-md);
-  background: rgba(108, 158, 255, 0.05);
+  background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
   color: var(--text-secondary);
   line-height: 1.6;
 }
 
 .remote-form-panel {
-  background: linear-gradient(180deg, rgba(108, 158, 255, 0.06), rgba(108, 158, 255, 0.02));
-  border: 1px solid rgba(108, 158, 255, 0.18);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), color-mix(in srgb, var(--accent-primary) 3%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, var(--border-color));
   border-radius: 0;
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
@@ -386,18 +385,27 @@ defineExpose({
 }
 
 .remote-instance-list {
-  display: grid;
-  gap: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
 }
 
 .remote-instance-card {
-  border: 1px solid var(--border-color);
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
   border-radius: 0;
-  background: var(--bg-primary);
-  padding: var(--spacing-md);
+  background: transparent;
+  padding: 12px 0;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 10px;
+}
+
+.remote-instance-card:last-child {
+  border-bottom: 0;
 }
 
 .remote-instance-card.disabled {
@@ -407,8 +415,9 @@ defineExpose({
 .remote-card-head {
   display: flex;
   justify-content: space-between;
-  gap: var(--spacing-md);
-  align-items: flex-start;
+  gap: var(--spacing-lg);
+  align-items: center;
+  padding: 0 12px;
 }
 
 .remote-title-line {
@@ -425,9 +434,9 @@ defineExpose({
 }
 
 .remote-card-url {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: var(--text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   word-break: break-all;
 }
 
@@ -448,50 +457,57 @@ defineExpose({
 }
 
 .status-badge.status-online {
-  background: rgba(73, 179, 126, 0.12);
-  color: #83d7aa;
-  border-color: rgba(73, 179, 126, 0.25);
+  background: color-mix(in srgb, var(--status-success) 12%, transparent);
+  color: var(--status-success);
+  border-color: color-mix(in srgb, var(--status-success) 28%, var(--border-color));
 }
 
 .status-badge.status-offline,
 .status-badge.status-error {
-  background: rgba(219, 83, 83, 0.12);
-  color: #f2a6a6;
-  border-color: rgba(219, 83, 83, 0.25);
+  background: color-mix(in srgb, var(--status-error) 12%, transparent);
+  color: var(--status-error);
+  border-color: color-mix(in srgb, var(--status-error) 28%, var(--border-color));
 }
 
 .status-badge.status-connecting,
 .status-badge.status-unknown {
-  background: rgba(245, 179, 69, 0.12);
-  color: #f5c987;
-  border-color: rgba(245, 179, 69, 0.25);
+  background: color-mix(in srgb, var(--status-warning) 12%, transparent);
+  color: var(--status-warning);
+  border-color: color-mix(in srgb, var(--status-warning) 28%, var(--border-color));
 }
 
 .mode-badge {
-  background: rgba(108, 158, 255, 0.08);
+  background: color-mix(in srgb, var(--accent-primary) 9%, transparent);
   color: var(--text-secondary);
-  border-color: rgba(108, 158, 255, 0.2);
+  border-color: color-mix(in srgb, var(--accent-primary) 22%, var(--border-color));
 }
 
 .mode-badge.muted {
-  background: rgba(58, 68, 89, 0.5);
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
   color: var(--text-muted);
   border-color: var(--border-color);
 }
 
 .remote-card-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0 12px;
 }
 
 .meta-item {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  background: var(--bg-secondary);
+  align-items: baseline;
+  gap: 8px;
+  min-width: min(240px, 100%);
+  padding: 4px 14px 4px 0;
+  background: transparent;
+  border-right: 1px solid color-mix(in srgb, var(--border-color) 64%, transparent);
   border-radius: 0;
+}
+
+.meta-item:last-child {
+  border-right: 0;
 }
 
 .meta-label {
@@ -518,7 +534,22 @@ defineExpose({
 
   .remote-form-grid,
   .remote-card-grid {
+    display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .remote-card-head {
+    padding: 0 10px;
+  }
+
+  .remote-card-grid {
+    padding: 0 10px;
+  }
+
+  .meta-item {
+    border-right: 0;
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 64%, transparent);
+    padding: 8px 0;
   }
 }
 </style>

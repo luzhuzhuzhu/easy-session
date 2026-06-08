@@ -15,7 +15,7 @@ describe('settings store compatibility', () => {
     })
   })
 
-  it('merges legacy app-settings.json with defaults without renaming keys', async () => {
+  it('merges legacy app-settings.json with defaults and maps legacy theme names', async () => {
     invokeMock.mockResolvedValueOnce({
       theme: 'light',
       language: 'en',
@@ -26,7 +26,7 @@ describe('settings store compatibility', () => {
     const store = useSettingsStore()
     await store.load()
 
-    expect(store.settings.theme).toBe('light')
+    expect(store.settings.theme).toBe('chatgpt-dark')
     expect(store.settings.language).toBe('en')
     expect(store.settings.claudePath).toBe('C:/tools/claude.exe')
     expect(store.settings.manualProjectOrder).toEqual(['local::d:/repo/demo'])
@@ -57,7 +57,7 @@ describe('settings store compatibility', () => {
     const store = useSettingsStore()
     await store.load()
 
-    expect(store.settings.theme).toBe('dark')
+    expect(store.settings.theme).toBe('chatgpt-dark')
     expect(store.settings.language).toBe('zh-CN')
     expect(store.settings.desktopRemoteMountEnabled).toBe(false)
     expect(store.settings.terminalFontSize).toBe(13)
@@ -65,5 +65,27 @@ describe('settings store compatibility', () => {
     expect(store.settings.manualProjectOrder).toEqual(['project-a'])
     expect(store.settings.manualSessionOrder).toEqual({ groupA: ['s1', 's2'], groupB: [] })
     expect(store.settings.sessionsListPosition).toBe('left')
+  })
+
+  it('preserves supported desktop theme variants', async () => {
+    invokeMock.mockResolvedValueOnce({
+      theme: 'gemini-dark'
+    })
+
+    const store = useSettingsStore()
+    await store.load()
+
+    expect(store.settings.theme).toBe('gemini-dark')
+  })
+
+  it('maps legacy Gemini variants to Gemini dark', async () => {
+    invokeMock.mockResolvedValueOnce({
+      theme: 'gemini-light'
+    })
+
+    const store = useSettingsStore()
+    await store.load()
+
+    expect(store.settings.theme).toBe('gemini-dark')
   })
 })

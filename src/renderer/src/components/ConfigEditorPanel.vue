@@ -31,8 +31,8 @@
       <div v-if="isModified" class="modified-hint">{{ $t('config.modified') }}</div>
 
       <div class="actions">
-        <button class="btn btn-primary" :disabled="!isModified || saving" @click="handleSave">{{ $t('config.save') }}</button>
-        <button class="btn" @click="handleReload">{{ $t('config.reload') }}</button>
+        <Button tone="primary" :disabled="!isModified || saving" @click="handleSave">{{ $t('config.save') }}</Button>
+        <Button @click="handleReload">{{ $t('config.reload') }}</Button>
       </div>
 
       <div v-if="message" class="message" :class="messageType">{{ message }}</div>
@@ -49,6 +49,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfigStore } from '@/stores/config'
 import { useToast } from '@/composables/useToast'
+import Button from '@/components/ui/Button.vue'
 
 const props = defineProps<{
   cli?: 'claude' | 'codex' | 'opencode'
@@ -271,12 +272,12 @@ onMounted(() => {
 
   &.success {
     color: var(--status-success);
-    background: rgba(52, 211, 153, 0.1);
+    background: color-mix(in srgb, var(--status-success) 12%, transparent);
   }
 
   &.error {
     color: var(--status-error);
-    background: rgba(248, 113, 113, 0.1);
+    background: color-mix(in srgb, var(--status-error) 12%, transparent);
   }
 }
 

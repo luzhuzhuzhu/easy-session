@@ -1,5 +1,7 @@
 <template>
   <MainLayout />
+  <ConfirmDialogHost />
+  <ShortcutHelpDialog />
   <ToastContainer />
   <div v-if="isShuttingDown" class="shutdown-overlay">
     <div class="shutdown-card">
@@ -15,6 +17,8 @@ import type { IpcRendererEvent } from 'electron'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MainLayout from '@/layouts/MainLayout.vue'
+import ConfirmDialogHost from '@/components/ConfirmDialogHost.vue'
+import ShortcutHelpDialog from '@/components/ShortcutHelpDialog.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useSettingsStore } from '@/stores/settings'
@@ -31,13 +35,23 @@ const shutdownListener = (_event: IpcRendererEvent) => {
   isShuttingDown.value = true
 }
 
+function resolveDocumentTheme(theme: string): string {
+  if (theme === 'gemini' || theme === 'gemini-light' || theme === 'gemini-dark') return 'gemini-dark'
+  return 'chatgpt-dark'
+}
+
 watch(() => settingsStore.settings.language, (lang) => {
   locale.value = lang
 })
 
+watch(() => settingsStore.settings.theme, (theme) => {
+  document.documentElement.dataset.theme = resolveDocumentTheme(theme)
+}, { immediate: true })
+
 onMounted(async () => {
   if (!settingsStore.loaded) await settingsStore.load()
   locale.value = settingsStore.settings.language
+  document.documentElement.dataset.theme = resolveDocumentTheme(settingsStore.settings.theme)
   window.electronAPI.on(SHUTDOWN_START_CHANNEL, shutdownListener)
 })
 

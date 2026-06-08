@@ -621,8 +621,8 @@ function bindInputEvents(inputEl, buttonEl) {
   function updateModeUi() {
     const label = state.passthroughOnly ? '仅透传模式' : '允许远程控制';
     const hint = state.passthroughOnly
-      ? '浏览器页只保留必要的查看和输入能力。'
-      : '浏览器页可执行启动、暂停、重启和删除。';
+      ? '浏览器入口只保留必要的查看和输入能力。'
+      : '浏览器入口可执行启动、暂停、重启和删除。';
 
     if (dom.modeLabel) dom.modeLabel.textContent = label;
     if (dom.modeHint) dom.modeHint.textContent = hint;

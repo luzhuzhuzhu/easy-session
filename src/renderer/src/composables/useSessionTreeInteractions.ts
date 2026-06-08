@@ -1,7 +1,10 @@
 import { computed, ref } from 'vue'
 import type { AppSettings } from '@/stores/settings'
-import type { InstanceCapabilities, SessionRef, UnifiedSession } from '@/models/unified-resource'
+import type { Instance, InstanceCapabilities, SessionRef, UnifiedSession } from '@/models/unified-resource'
 import type { ProjectSessionGroup, SessionTreeSessionItem } from '@/features/sessions/session-tree'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { buildSessionDestroyConfirmCopy } from '@/utils/session-confirm'
+import { formatRemoteOperationError, formatSessionOperationTarget } from '@/utils/remote-operation-error'
 
 type SettingsStoreLike = {
   settings: AppSettings
@@ -36,7 +39,7 @@ type UseSessionTreeInteractionsOptions = {
   sessionsStore: SessionsStoreLike
   workspaceStore: WorkspaceStoreLike
   instancesStore: {
-    getInstance(id: string): { capabilities: InstanceCapabilities } | null | undefined
+    getInstance(id: string): Instance | null | undefined
   }
   toSessionRef: (session: Pick<UnifiedSession, 'instanceId' | 'sessionId' | 'globalSessionKey'>) => SessionRef
   buildProjectGroupKey: (instanceId: string, projectPath: string) => string
@@ -48,6 +51,7 @@ type UseSessionTreeInteractionsOptions = {
 }
 
 export function useSessionTreeInteractions(options: UseSessionTreeInteractionsOptions) {
+  const confirmDialog = useConfirmDialog()
   const contextMenu = ref({ visible: false, x: 0, y: 0, session: null as SessionTreeSessionItem | null })
   const sessionDragState = ref<{ sessionId: string; projectKey: string } | null>(null)
   const projectDragState = ref<{ group: ProjectSessionGroup } | null>(null)
@@ -264,12 +268,29 @@ export function useSessionTreeInteractions(options: UseSessionTreeInteractionsOp
   }
 
   async function destroySessionWithConfirm(sessionRef: SessionRef): Promise<void> {
-    if (!confirm(options.t('session.confirmDestroy'))) return
+    const session = options.sessionsStore.getUnifiedSession(sessionRef.globalSessionKey)
+    const copy = buildSessionDestroyConfirmCopy(session, options.t)
+    const confirmed = await confirmDialog.confirm({
+      title: copy.title,
+      message: copy.message,
+      details: copy.details,
+      confirmText: options.t('confirm.destroy'),
+      cancelText: options.t('confirm.cancel'),
+      tone: 'danger'
+    })
+    if (!confirmed) return
     try {
       await options.sessionsStore.destroySessionRef(sessionRef)
       options.toast.success(options.t('toast.sessionDestroyed'))
     } catch (error: unknown) {
-      options.toast.error(options.t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
+      options.toast.error(formatRemoteOperationError({
+        t: options.t,
+        instancesStore: options.instancesStore,
+        instanceId: sessionRef.instanceId,
+        action: options.t('session.destroy'),
+        target: formatSessionOperationTarget(sessionRef, session?.name),
+        error
+      }))
     }
   }
 

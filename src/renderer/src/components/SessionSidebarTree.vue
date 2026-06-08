@@ -18,22 +18,10 @@
           @click="onToggleInstance(node.instance.key)"
         >
           <span class="tree-caret" :class="{ expanded: isInstanceExpanded(node.instance.key) }" aria-hidden="true">
-            <svg viewBox="0 0 16 16">
-              <path d="M5 3.5L10 8l-5 4.5" />
-            </svg>
+            <UiIcon name="chevron-right" />
           </span>
           <span class="tree-node-icon instance-node-icon" :class="node.instance.instanceType" aria-hidden="true">
-            <svg v-if="node.instance.instanceType === 'local'" viewBox="0 0 16 16">
-              <rect x="2.25" y="3" width="11.5" height="9.75" rx="1.5" />
-              <path d="M2.25 6h11.5" />
-              <circle cx="5" cy="4.5" r="0.7" />
-              <circle cx="7" cy="4.5" r="0.7" />
-            </svg>
-            <svg v-else viewBox="0 0 16 16">
-              <circle cx="8" cy="8" r="5.5" />
-              <ellipse cx="8" cy="8" rx="2.4" ry="5.5" />
-              <path d="M2.5 8h11" />
-            </svg>
+            <UiIcon :name="node.instance.instanceType === 'local' ? 'desktop' : 'globe'" />
           </span>
           <div class="instance-info">
             <span class="instance-name" :title="node.instance.instanceName">{{ node.instance.instanceName }}</span>
@@ -51,8 +39,23 @@
               >
                 {{ formatInstanceStatus(node.instance.instanceStatus) }}
               </span>
+              <span
+                v-if="node.instance.instanceType === 'remote'"
+                class="instance-mode-badge"
+                :class="{ passthrough: node.instance.instancePassthroughOnly }"
+                :title="formatInstanceMode(node.instance)"
+              >
+                {{ formatInstanceMode(node.instance) }}
+              </span>
               <span class="instance-count">{{ formatInstanceCounts(node.instance) }}</span>
             </div>
+            <span
+              v-if="node.instance.instanceType === 'remote' && node.instance.instanceLastError"
+              class="instance-error"
+              :title="formatInstanceErrorTitle(node.instance)"
+            >
+              {{ node.instance.instanceLastError }}
+            </span>
           </div>
         </div>
       </div>
@@ -60,43 +63,43 @@
       <div
         v-else-if="node.type === 'project'"
         class="tree-group sidebar-tree-row sidebar-project-shell"
+        :class="{ 'drop-target': dragOverProjectKey === node.project.key }"
         draggable="true"
         @dragstart="onProjectDragStart($event, node.project)"
+        @dragenter.prevent="dragOverProjectKey = node.project.key"
         @dragover.prevent="onProjectDragOver($event)"
-        @drop="onProjectDrop($event, node.project.key)"
-        @dragend="onProjectDragEnd()"
+        @dragleave="handleDropTargetLeave($event, 'project', node.project.key)"
+        @drop="handleProjectDrop($event, node.project.key)"
+        @dragend="handleProjectDragEnd()"
       >
         <div class="project-node" @click="onToggleProject(node.project.key)">
           <span class="tree-caret" :class="{ expanded: isProjectExpanded(node.project.key) }" aria-hidden="true">
-            <svg viewBox="0 0 16 16">
-              <path d="M5 3.5L10 8l-5 4.5" />
-            </svg>
+            <UiIcon name="chevron-right" />
           </span>
           <span class="tree-node-icon project-node-icon" aria-hidden="true">
-            <svg viewBox="0 0 16 16">
-              <path d="M2 4.25h4l1.75 1.75H14v5.75a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4.25Z" />
-            </svg>
+            <UiIcon name="folder" />
           </span>
           <span class="project-name" :title="node.project.projectName">{{ node.project.projectName }}</span>
           <div class="project-right">
             <span class="project-count">{{ node.project.sessions.length }}</span>
             <div class="project-actions" @click.stop>
-            <button
-              v-if="node.project.canCreateSession"
-              class="project-action-btn"
-              :title="$t('session.create')"
-              @click="onOpenCreateDialog(node.project)"
-            >
-              +
-            </button>
-            <button
-              v-if="node.project.canOpenProjectDetail"
-              class="project-action-btn"
-              :title="$t('project.settings')"
-              @click="onOpenProject(node.project)"
-            >
-              P
-            </button>
+              <IconButton
+                v-if="node.project.canCreateSession"
+                size="xs"
+                tone="primary"
+                :label="$t('session.create')"
+                @click="onOpenCreateDialog(node.project)"
+              >
+                <UiIcon name="plus" />
+              </IconButton>
+              <IconButton
+                v-if="node.project.canOpenProjectDetail"
+                size="xs"
+                :label="$t('project.settings')"
+                @click="onOpenProject(node.project)"
+              >
+                <UiIcon name="settings" />
+              </IconButton>
             </div>
           </div>
         </div>
@@ -106,15 +109,24 @@
         v-else-if="node.type === 'session'"
         class="sidebar-tree-row sidebar-session-shell"
       >
-        <button
+        <div
           class="session-item tree-child"
-          :class="{ active: activeGlobalSessionKey === node.session.id }"
+          :class="{
+            active: activeGlobalSessionKey === node.session.id,
+            'drop-target': dragOverSessionId === node.session.id
+          }"
+          role="button"
+          tabindex="0"
           draggable="true"
           @click="onSessionClick(node.session)"
+          @keydown.enter.prevent="onSessionClick(node.session)"
+          @keydown.space.prevent="onSessionClick(node.session)"
           @dragstart="onSessionDragStart($event, node.session)"
+          @dragenter.prevent="dragOverSessionId = node.session.id"
           @dragover.prevent="onSessionDragOver($event, node.projectKey)"
-          @drop="onSessionDrop($event, node.projectKey, node.session.id)"
-          @dragend="onSessionDragEnd()"
+          @dragleave="handleDropTargetLeave($event, 'session', node.session.id)"
+          @drop="handleSessionDrop($event, node.projectKey, node.session.id)"
+          @dragend="handleSessionDragEnd()"
           @contextmenu.prevent="onSessionContextMenu($event, node.session)"
         >
           <span v-if="node.session.icon" class="session-icon">{{ node.session.icon }}</span>
@@ -123,8 +135,14 @@
             <span class="item-name">{{ node.session.name }}</span>
             <span class="item-time">{{ formatTime(node.session.createdAt) }}</span>
           </div>
-          <span class="status-dot" :class="node.session.status"></span>
-        </button>
+          <span
+            class="status-dot"
+            :class="node.session.status"
+            role="img"
+            :title="formatSessionStatus(node.session.status)"
+            :aria-label="formatSessionStatus(node.session.status)"
+          ></span>
+        </div>
       </div>
 
       <div v-else-if="node.type === 'spacer'" class="instance-gap" aria-hidden="true"></div>
@@ -144,8 +162,11 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VirtualTree from '@/components/tree/VirtualTree.vue'
+import IconButton from '@/components/ui/IconButton.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import type {
   InstanceTreeGroup,
   ProjectSessionGroup,
@@ -175,6 +196,8 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const dragOverProjectKey = ref('')
+const dragOverSessionId = ref('')
 
 function isInstanceExpanded(key: string): boolean {
   return props.expandedInstances[key] ?? true
@@ -190,6 +213,15 @@ function formatInstanceType(type: InstanceTreeGroup['instanceType']): string {
 
 function formatInstanceStatus(status: InstanceTreeGroup['instanceStatus']): string {
   return t(`settings.remoteStatus.${status}`)
+}
+
+function formatInstanceMode(group: InstanceTreeGroup): string {
+  if (group.instanceType !== 'remote') return ''
+  return group.instancePassthroughOnly ? t('settings.remoteModePassthrough') : t('settings.remoteModeManaged')
+}
+
+function formatSessionStatus(status: SessionTreeSessionItem['status']): string {
+  return t(`session.status.${status}`)
 }
 
 function formatInstanceLatency(latencyMs: number | null): string {
@@ -215,11 +247,25 @@ function formatInstanceCounts(group: InstanceTreeGroup): string {
   })
 }
 
+function formatInstanceLastChecked(timestamp: number | null): string {
+  if (!timestamp) return t('settings.remoteNeverChecked')
+  return new Date(timestamp).toLocaleString()
+}
+
+function formatInstanceErrorTitle(group: InstanceTreeGroup): string {
+  return [
+    `${t('settings.remoteLastError')}: ${group.instanceLastError}`,
+    `${t('settings.remoteLastChecked')}: ${formatInstanceLastChecked(group.instanceLastCheckedAt)}`
+  ].filter(Boolean).join('\n')
+}
+
 function formatInstanceTooltip(group: InstanceTreeGroup): string {
   const lines = [group.instanceName, formatInstanceCounts(group)]
 
   if (group.instanceType === 'remote') {
     lines.splice(1, 0, `${formatInstanceType(group.instanceType)} · ${formatInstanceStatus(group.instanceStatus)}`)
+    lines.splice(2, 0, formatInstanceMode(group))
+    lines.push(`${t('settings.remoteLastChecked')}: ${formatInstanceLastChecked(group.instanceLastCheckedAt)}`)
     if (Number.isFinite(group.instanceLatencyMs)) {
       lines.push(`${t('settings.remoteLatency')}: ${formatInstanceLatency(group.instanceLatencyMs)}`)
     }
@@ -233,5 +279,46 @@ function formatInstanceTooltip(group: InstanceTreeGroup): string {
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString()
+}
+
+function isLeavingCurrentTarget(event: DragEvent): boolean {
+  const current = event.currentTarget as HTMLElement | null
+  const related = event.relatedTarget as Node | null
+  return !(current && related && current.contains(related))
+}
+
+function handleDropTargetLeave(event: DragEvent, type: 'project' | 'session', key: string): void {
+  if (!isLeavingCurrentTarget(event)) return
+  if (type === 'project' && dragOverProjectKey.value === key) {
+    dragOverProjectKey.value = ''
+  }
+  if (type === 'session' && dragOverSessionId.value === key) {
+    dragOverSessionId.value = ''
+  }
+}
+
+function clearDropTargets(): void {
+  dragOverProjectKey.value = ''
+  dragOverSessionId.value = ''
+}
+
+function handleProjectDrop(event: DragEvent, projectKey: string): void {
+  props.onProjectDrop(event, projectKey)
+  clearDropTargets()
+}
+
+function handleProjectDragEnd(): void {
+  props.onProjectDragEnd()
+  clearDropTargets()
+}
+
+function handleSessionDrop(event: DragEvent, projectKey: string, sessionId: string): void {
+  props.onSessionDrop(event, projectKey, sessionId)
+  clearDropTargets()
+}
+
+function handleSessionDragEnd(): void {
+  props.onSessionDragEnd()
+  clearDropTargets()
 }
 </script>

@@ -9,9 +9,7 @@
       <div class="card cli-card clickable" @click="toggleCliConfig('claude')">
         <div class="card-header">
           <h3>{{ $t('dashboard.claudeStatus') }}</h3>
-          <svg class="chevron" :class="{ rotated: activeCli === 'claude' }" viewBox="0 0 16 16" width="12" height="12">
-            <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
-          </svg>
+          <UiIcon class="chevron" :class="{ rotated: activeCli === 'claude' }" name="chevron-down" />
         </div>
         <div class="cli-status">
           <span class="indicator" :class="statusClass(appStore.claudeAvailable, checking)"></span>
@@ -26,9 +24,7 @@
       <div class="card cli-card clickable" @click="toggleCliConfig('codex')">
         <div class="card-header">
           <h3>{{ $t('dashboard.codexStatus') }}</h3>
-          <svg class="chevron" :class="{ rotated: activeCli === 'codex' }" viewBox="0 0 16 16" width="12" height="12">
-            <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
-          </svg>
+          <UiIcon class="chevron" :class="{ rotated: activeCli === 'codex' }" name="chevron-down" />
         </div>
         <div class="cli-status">
           <span class="indicator" :class="statusClass(appStore.codexAvailable, checking)"></span>
@@ -43,9 +39,7 @@
       <div class="card cli-card clickable" @click="toggleCliConfig('opencode')">
         <div class="card-header">
           <h3>{{ $t('dashboard.opencodeStatus') }}</h3>
-          <svg class="chevron" :class="{ rotated: activeCli === 'opencode' }" viewBox="0 0 16 16" width="12" height="12">
-            <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
-          </svg>
+          <UiIcon class="chevron" :class="{ rotated: activeCli === 'opencode' }" name="chevron-down" />
         </div>
         <div class="cli-status">
           <span class="indicator" :class="statusClass(appStore.opencodeAvailable, checking)"></span>
@@ -91,16 +85,12 @@
           </div>
         </div>
         <div v-else class="recent-empty">
-          <svg viewBox="0 0 16 16" width="32" height="32" opacity="0.3">
-            <path d="M2 4.5a1.5 1.5 0 0 1 1.5-1.5h3.2l2 2h5.3a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H3.5a1.5 1.5 0 0 1-1.5-1.5v-6z" fill="none" stroke="currentColor" stroke-width="1.2" />
-          </svg>
+          <UiIcon class="recent-empty-icon" name="folder" />
           <p>{{ $t('dashboard.noRecentProjects') }}</p>
-          <button class="action-btn primary" @click="handleNewProject">
-            <svg viewBox="0 0 16 16" width="14" height="14">
-              <path d="M8 3.25v9.5M3.25 8h9.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
-            </svg>
+          <Button tone="primary" size="sm" @click="handleNewProject">
+            <UiIcon name="plus" />
             {{ $t('dashboard.newProject') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -108,18 +98,14 @@
     <div class="quick-actions">
       <h3>{{ $t('dashboard.quickActions') }}</h3>
       <div class="actions">
-        <button class="action-btn primary" @click="handleNewProject">
-          <svg viewBox="0 0 16 16" width="14" height="14">
-            <path d="M8 3.25v9.5M3.25 8h9.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.6" />
-          </svg>
+        <Button tone="primary" size="sm" @click="handleNewProject">
+          <UiIcon name="plus" />
           {{ $t('dashboard.newProject') }}
-        </button>
-        <button class="action-btn" @click="$router.push('/sessions')">
-          <svg viewBox="0 0 16 16" width="14" height="14">
-            <rect x="4" y="4" width="8" height="8" fill="none" stroke="currentColor" stroke-width="1.6" />
-          </svg>
+        </Button>
+        <Button size="sm" @click="$router.push('/sessions')">
+          <UiIcon name="terminal" />
           {{ $t('dashboard.newSession') }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -136,6 +122,8 @@ import { useInstancesStore } from '@/stores/instances'
 import { useConfigStore } from '@/stores/config'
 import { selectFolder } from '@/api/local-project'
 import ConfigEditorPanel from '@/components/ConfigEditorPanel.vue'
+import Button from '@/components/ui/Button.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { buildProjectRouteLocation } from '@/utils/project-routing'
 
 const { t } = useI18n()
@@ -316,6 +304,8 @@ watch(
   }
 
   .chevron {
+    width: 12px;
+    height: 12px;
     color: var(--text-muted);
     transition: transform var(--transition-fast);
 
@@ -480,6 +470,12 @@ watch(
   }
 }
 
+.recent-empty-icon {
+  width: 32px;
+  height: 32px;
+  opacity: 0.3;
+}
+
 .quick-actions {
   padding: var(--spacing-md);
   border-top: 1px solid var(--border-color);
@@ -496,41 +492,5 @@ watch(
   display: flex;
   gap: var(--spacing-sm);
   flex-wrap: wrap;
-}
-
-.action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 0;
-  color: var(--text-primary);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-
-  &:hover {
-    background: var(--bg-hover);
-    border-color: var(--accent-primary);
-    color: var(--accent-primary);
-  }
-
-  &.primary {
-    background: var(--accent-primary);
-    border-color: var(--accent-primary);
-    color: var(--bg-primary);
-
-    &:hover {
-      background: var(--accent-primary);
-      opacity: 0.9;
-    }
-  }
-
-  svg {
-    flex-shrink: 0;
-  }
 }
 </style>

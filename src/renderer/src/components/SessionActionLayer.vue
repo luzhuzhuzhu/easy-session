@@ -1,50 +1,80 @@
 <template>
-  <div v-if="contextMenuVisible" class="context-menu" :style="{ left: `${contextMenuX}px`, top: `${contextMenuY}px` }">
-    <button class="context-item" @click="emit('open-in-pane')">{{ $t('session.openInFocusedPane') }}</button>
-    <button class="context-item" @click="emit('split-open', 'horizontal')">{{ $t('session.splitRightOpen') }}</button>
-    <button class="context-item" @click="emit('split-open', 'vertical')">{{ $t('session.splitDownOpen') }}</button>
-    <button
-      v-if="contextSessionCapabilities?.sessionStart && contextSession?.status !== 'running'"
-      class="context-item"
+  <div
+    v-if="contextMenuVisible"
+    ref="contextMenuRef"
+    class="context-menu"
+    role="menu"
+    tabindex="-1"
+    :style="{ left: `${contextMenuX}px`, top: `${contextMenuY}px` }"
+    @keydown="handleMenuKeydown"
+  >
+    <MenuItem :label="$t('session.openInFocusedPane')" @click="emit('open-in-pane')">
+      {{ $t('session.openInFocusedPane') }}
+    </MenuItem>
+    <MenuItem :label="$t('session.splitRightOpen')" @click="emit('split-open', 'horizontal')">
+      {{ $t('session.splitRightOpen') }}
+    </MenuItem>
+    <MenuItem :label="$t('session.splitDownOpen')" @click="emit('split-open', 'vertical')">
+      {{ $t('session.splitDownOpen') }}
+    </MenuItem>
+    <div
+      v-if="showLifecycleGroup"
+      class="context-separator"
+      role="separator"
+    ></div>
+    <MenuItem
+      v-if="showStartAction"
+      :disabled="!canStartContextAction"
+      :title="formatActionTitle($t('session.start'), canStartContextAction)"
+      :label="formatActionTitle($t('session.start'), canStartContextAction)"
       @click="emit('start-context')"
     >
       {{ $t('session.start') }}
-    </button>
-    <button
-      v-if="contextSessionCapabilities?.sessionPause && contextSession?.status === 'running'"
-      class="context-item"
+    </MenuItem>
+    <MenuItem
+      v-if="showPauseAction"
+      :disabled="!canPauseContextAction"
+      :title="formatActionTitle($t('session.pause'), canPauseContextAction)"
+      :label="formatActionTitle($t('session.pause'), canPauseContextAction)"
       @click="emit('pause-context')"
     >
       {{ $t('session.pause') }}
-    </button>
-    <button
-      v-if="contextSessionCapabilities?.sessionRestart"
-      class="context-item"
+    </MenuItem>
+    <MenuItem
+      v-if="showRestartAction"
+      :disabled="!canRestartContextAction"
+      :title="formatActionTitle($t('session.restart'), canRestartContextAction)"
+      :label="formatActionTitle($t('session.restart'), canRestartContextAction)"
       @click="emit('restart-context')"
     >
       {{ $t('session.restart') }}
-    </button>
-    <button
+    </MenuItem>
+    <div v-if="contextSession?.instanceId === 'local'" class="context-separator" role="separator"></div>
+    <MenuItem
       v-if="contextSession?.instanceId === 'local'"
-      class="context-item"
+      :label="$t('session.rename')"
       @click="emit('rename')"
     >
       {{ $t('session.rename') }}
-    </button>
-    <button
+    </MenuItem>
+    <MenuItem
       v-if="contextSession?.instanceId === 'local'"
-      class="context-item"
+      :label="$t('session.changeIcon')"
       @click="emit('change-icon')"
     >
       {{ $t('session.changeIcon') }}
-    </button>
-    <button
-      v-if="contextSessionCapabilities?.sessionDestroy"
-      class="context-item danger"
+    </MenuItem>
+    <div v-if="showDestroyAction" class="context-separator" role="separator"></div>
+    <MenuItem
+      v-if="showDestroyAction"
+      danger
+      :disabled="!canDestroyContextAction"
+      :title="formatActionTitle($t('session.destroy'), canDestroyContextAction)"
+      :label="formatActionTitle($t('session.destroy'), canDestroyContextAction)"
       @click="emit('destroy-context')"
     >
       {{ $t('session.destroy') }}
-    </button>
+    </MenuItem>
   </div>
   <div v-if="contextMenuVisible" class="context-overlay" @click="emit('close-context')"></div>
 
@@ -59,10 +89,10 @@
         @keydown.enter="emit('confirm-rename')"
       />
       <div class="dialog-actions">
-        <button class="btn btn-sm" @click="emit('close-rename')">{{ $t('session.dialog.cancel') }}</button>
-        <button class="btn btn-sm btn-primary" :disabled="!renameInput.trim()" @click="emit('confirm-rename')">
+        <Button size="sm" @click="emit('close-rename')">{{ $t('session.dialog.cancel') }}</Button>
+        <Button size="sm" tone="primary" :disabled="!renameInput.trim()" @click="emit('confirm-rename')">
           {{ $t('session.dialog.confirm') }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -79,8 +109,8 @@
         <span>{{ $t('session.wakeDialogNoRemind') }}</span>
       </label>
       <div class="dialog-actions">
-        <button class="btn btn-sm" @click="emit('close-wake')">{{ $t('session.dialog.cancel') }}</button>
-        <button class="btn btn-sm btn-primary" @click="emit('confirm-wake')">{{ $t('session.wakeDialogStart') }}</button>
+        <Button size="sm" @click="emit('close-wake')">{{ $t('session.dialog.cancel') }}</Button>
+        <Button size="sm" tone="primary" @click="emit('confirm-wake')">{{ $t('session.wakeDialogStart') }}</Button>
       </div>
     </div>
   </div>
@@ -105,17 +135,23 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SessionTreeSessionItem } from '@/features/sessions/session-tree'
 import type { InstanceCapabilities } from '@/models/unified-resource'
 import type { WorkspaceSplitDirection } from '@/api/workspace'
+import { useMenuKeyboard } from '@/composables/useMenuKeyboard'
+import { useOverlayStack } from '@/composables/useOverlayStack'
+import Button from '@/components/ui/Button.vue'
+import MenuItem from '@/components/ui/MenuItem.vue'
 
-defineProps<{
+const props = defineProps<{
   contextMenuVisible: boolean
   contextMenuX: number
   contextMenuY: number
   contextSession: SessionTreeSessionItem | null
   contextSessionCapabilities: InstanceCapabilities | null
+  contextSessionPassthroughOnly: boolean
   showRenameDialog: boolean
   renameInput: string
   showWakeDialog: boolean
@@ -146,7 +182,53 @@ const emit = defineEmits<{
   'pick-icon': [emoji: string | null]
 }>()
 
-useI18n()
+const { t } = useI18n()
+const contextMenuRef = ref<HTMLElement | null>(null)
+
+const showStartAction = computed(() => !!props.contextSession && props.contextSession.status !== 'running')
+const showPauseAction = computed(() => !!props.contextSession && props.contextSession.status === 'running')
+const showRestartAction = computed(() => !!props.contextSession)
+const showDestroyAction = computed(() => !!props.contextSession)
+
+const canStartContextAction = computed(() => !!props.contextSessionCapabilities?.sessionStart)
+const canPauseContextAction = computed(() => !!props.contextSessionCapabilities?.sessionPause)
+const canRestartContextAction = computed(() => !!props.contextSessionCapabilities?.sessionRestart)
+const canDestroyContextAction = computed(() => !!props.contextSessionCapabilities?.sessionDestroy)
+const showLifecycleGroup = computed(
+  () => showStartAction.value || showPauseAction.value || showRestartAction.value
+)
+
+const { handleMenuKeydown } = useMenuKeyboard({
+  menuRef: contextMenuRef,
+  isOpen: () => props.contextMenuVisible,
+  onClose: () => emit('close-context')
+})
+
+useOverlayStack({
+  isOpen: () => props.showRenameDialog,
+  onEscape: () => emit('close-rename')
+})
+
+useOverlayStack({
+  isOpen: () => props.showWakeDialog,
+  onEscape: () => emit('close-wake')
+})
+
+useOverlayStack({
+  isOpen: () => props.showIconPicker,
+  onEscape: () => emit('close-icon-picker')
+})
+
+function capabilityUnavailableReason(): string {
+  return props.contextSessionPassthroughOnly
+    ? t('session.capabilityUnavailablePassthrough')
+    : t('session.capabilityUnavailable')
+}
+
+function formatActionTitle(label: string, available: boolean): string {
+  if (available) return label
+  return `${label} - ${capabilityUnavailableReason()}`
+}
 
 function handleRenameInput(event: Event): void {
   const target = event.target as HTMLInputElement | null
@@ -202,7 +284,7 @@ function handleWakeReminderChange(event: Event): void {
   }
 
   &.selected {
-    background: rgba(108, 158, 255, 0.15);
+    background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
   }
 
   &.clear-cell {

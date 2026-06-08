@@ -96,12 +96,44 @@
         </div>
         <div class="topbar-right">
           <div class="status-indicators">
-            <span class="status-dot" :class="appStore.claudeAvailable ? 'online' : 'offline'" :title="$t(appStore.claudeAvailable ? 'topbar.claudeOnline' : 'topbar.claudeOffline')"></span>
-            <span class="status-label">Claude</span>
-            <span class="status-dot" :class="appStore.codexAvailable ? 'online' : 'offline'" :title="$t(appStore.codexAvailable ? 'topbar.codexOnline' : 'topbar.codexOffline')"></span>
-            <span class="status-label">Codex</span>
-            <span class="status-dot" :class="appStore.opencodeAvailable ? 'online' : 'offline'" :title="$t(appStore.opencodeAvailable ? 'topbar.opencodeOnline' : 'topbar.opencodeOffline')"></span>
-            <span class="status-label">OpenCode</span>
+            <button
+              class="cli-status-btn"
+              type="button"
+              :title="getCliStatusTitle(appStore.claudeAvailable ? 'topbar.claudeOnline' : 'topbar.claudeOffline')"
+              :aria-label="getCliStatusTitle(appStore.claudeAvailable ? 'topbar.claudeOnline' : 'topbar.claudeOffline')"
+              @click="openCliSettings"
+            >
+              <span class="status-dot" :class="appStore.claudeAvailable ? 'online' : 'offline'"></span>
+              <span class="status-label">Claude</span>
+            </button>
+            <button
+              class="cli-status-btn"
+              type="button"
+              :title="getCliStatusTitle(appStore.codexAvailable ? 'topbar.codexOnline' : 'topbar.codexOffline')"
+              :aria-label="getCliStatusTitle(appStore.codexAvailable ? 'topbar.codexOnline' : 'topbar.codexOffline')"
+              @click="openCliSettings"
+            >
+              <span class="status-dot" :class="appStore.codexAvailable ? 'online' : 'offline'"></span>
+              <span class="status-label">Codex</span>
+            </button>
+            <button
+              class="cli-status-btn"
+              type="button"
+              :title="getCliStatusTitle(appStore.opencodeAvailable ? 'topbar.opencodeOnline' : 'topbar.opencodeOffline')"
+              :aria-label="getCliStatusTitle(appStore.opencodeAvailable ? 'topbar.opencodeOnline' : 'topbar.opencodeOffline')"
+              @click="openCliSettings"
+            >
+              <span class="status-dot" :class="appStore.opencodeAvailable ? 'online' : 'offline'"></span>
+              <span class="status-label">OpenCode</span>
+            </button>
+            <span
+              v-if="remoteRefreshSummary"
+              class="remote-status-summary"
+              :class="{ warning: remoteFailureCount > 0 }"
+              :title="remoteRefreshSummary"
+            >
+              {{ remoteRefreshSummary }}
+            </span>
             <span class="session-count" v-if="activeSessionCount > 0">{{ activeSessionCount }} {{ $t('topbar.activeSessions') }}</span>
           </div>
           <div class="window-controls">
@@ -138,25 +170,29 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useProjectsStore } from '@/stores/projects'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
 import { useInstancesStore } from '@/stores/instances'
 import { useSettingsStore } from '@/stores/settings'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import { SHORTCUT_LABELS } from '@/composables/useShortcuts'
 import logoSrc from '@/assets/logo-easy-session-light.png'
 import { buildProjectRouteLocation, resolveProjectRouteRef } from '@/utils/project-routing'
+import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
 
 const route = useRoute()
+const router = useRouter()
 const { t } = useI18n()
 const projectsStore = useProjectsStore()
 const appStore = useAppStore()
 const sessionsStore = useSessionsStore()
 const instancesStore = useInstancesStore()
 const settingsStore = useSettingsStore()
+const confirmDialog = useConfirmDialog()
 const navItems = [
   { path: "/dashboard", icon: "dashboard", label: "nav.dashboard" },
   { path: "/sessions", icon: "sessions", label: "nav.sessions" },
@@ -171,6 +207,45 @@ const activeSessionCount = computed(() =>
   sessionsStore.unifiedSessions.filter((session) => session.status === 'running').length
 )
 
+const runningLocalSessionCount = computed(() =>
+  sessionsStore.unifiedSessions.filter((session) => session.instanceId === 'local' && session.status === 'running').length
+)
+
+const runningRemoteSessionCount = computed(() =>
+  sessionsStore.unifiedSessions.filter((session) => session.instanceId !== 'local' && session.status === 'running').length
+)
+
+const remoteFailureCount = computed(() =>
+  instancesStore.remoteInstances.filter((instance) => instance.status === 'offline' || instance.status === 'error').length
+)
+
+const remoteRefreshSummary = computed(() => {
+  if (!settingsStore.settings.desktopRemoteMountEnabled) return ''
+
+  const remotes = instancesStore.remoteInstances
+  if (remotes.length === 0) {
+    return t('session.remoteRefreshNoInstances')
+  }
+
+  const lastCheckedAt = remotes
+    .map((instance) => instance.lastCheckedAt ?? 0)
+    .filter((value) => value > 0)
+    .sort((a, b) => b - a)[0] ?? 0
+  const parts: string[] = []
+
+  if (lastCheckedAt > 0) {
+    parts.push(t('session.remoteLastRefresh', { time: formatClockTime(lastCheckedAt) }))
+  } else {
+    parts.push(t('session.remoteNotRefreshed'))
+  }
+
+  parts.push(remoteFailureCount.value > 0
+    ? t('session.remoteFailureCount', { count: remoteFailureCount.value })
+    : t('session.remoteAllHealthy'))
+
+  return parts.join(' · ')
+})
+
 const breadcrumbs = computed(() => {
   const crumbs: { label: string; path?: string }[] = []
   if (route.path === '/settings') {
@@ -179,6 +254,9 @@ const breadcrumbs = computed(() => {
     crumbs.push({ label: t('nav.projects'), path: '/projects' })
     const projectRef = resolveProjectRouteRef(route)
     const project = projectRef ? projectsStore.getUnifiedProject(projectRef.globalProjectKey) : null
+    if (projectRef) {
+      crumbs.push({ label: formatProjectInstanceCrumb(projectRef.instanceId) })
+    }
     crumbs.push({ label: project?.name || String(projectRef?.projectId || route.params.id || route.params.projectId) })
   } else {
     const item = navItems.find((n) => route.path.startsWith(n.path))
@@ -194,7 +272,49 @@ function toggleSidebar() {
 const api = window.electronAPI
 function minimize() { api.invoke('window:minimize') }
 function toggleMaximize() { api.invoke('window:maximize') }
-function closeWindow() { api.invoke('window:close') }
+async function closeWindow() {
+  if (activeSessionCount.value > 0) {
+    const confirmed = await confirmDialog.confirm({
+      title: t('topbar.confirmCloseRunningTitle'),
+      message: t('topbar.confirmCloseRunningMessage', {
+        local: runningLocalSessionCount.value,
+        remote: runningRemoteSessionCount.value
+      }),
+      details: t('topbar.confirmCloseRunningDetails'),
+      confirmText: t('topbar.confirmCloseRunningAction'),
+      cancelText: t('common.cancel'),
+      tone: 'danger'
+    })
+    if (!confirmed) return
+  }
+  api.invoke('window:close')
+}
+
+function openCliSettings(): void {
+  void router.push({ path: '/settings', query: { category: 'cli' } })
+}
+
+function getCliStatusTitle(statusKey: string): string {
+  return `${t(statusKey)} · ${t('topbar.openCliSettings')}`
+}
+
+function formatProjectInstanceCrumb(instanceId: string): string {
+  if (instanceId === LOCAL_INSTANCE_ID) {
+    return t('session.instanceLocal')
+  }
+
+  const instance = instancesStore.getInstance(instanceId)
+  const name = instance?.name || instanceId
+  if (!instance) return name
+  return `${name} · ${t(`settings.remoteStatus.${instance.status}`)}`
+}
+
+function formatClockTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
 
 onMounted(() => {
   if (!projectsStore.unifiedProjects.length) {
@@ -378,7 +498,7 @@ onMounted(() => {
 
   .nav-item:hover &,
   .router-link-active & {
-    background: rgba(108, 158, 255, 0.15);
+    background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
     color: var(--accent-primary);
   }
 }
@@ -491,20 +611,69 @@ onMounted(() => {
   gap: 6px;
   font-size: var(--font-size-xs);
   color: var(--text-muted);
+  min-width: 0;
 }
 
 .status-dot {
+  flex-shrink: 0;
   width: 7px;
   height: 7px;
   border-radius: 0;
-  &.online { background: var(--status-success); box-shadow: 0 0 4px rgba(52, 211, 153, 0.4); }
+  &.online { background: var(--status-success); box-shadow: 0 0 4px color-mix(in srgb, var(--status-success) 45%, transparent); }
   &.offline { background: var(--text-muted); }
 }
 
 .status-label {
   margin-right: var(--spacing-sm);
   font-size: 11px;
-  letter-spacing: 0.3px;
+  letter-spacing: 0;
+}
+
+.cli-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--accent-primary);
+    outline-offset: 3px;
+  }
+
+  .status-label {
+    margin-right: var(--spacing-sm);
+  }
+}
+
+.remote-status-summary {
+  max-width: 240px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 2px 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.warning {
+    border-color: color-mix(in srgb, var(--status-warning) 34%, var(--border-color));
+    color: var(--status-warning);
+    background: color-mix(in srgb, var(--status-warning) 10%, var(--bg-tertiary));
+  }
 }
 
 .session-count {

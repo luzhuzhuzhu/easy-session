@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import type { AppSettings } from '@/stores/settings'
 import type { SessionRef } from '@/models/unified-resource'
 import type { WorkspaceSplitDirection } from '@/api/workspace'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 
 type ToastLike = {
   success(message: string): void
@@ -62,6 +63,8 @@ const MIN_FONT_SIZE = 9
 const MAX_FONT_SIZE = 28
 
 export function useWorkspacePaneActions(options: UseWorkspacePaneActionsOptions) {
+  const confirmDialog = useConfirmDialog()
+
   function clampFontSize(size: number): number {
     if (!Number.isFinite(size)) return DEFAULT_FONT_SIZE
     return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(size)))
@@ -245,7 +248,15 @@ export function useWorkspacePaneActions(options: UseWorkspacePaneActionsOptions)
   }
 
   async function handleResetWorkspace(): Promise<void> {
-    if (!confirm(options.t('session.confirmResetLayout'))) return
+    const confirmed = await confirmDialog.confirm({
+      title: options.t('session.confirmResetLayoutTitle'),
+      message: options.t('session.confirmResetLayoutMessage'),
+      details: options.t('session.confirmResetLayoutDetails'),
+      confirmText: options.t('confirm.reset'),
+      cancelText: options.t('confirm.cancel'),
+      tone: 'danger'
+    })
+    if (!confirmed) return
     await options.workspaceStore.hardReset()
     options.reconcileWorkspaceSessions()
     options.toast.success(options.t('toast.layoutReset'))

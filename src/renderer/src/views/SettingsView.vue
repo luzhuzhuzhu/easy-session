@@ -1,34 +1,100 @@
 ﻿<template>
   <div class="settings-page">
-    <h1>{{ $t('settings.title') }}</h1>
+    <header class="settings-header">
+      <div class="settings-title-block">
+        <h1>{{ $t('settings.title') }}</h1>
+        <p>{{ $t('settings.subtitle') }}</p>
+      </div>
+      <div class="settings-search">
+        <UiIcon name="search" />
+        <input
+          v-model.trim="settingsSearchQuery"
+          type="search"
+          :placeholder="$t('settings.searchPlaceholder')"
+          :aria-label="$t('settings.searchPlaceholder')"
+        />
+      </div>
+    </header>
 
-    <GeneralPreferencesSettingsSection
-      :theme="settingsStore.settings.theme"
-      :language="settingsStore.settings.language"
-      :session-wake-confirm="settingsStore.settings.sessionWakeConfirm"
-      :sessions-list-position="settingsStore.settings.sessionsListPosition"
-      :sessions-panel-collapsed="settingsStore.settings.sessionsPanelCollapsed"
-      :smart-priority-enabled="settingsStore.settings.smartPriorityEnabled"
-      :smart-priority-scope="settingsStore.settings.smartPriorityScope"
-      :smart-priority-mode="settingsStore.settings.smartPriorityMode"
-      @update:theme="settingsStore.settings.theme = $event; handleSave()"
-      @update:language="settingsStore.settings.language = $event; handleSave()"
-      @update:session-wake-confirm="settingsStore.settings.sessionWakeConfirm = $event; handleSave()"
-      @toggle-sessions-list-position="toggleSessionsListPosition"
-      @update:sessions-panel-collapsed="settingsStore.settings.sessionsPanelCollapsed = $event; handleSave()"
-      @update:smart-priority-enabled="settingsStore.settings.smartPriorityEnabled = $event; handleSave()"
-      @update:smart-priority-scope="settingsStore.settings.smartPriorityScope = $event; handleSave()"
-      @update:smart-priority-mode="settingsStore.settings.smartPriorityMode = $event; handleSave()"
-    />
+    <div class="settings-shell">
+      <nav class="settings-nav" :aria-label="$t('settings.sectionNav')">
+        <button
+          v-for="item in settingsNavItems"
+          :key="item.id"
+          class="settings-nav-item"
+          :class="{ active: activeSettingsCategory === item.id }"
+          type="button"
+          @click="setSettingsCategory(item.id)"
+        >
+          <span class="settings-nav-marker" aria-hidden="true">{{ item.marker }}</span>
+          <span class="settings-nav-copy">
+            <span class="settings-nav-label">{{ item.label }}</span>
+            <span class="settings-nav-count">{{ item.countLabel }}</span>
+          </span>
+        </button>
+      </nav>
 
-    <CliPathsSettingsSection
-      :claude-path="settingsStore.settings.claudePath"
-      :codex-path="settingsStore.settings.codexPath"
-      :opencode-path="settingsStore.settings.opencodePath"
-      @update:claude-path="settingsStore.settings.claudePath = $event; handleSave()"
-      @update:codex-path="settingsStore.settings.codexPath = $event; handleSave()"
-      @update:opencode-path="settingsStore.settings.opencodePath = $event; handleSave()"
-    />
+      <div class="settings-content">
+        <div v-if="!hasVisibleSettingsSections" class="settings-empty-state">
+          {{ $t('settings.searchNoResults') }}
+        </div>
+
+    <div v-show="shouldShowSettingsSection('general')" class="settings-section-group">
+      <GeneralPreferencesSettingsSection
+        :theme="settingsStore.settings.theme"
+        :language="settingsStore.settings.language"
+        :session-wake-confirm="settingsStore.settings.sessionWakeConfirm"
+        :sessions-list-position="settingsStore.settings.sessionsListPosition"
+        :sessions-panel-collapsed="settingsStore.settings.sessionsPanelCollapsed"
+        :smart-priority-enabled="settingsStore.settings.smartPriorityEnabled"
+        :smart-priority-scope="settingsStore.settings.smartPriorityScope"
+        :smart-priority-mode="settingsStore.settings.smartPriorityMode"
+        @update:theme="settingsStore.settings.theme = $event; handleSave()"
+        @update:language="settingsStore.settings.language = $event; handleSave()"
+        @update:session-wake-confirm="settingsStore.settings.sessionWakeConfirm = $event; handleSave()"
+        @toggle-sessions-list-position="toggleSessionsListPosition"
+        @update:sessions-panel-collapsed="settingsStore.settings.sessionsPanelCollapsed = $event; handleSave()"
+        @update:smart-priority-enabled="settingsStore.settings.smartPriorityEnabled = $event; handleSave()"
+        @update:smart-priority-scope="settingsStore.settings.smartPriorityScope = $event; handleSave()"
+        @update:smart-priority-mode="settingsStore.settings.smartPriorityMode = $event; handleSave()"
+      />
+    </div>
+
+    <div v-show="shouldShowSettingsSection('cli')" class="settings-section-group">
+      <CliPathsSettingsSection
+        :claude-path="settingsStore.settings.claudePath"
+        :codex-path="settingsStore.settings.codexPath"
+        :opencode-path="settingsStore.settings.opencodePath"
+        @update:claude-path="settingsStore.settings.claudePath = $event; handleSave()"
+        @update:codex-path="settingsStore.settings.codexPath = $event; handleSave()"
+        @update:opencode-path="settingsStore.settings.opencodePath = $event; handleSave()"
+      />
+    </div>
+
+    <div v-show="shouldShowSettingsSection('remote')" class="settings-remote-stack">
+    <section class="remote-access-map" aria-labelledby="remote-access-map-title">
+      <div class="remote-access-map-head">
+        <h2 id="remote-access-map-title">{{ $t('settings.remoteAccessMapTitle') }}</h2>
+        <p>{{ $t('settings.remoteAccessMapHint') }}</p>
+      </div>
+      <div class="remote-access-map-grid">
+        <article class="remote-access-map-item">
+          <span class="remote-access-map-kicker">{{ $t('settings.remoteAccessMapServiceKicker') }}</span>
+          <strong>{{ $t('settings.remoteAccessMapServiceTitle') }}</strong>
+          <p>{{ $t('settings.remoteAccessMapServiceDescription') }}</p>
+        </article>
+        <article class="remote-access-map-item">
+          <span class="remote-access-map-kicker">{{ $t('settings.remoteAccessMapWebKicker') }}</span>
+          <strong>{{ $t('settings.remoteAccessMapWebTitle') }}</strong>
+          <p>{{ $t('settings.remoteAccessMapWebDescription') }}</p>
+        </article>
+        <article class="remote-access-map-item">
+          <span class="remote-access-map-kicker">{{ $t('settings.remoteAccessMapDesktopKicker') }}</span>
+          <strong>{{ $t('settings.remoteAccessMapDesktopTitle') }}</strong>
+          <p>{{ $t('settings.remoteAccessMapDesktopDescription') }}</p>
+        </article>
+      </div>
+    </section>
 
     <RemoteServiceSettingsSection
       ref="remoteServiceSectionRef"
@@ -94,26 +160,34 @@
       @edit-instance="handleEditRemoteInstance"
       @delete-instance="handleDeleteRemoteInstance"
     />
+    </div>
 
-    <TerminalSettingsSection
-      :buffer-size="settingsStore.settings.bufferSize"
-      :terminal-font="settingsStore.settings.terminalFont"
-      @update:buffer-size="settingsStore.settings.bufferSize = $event; handleSave()"
-      @update:terminal-font="settingsStore.settings.terminalFont = $event; handleSave()"
-    />
+    <div v-show="shouldShowSettingsSection('terminal')" class="settings-section-group">
+      <TerminalSettingsSection
+        :buffer-size="settingsStore.settings.bufferSize"
+        :terminal-font="settingsStore.settings.terminalFont"
+        @update:buffer-size="settingsStore.settings.bufferSize = $event; handleSave()"
+        @update:terminal-font="settingsStore.settings.terminalFont = $event; handleSave()"
+      />
+    </div>
 
-    <AboutSettingsSection
-      :version="appStore.version || '-'"
-      :electron-version="systemInfo.electronVersion || '-'"
-      :node-version="systemInfo.nodeVersion || '-'"
-      :platform="systemInfo.platform"
-      :arch="systemInfo.arch"
-    />
+    <div v-show="shouldShowSettingsSection('about')" class="settings-section-group">
+      <AboutSettingsSection
+        :version="appStore.version || '-'"
+        :electron-version="systemInfo.electronVersion || '-'"
+        :node-version="systemInfo.nodeVersion || '-'"
+        :platform="systemInfo.platform"
+        :arch="systemInfo.arch"
+      />
+    </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AboutSettingsSection from '@/components/settings/AboutSettingsSection.vue'
 import CliPathsSettingsSection from '@/components/settings/CliPathsSettingsSection.vue'
 import CloudflareTunnelSettingsSection from '@/components/settings/CloudflareTunnelSettingsSection.vue'
@@ -121,15 +195,19 @@ import GeneralPreferencesSettingsSection from '@/components/settings/GeneralPref
 import RemoteServiceSettingsSection from '@/components/settings/RemoteServiceSettingsSection.vue'
 import RemoteInstancesSettingsSection from '@/components/settings/RemoteInstancesSettingsSection.vue'
 import TerminalSettingsSection from '@/components/settings/TerminalSettingsSection.vue'
+import UiIcon from '@/components/ui/UiIcon.vue'
 import { useSettingsStore } from '@/stores/settings'
 import { useAppStore } from '@/stores/app'
 import { useInstancesStore } from '@/stores/instances'
 import { useProjectsStore } from '@/stores/projects'
 import { useSessionsStore } from '@/stores/sessions'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useToast } from '@/composables/useToast'
 import {
   useSettingsPageRuntime
 } from '@/composables/useSettingsPageRuntime'
+import { formatRemoteOperationError } from '@/utils/remote-operation-error'
 import { useI18n } from 'vue-i18n'
 import type { RemoteInstanceDraft } from '@/api/remote-instance'
 import {
@@ -147,7 +225,7 @@ import {
   type RemoteServiceState,
   type RemoteServiceTokenMode
 } from '@/api/remote-service'
-import type { RemoteInstance } from '@/models/unified-resource'
+import { LOCAL_INSTANCE_ID, type RemoteInstance } from '@/models/unified-resource'
 
 interface RemoteFormState {
   id: string | null
@@ -166,12 +244,24 @@ interface RemoteServiceFormState {
   customToken: string
 }
 
+type SettingsCategory = 'all' | 'general' | 'cli' | 'terminal' | 'remote' | 'about'
+
+type SettingsSectionMeta = {
+  id: Exclude<SettingsCategory, 'all'>
+  category: SettingsCategory
+  label: string
+  keywords: string[]
+}
+
 const { t } = useI18n()
+const route = useRoute()
 const settingsStore = useSettingsStore()
 const appStore = useAppStore()
 const instancesStore = useInstancesStore()
 const projectsStore = useProjectsStore()
 const sessionsStore = useSessionsStore()
+const workspaceStore = useWorkspaceStore()
+const confirmDialog = useConfirmDialog()
 const toast = useToast()
 
 const savingRemote = ref(false)
@@ -204,6 +294,8 @@ const remoteServiceForm = reactive<RemoteServiceFormState>({
   tokenMode: 'default',
   customToken: ''
 })
+const activeSettingsCategory = ref<SettingsCategory>('all')
+const settingsSearchQuery = ref('')
 
 const {
   systemInfo,
@@ -275,6 +367,157 @@ const remoteServiceEnvOverrideFields = computed(() => {
 const canStartCloudflareTunnel = computed(() => {
   return !!cloudflareTunnelState.value?.available && !!remoteServiceState.value?.running
 })
+
+const remoteWorkspaceTabCount = computed(() =>
+  Object.values(workspaceStore.layout.tabs).filter((tab) => tab.instanceId !== LOCAL_INSTANCE_ID).length
+)
+
+const remoteSessionCount = computed(() =>
+  sessionsStore.unifiedSessions.filter((session) => session.instanceId !== LOCAL_INSTANCE_ID).length
+)
+
+const settingsSections = computed<SettingsSectionMeta[]>(() => [
+  {
+    id: 'general',
+    category: 'general',
+    label: t('settings.navGeneral'),
+    keywords: [
+      t('settings.appearance'),
+      t('settings.language'),
+      t('settings.sessions'),
+      t('settings.theme'),
+      t('settings.themeChatGPTDark'),
+      t('settings.themeGeminiDark'),
+      t('settings.sessionWakeConfirm'),
+      t('settings.sessionsListPosition'),
+      t('settings.smartPriorityEnabled')
+    ]
+  },
+  {
+    id: 'cli',
+    category: 'cli',
+    label: t('settings.navCli'),
+    keywords: [
+      t('settings.cliPaths'),
+      t('settings.claudePath'),
+      t('settings.codexPath'),
+      t('settings.opencodePath'),
+      'Claude',
+      'Codex',
+      'OpenCode'
+    ]
+  },
+  {
+    id: 'terminal',
+    category: 'terminal',
+    label: t('settings.navTerminal'),
+    keywords: [
+      t('settings.terminal'),
+      t('settings.bufferSize'),
+      t('settings.terminalFont')
+    ]
+  },
+  {
+    id: 'remote',
+    category: 'remote',
+    label: t('settings.navRemote'),
+    keywords: [
+      t('settings.localRemoteService'),
+      t('settings.remoteInstances'),
+      t('settings.cloudflareTunnel'),
+      t('settings.desktopRemoteMountEnabled'),
+      t('settings.remoteServiceTokenMode'),
+      'Cloudflare',
+      'Tunnel',
+      'Token'
+    ]
+  },
+  {
+    id: 'about',
+    category: 'about',
+    label: t('settings.navAbout'),
+    keywords: [
+      t('settings.about'),
+      t('settings.version'),
+      t('settings.system')
+    ]
+  }
+])
+
+const normalizedSettingsSearchQuery = computed(() => settingsSearchQuery.value.trim().toLocaleLowerCase())
+
+const visibleSettingsSections = computed(() => {
+  const query = normalizedSettingsSearchQuery.value
+  return settingsSections.value.filter((section) => {
+    if (activeSettingsCategory.value !== 'all' && section.category !== activeSettingsCategory.value) {
+      return false
+    }
+    if (!query) return true
+
+    const haystack = [section.label, ...section.keywords].join(' ').toLocaleLowerCase()
+    return haystack.includes(query)
+  })
+})
+
+const visibleSettingsSectionIds = computed(() => new Set(visibleSettingsSections.value.map((section) => section.id)))
+const hasVisibleSettingsSections = computed(() => visibleSettingsSections.value.length > 0)
+
+const settingsNavItems = computed(() => {
+  const categories: Array<{ id: SettingsCategory; marker: string; label: string }> = [
+    { id: 'all', marker: '*', label: t('settings.navAll') },
+    { id: 'general', marker: 'G', label: t('settings.navGeneral') },
+    { id: 'cli', marker: 'C', label: t('settings.navCli') },
+    { id: 'terminal', marker: 'T', label: t('settings.navTerminal') },
+    { id: 'remote', marker: 'R', label: t('settings.navRemote') },
+    { id: 'about', marker: 'I', label: t('settings.navAbout') }
+  ]
+
+  return categories.map((item) => {
+    const count = item.id === 'all'
+      ? settingsSections.value.length
+      : settingsSections.value.filter((section) => section.category === item.id).length
+    return {
+      ...item,
+      countLabel: t('settings.sectionItemCount', { count })
+    }
+  })
+})
+
+function shouldShowSettingsSection(section: SettingsSectionMeta['id']): boolean {
+  return visibleSettingsSectionIds.value.has(section)
+}
+
+function setSettingsCategory(category: SettingsCategory): void {
+  activeSettingsCategory.value = category
+  if (category === 'remote') {
+    activateRemoteSettingsSections()
+  }
+}
+
+function normalizeRouteSettingsCategory(value: unknown): SettingsCategory | null {
+  const category = Array.isArray(value) ? value[0] : value
+  if (category === 'all' || category === 'general' || category === 'cli' || category === 'terminal' || category === 'remote' || category === 'about') {
+    return category
+  }
+  return null
+}
+
+watch(
+  () => route.query.category,
+  (value) => {
+    const category = normalizeRouteSettingsCategory(value)
+    if (!category) return
+    settingsSearchQuery.value = ''
+    setSettingsCategory(category)
+  },
+  { immediate: true }
+)
+
+function activateRemoteSettingsSections(): void {
+  activateDeferredSection('remoteService')
+  activateDeferredSection('cloudflare')
+  activateDeferredSection('remoteInstances')
+}
 
 function normalizeBaseUrl(value: string): string {
   return value.trim().replace(/\/+$/, '')
@@ -428,6 +671,16 @@ async function handleCopyRemoteServiceToken(): Promise<void> {
 }
 
 async function handleRegenerateRemoteServiceToken(): Promise<void> {
+  const confirmed = await confirmDialog.confirm({
+    title: t('settings.remoteServiceRegenerateTokenConfirmTitle'),
+    message: t('settings.remoteServiceRegenerateTokenConfirmMessage'),
+    details: t('settings.remoteServiceRegenerateTokenConfirmDetails'),
+    confirmText: t('settings.remoteServiceRegenerateDefaultToken'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
+
   regeneratingRemoteServiceToken.value = true
   try {
     const state = await regenerateRemoteServiceDefaultToken()
@@ -444,6 +697,16 @@ async function handleRegenerateRemoteServiceToken(): Promise<void> {
 
 async function handleResetRemoteServiceToken(): Promise<void> {
   if (!remoteServiceState.value?.customTokenConfigured) return
+  const confirmed = await confirmDialog.confirm({
+    title: t('settings.remoteServiceResetTokenConfirmTitle'),
+    message: t('settings.remoteServiceResetTokenConfirmMessage'),
+    details: t('settings.remoteServiceResetTokenConfirmDetails'),
+    confirmText: t('settings.remoteServiceResetToDefaultToken'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
+
   resettingRemoteServiceToken.value = true
   try {
     const state = await updateRemoteServiceSettings({
@@ -523,6 +786,20 @@ async function handleCopyCloudflareTunnelUrl(): Promise<void> {
 async function handleRemoteFeatureToggle(nextEnabled?: boolean): Promise<void> {
   const previousEnabled = settingsStore.settings.desktopRemoteMountEnabled
   const enabled = typeof nextEnabled === 'boolean' ? nextEnabled : previousEnabled
+  if (previousEnabled && !enabled) {
+    const confirmed = await confirmDialog.confirm({
+      title: t('settings.desktopRemoteMountDisableConfirmTitle'),
+      message: t('settings.desktopRemoteMountDisableConfirmMessage', {
+        tabs: remoteWorkspaceTabCount.value,
+        sessions: remoteSessionCount.value
+      }),
+      details: t('settings.desktopRemoteMountDisableConfirmDetails'),
+      confirmText: t('settings.desktopRemoteMountDisableConfirmAction'),
+      cancelText: t('confirm.cancel'),
+      tone: 'danger'
+    })
+    if (!confirmed) return
+  }
   settingsStore.settings.desktopRemoteMountEnabled = enabled
   try {
     await flushSettingsSave(false)
@@ -550,9 +827,51 @@ function buildRemoteDraft(): RemoteInstanceDraft {
   }
 }
 
+function findRemoteInstanceName(id: string): string {
+  return instancesStore.getInstance(id)?.name || id
+}
+
+function formatRemoteSettingsError(error: unknown, params: {
+  instanceId?: string | null
+  instanceName?: string | null
+  action: string
+  target: string
+}): string {
+  const virtualInstanceId = params.instanceId || '__remote-settings__'
+  return formatRemoteOperationError({
+    t,
+    instancesStore: {
+      getInstance(id: string) {
+        if (id === virtualInstanceId) {
+          return {
+            id,
+            type: 'remote',
+            name: params.instanceName || params.target,
+            baseUrl: '',
+            enabled: true,
+            authRef: '',
+            status: 'unknown',
+            lastCheckedAt: null,
+            passthroughOnly: false,
+            capabilities: instancesStore.localInstance.capabilities,
+            lastError: null,
+            latencyMs: null
+          }
+        }
+        return instancesStore.getInstance(id)
+      }
+    },
+    instanceId: virtualInstanceId,
+    action: params.action,
+    target: params.target,
+    error
+  })
+}
+
 async function handleSaveRemoteInstance(): Promise<void> {
   if (!canSubmitRemoteForm.value) return
   savingRemote.value = true
+  const targetName = remoteForm.name.trim() || remoteForm.id || t('settings.remoteInstances')
   try {
     const draft = buildRemoteDraft()
     if (remoteForm.id) {
@@ -565,7 +884,12 @@ async function handleSaveRemoteInstance(): Promise<void> {
     resetRemoteForm()
     await loadRemoteInstances()
   } catch (error) {
-    toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
+    toast.error(formatRemoteSettingsError(error, {
+      instanceId: remoteForm.id,
+      instanceName: targetName,
+      action: remoteForm.id ? t('settings.remoteUpdated') : t('settings.remoteAdded'),
+      target: targetName
+    }))
   } finally {
     savingRemote.value = false
   }
@@ -580,12 +904,26 @@ async function handleEditRemoteInstance(instance: RemoteInstance): Promise<void>
     remoteForm.token = token
     remoteForm.enabled = instance.enabled
   } catch (error) {
-    toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
+    toast.error(formatRemoteSettingsError(error, {
+      instanceId: instance.id,
+      instanceName: instance.name,
+      action: t('settings.remoteServiceCopyToken'),
+      target: instance.name
+    }))
   }
 }
 
 async function handleDeleteRemoteInstance(id: string): Promise<void> {
-  if (!confirm(t('settings.remoteDeleteConfirm'))) return
+  const targetName = findRemoteInstanceName(id)
+  const confirmed = await confirmDialog.confirm({
+    title: t('settings.remoteDeleteConfirmTitle'),
+    message: t('settings.remoteDeleteConfirmMessage'),
+    details: t('settings.remoteDeleteConfirmDetails'),
+    confirmText: t('confirm.delete'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
   deletingId.value = id
   try {
     await instancesStore.removeRemoteInstance(id)
@@ -594,7 +932,12 @@ async function handleDeleteRemoteInstance(id: string): Promise<void> {
     }
     toast.success(t('settings.remoteDeleted'))
   } catch (error) {
-    toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
+    toast.error(formatRemoteSettingsError(error, {
+      instanceId: id,
+      instanceName: targetName,
+      action: t('confirm.delete'),
+      target: targetName
+    }))
   } finally {
     deletingId.value = null
   }
@@ -611,13 +954,244 @@ onMounted(async () => {
 <style scoped lang="scss">
 .settings-page {
   padding: var(--spacing-xl);
-  max-width: 980px;
+  max-width: 1220px;
   overflow-y: auto;
+  min-height: 100%;
 
   h1 {
     font-size: var(--font-size-2xl);
-    margin-bottom: var(--spacing-xl);
+    margin: 0;
   }
+}
+
+.settings-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.settings-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+
+  p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+  }
+}
+
+.settings-search {
+  position: relative;
+  flex: 0 1 320px;
+  min-width: 220px;
+
+  .ui-icon {
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    width: 15px;
+    height: 15px;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+
+  input {
+    width: 100%;
+    height: 34px;
+    padding: 0 10px 0 32px;
+    border: 1px solid var(--border-color);
+    border-radius: 0;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+
+    &:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+    }
+  }
+}
+
+.settings-shell {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--spacing-lg);
+}
+
+.settings-nav {
+  position: sticky;
+  top: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  &.active {
+    border-color: color-mix(in srgb, var(--accent-primary) 44%, var(--border-color));
+    background: color-mix(in srgb, var(--accent-primary) 9%, var(--bg-card));
+    color: var(--text-primary);
+  }
+}
+
+.settings-nav-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.settings-nav-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-nav-label,
+.settings-nav-count {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-nav-label {
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.settings-nav-count {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.settings-content {
+  min-width: 0;
+}
+
+.settings-section-group {
+  display: block;
+}
+
+.settings-empty-state {
+  padding: var(--spacing-lg);
+  border: 1px dashed var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.settings-remote-stack {
+  display: contents;
+}
+
+.remote-access-map {
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 22%, var(--border-color));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), transparent),
+    var(--bg-card);
+}
+
+.remote-access-map-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+
+  h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: var(--font-size-lg);
+  }
+
+  p {
+    max-width: 560px;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+  }
+}
+
+.remote-access-map-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.remote-access-map-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+
+  strong {
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+  }
+
+  p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    line-height: 1.55;
+  }
+}
+
+.remote-access-map-kicker {
+  color: var(--accent-primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .settings-section {
@@ -665,7 +1239,7 @@ onMounted(async () => {
 
 .summary-pill.online {
   color: var(--accent-primary);
-  border-color: rgba(108, 158, 255, 0.35);
+  border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--border-color));
 }
 
 .setting-row {
@@ -676,7 +1250,7 @@ onMounted(async () => {
   padding: 10px 0;
 
   & + .setting-row {
-    border-top: 1px solid rgba(45, 53, 72, 0.5);
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 62%, transparent);
   }
 
   label {
@@ -736,14 +1310,14 @@ onMounted(async () => {
   padding: var(--spacing-md);
   border: 1px dashed var(--border-color);
   border-radius: 0;
-  background: rgba(108, 158, 255, 0.05);
+  background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
   color: var(--text-secondary);
   line-height: 1.6;
 }
 
 .remote-form-panel {
-  background: linear-gradient(180deg, rgba(108, 158, 255, 0.06), rgba(108, 158, 255, 0.02));
-  border: 1px solid rgba(108, 158, 255, 0.18);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), color-mix(in srgb, var(--accent-primary) 3%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, var(--border-color));
   border-radius: 0;
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
@@ -825,17 +1399,17 @@ onMounted(async () => {
 }
 
 .draft-result.ok {
-  background: rgba(73, 179, 126, 0.1);
-  border: 1px solid rgba(73, 179, 126, 0.25);
+  background: color-mix(in srgb, var(--status-success) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-success) 28%, var(--border-color));
 }
 
 .draft-result.error {
-  background: rgba(219, 83, 83, 0.1);
-  border: 1px solid rgba(219, 83, 83, 0.25);
+  background: color-mix(in srgb, var(--status-error) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-error) 28%, var(--border-color));
 }
 
 .draft-result-error {
-  color: #f2a6a6;
+  color: var(--status-error);
 }
 
 .inline-hint {
@@ -917,33 +1491,33 @@ onMounted(async () => {
 }
 
 .status-badge.status-online {
-  background: rgba(73, 179, 126, 0.12);
-  color: #83d7aa;
-  border-color: rgba(73, 179, 126, 0.25);
+  background: color-mix(in srgb, var(--status-success) 12%, transparent);
+  color: var(--status-success);
+  border-color: color-mix(in srgb, var(--status-success) 28%, var(--border-color));
 }
 
 .status-badge.status-offline,
 .status-badge.status-error {
-  background: rgba(219, 83, 83, 0.12);
-  color: #f2a6a6;
-  border-color: rgba(219, 83, 83, 0.25);
+  background: color-mix(in srgb, var(--status-error) 12%, transparent);
+  color: var(--status-error);
+  border-color: color-mix(in srgb, var(--status-error) 28%, var(--border-color));
 }
 
 .status-badge.status-connecting,
 .status-badge.status-unknown {
-  background: rgba(245, 179, 69, 0.12);
-  color: #f5c987;
-  border-color: rgba(245, 179, 69, 0.25);
+  background: color-mix(in srgb, var(--status-warning) 12%, transparent);
+  color: var(--status-warning);
+  border-color: color-mix(in srgb, var(--status-warning) 28%, var(--border-color));
 }
 
 .mode-badge {
-  background: rgba(108, 158, 255, 0.08);
+  background: color-mix(in srgb, var(--accent-primary) 9%, transparent);
   color: var(--text-secondary);
-  border-color: rgba(108, 158, 255, 0.2);
+  border-color: color-mix(in srgb, var(--accent-primary) 22%, var(--border-color));
 }
 
 .mode-badge.muted {
-  background: rgba(58, 68, 89, 0.5);
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
   color: var(--text-muted);
   border-color: var(--border-color);
 }
@@ -983,23 +1557,8 @@ onMounted(async () => {
 }
 
 .error-text {
-  color: #f2a6a6;
+  color: var(--status-error);
   word-break: break-word;
-}
-
-.toggle-btn {
-  min-width: 36px;
-  height: 28px;
-  border: 1px solid var(--border-color);
-  border-radius: 0;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--bg-hover);
-  }
 }
 
 .setting-hint {
@@ -1035,6 +1594,40 @@ onMounted(async () => {
 @media (max-width: 960px) {
   .settings-page {
     max-width: none;
+  }
+
+  .settings-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-search {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .settings-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .settings-nav-item {
+    flex: 0 0 auto;
+    width: 152px;
+  }
+
+  .remote-access-map-head {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .remote-access-map-grid {
+    grid-template-columns: 1fr;
   }
 
   .section-head,
