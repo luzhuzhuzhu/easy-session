@@ -2,23 +2,23 @@
 :root,
 :root[data-theme='chatgpt-dark'] {
   --bg-primary: #0d0d0d;
-  --bg-secondary: #171717;
+  --bg-secondary: #141414;
   --bg-tertiary: #212121;
-  --bg-card: #171717;
+  --bg-card: #141414;
   --bg-hover: #2a2a2a;
 
-  --text-primary: #f7f7f7;
-  --text-secondary: #e5e5e5;
-  --text-muted: #a8a8a8;
+  --text-primary: #f4f1ea;
+  --text-secondary: #ddd8cf;
+  --text-muted: #aaa39a;
 
-  --accent-primary: #f7f7f7;
-  --accent-secondary: #ff5d1f;
-  --accent-gradient: linear-gradient(135deg, #f7f7f7, #ff5d1f);
+  --accent-primary: #e8edf3;
+  --accent-secondary: #f0a064;
+  --accent-gradient: linear-gradient(135deg, #e8edf3, #f0a064);
 
-  --status-success: #40a02b;
-  --status-warning: #df8e1d;
-  --status-error: #e64553;
-  --status-info: #1e66f5;
+  --status-success: #72d66f;
+  --status-warning: #f2ba54;
+  --status-error: #ff8178;
+  --status-info: #7db7ff;
   --success-color: var(--status-success);
   --warning-color: var(--status-warning);
   --error-color: var(--status-error);
@@ -59,7 +59,7 @@
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
 
-  --focus-ring-color: #f7f7f7;
+  --focus-ring-color: #e8edf3;
   --focus-ring: 0 0 0 2px color-mix(in srgb, var(--focus-ring-color) 22%, transparent),
     0 0 0 4px color-mix(in srgb, var(--accent-primary) 10%, transparent);
 }

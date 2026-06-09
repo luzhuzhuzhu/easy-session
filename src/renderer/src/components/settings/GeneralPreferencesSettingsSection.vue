@@ -271,8 +271,8 @@ function handleSmartPriorityModeChange(event: Event): void {
 
 .theme-swatch-chatgpt-dark {
   background: #0d0d0d;
-  span:first-child { background: #171717; }
-  span:last-child { background: #f7f7f7; }
+  span:first-child { background: #141414; }
+  span:last-child { background: #e8edf3; }
 }
 
 .theme-swatch-gemini-dark {
