@@ -3,6 +3,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { CliManager } from './cli-manager'
+import { normalizeCustomCliArgs } from './cli-args'
 import type { ClaudeSessionOptions } from './types'
 
 export class ClaudeAdapter {
@@ -43,6 +44,7 @@ export class ClaudeAdapter {
         args.push('--allowed-tools', tool)
       }
     }
+    args.push(...normalizeCustomCliArgs(options?.customArgs))
 
     this.cliManager.spawn(id, 'claude', args, { cwd: projectPath || undefined })
     return id
@@ -60,6 +62,7 @@ export class ClaudeAdapter {
         args.push('--allowed-tools', tool)
       }
     }
+    args.push(...normalizeCustomCliArgs(options?.customArgs))
 
     this.cliManager.spawn(id, 'claude', args, { cwd: projectPath || undefined })
     return id

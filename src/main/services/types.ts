@@ -26,10 +26,16 @@ export interface SpawnRequest {
   options?: { cwd?: string }
 }
 
+export interface CustomCliArgument {
+  name: string
+  value?: string
+}
+
 export interface ClaudeSessionOptions {
   model?: string
   maxTurns?: number
   allowedTools?: string[]
+  customArgs?: CustomCliArgument[]
 }
 
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -44,6 +50,7 @@ export interface CodexSessionOptions {
   sandboxMode?: CodexSandboxMode
   approvalMode?: SupportedCodexApprovalMode
   inlineMode?: boolean
+  customArgs?: CustomCliArgument[]
 }
 
 export interface OpenCodeSessionOptions {

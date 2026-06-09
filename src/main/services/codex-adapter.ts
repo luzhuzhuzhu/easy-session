@@ -5,6 +5,7 @@ import { homedir } from 'os'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import { CliManager } from './cli-manager'
+import { normalizeCustomCliArgs } from './cli-args'
 import type {
   CodexApprovalMode,
   CodexPermissionsMode,
@@ -207,12 +208,14 @@ export class CodexAdapter {
     if (permissionPreset) {
       const resolved = this.resolvePermissionsPreset(permissionPreset)
       args.push('--sandbox', resolved.sandbox, '--ask-for-approval', resolved.approval)
+      args.push(...normalizeCustomCliArgs(options?.customArgs))
       return args
     }
 
     const resolvedLegacy = this.resolveLegacyPermissions(options?.approvalMode)
     if (resolvedLegacy) {
       args.push('--sandbox', resolvedLegacy.sandbox, '--ask-for-approval', resolvedLegacy.approval)
+      args.push(...normalizeCustomCliArgs(options?.customArgs))
       return args
     }
 
@@ -224,6 +227,8 @@ export class CodexAdapter {
     if (approvalMode) {
       args.push('--ask-for-approval', approvalMode)
     }
+
+    args.push(...normalizeCustomCliArgs(options?.customArgs))
 
     return args
   }
