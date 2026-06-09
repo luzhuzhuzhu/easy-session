@@ -854,10 +854,6 @@ settings: {
     autoDetect: '自动检测',
     comingSoon: '即将支持'
   },
-  sidebar: {
-    collapse: '收起侧边栏',
-    expand: '展开侧边栏'
-  },
   topbar: {
     activeSessions: '活跃会话',
     claudeOnline: 'Claude 在线',

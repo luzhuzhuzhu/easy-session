@@ -1,170 +1,141 @@
-﻿<template>
-  <div class="layout" :class="{ collapsed: sidebarCollapsed }">
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <div class="logo">
+<template>
+  <div class="layout">
+    <header class="topbar" @dblclick="toggleMaximize">
+      <div class="topbar-left">
+        <router-link class="brand-link" to="/dashboard" :title="`${$t('app.title')} v${appStore.version}`" @dblclick.stop>
           <img class="logo-image" :src="logoSrc" alt="EasySession logo" />
-        </div>
-        <template v-if="!sidebarCollapsed">
-          <div class="brand">
-            <div class="brand-title">{{ $t('app.title') }}</div>
-            <div class="brand-subtitle">{{ $t('app.subtitle') }}</div>
-          </div>
-        </template>
-      </div>
-      <nav class="nav-menu">
-        <template v-for="item in navItems" :key="item.path">
-          <router-link :to="item.path" class="nav-item" :title="sidebarCollapsed ? $t(item.label) : undefined">
-            <span class="nav-icon">
+          <span class="brand-copy">
+            <span class="brand-title">{{ $t('app.title') }}</span>
+          </span>
+        </router-link>
+
+        <nav class="global-nav" :aria-label="$t('app.title')" @dblclick.stop>
+          <router-link
+            v-for="item in navItems"
+            :key="item.path"
+            :to="item.path"
+            class="top-nav-item"
+            :class="{ active: isNavActive(item.path) }"
+          >
+            <span class="top-nav-icon">
               <svg v-if="item.icon === 'dashboard'" viewBox="0 0 16 16" aria-hidden="true">
-                <rect x="2" y="2" width="5" height="5" fill="currentColor" />
-                <rect x="9" y="2" width="5" height="5" fill="currentColor" />
-                <rect x="2" y="9" width="5" height="5" fill="currentColor" />
-                <rect x="9" y="9" width="5" height="5" fill="currentColor" />
+                <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" fill="currentColor" />
+                <rect x="9" y="2.5" width="4.5" height="4.5" rx="1" fill="currentColor" />
+                <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" fill="currentColor" />
+                <rect x="9" y="9" width="4.5" height="4.5" rx="1" fill="currentColor" />
               </svg>
-<svg v-else-if="item.icon === 'sessions'" viewBox="0 0 16 16" aria-hidden="true">
-                <rect x="2" y="2" width="12" height="12" fill="currentColor" />
-                <rect x="2" y="5" width="12" height="2" fill="var(--bg-secondary)" />
-                <rect x="4" y="8" width="8" height="1" fill="var(--bg-secondary)" />
-                <rect x="4" y="10" width="5" height="1" fill="var(--bg-secondary)" />
+              <svg v-else-if="item.icon === 'sessions'" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="2.5" y="3" width="11" height="10" rx="1.4" fill="currentColor" />
+                <rect x="4.25" y="5.5" width="7.5" height="1.2" rx=".6" fill="var(--bg-secondary)" />
+                <rect x="4.25" y="8" width="5.5" height="1.2" rx=".6" fill="var(--bg-secondary)" />
+                <rect x="4.25" y="10.5" width="6.5" height="1.2" rx=".6" fill="var(--bg-secondary)" />
               </svg>
               <svg v-else-if="item.icon === 'projects'" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M2 4.5a1.5 1.5 0 0 1 1.5-1.5h3.2l2 2h5.3a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H3.5a1.5 1.5 0 0 1-1.5-1.5v-6z" fill="currentColor" />
+                <path d="M2 4.6A1.6 1.6 0 0 1 3.6 3h3l1.45 1.7h4.35A1.6 1.6 0 0 1 14 6.3v5.1a1.6 1.6 0 0 1-1.6 1.6H3.6A1.6 1.6 0 0 1 2 11.4V4.6z" fill="currentColor" />
               </svg>
               <svg v-else-if="item.icon === 'skills'" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M8 1.5L9.8 6h4.7l-3.8 2.8 1.5 4.7L8 12l-4.2 2.5 1.5-4.7L1.5 6h4.7L8 1.5z" fill="currentColor" />
+                <path d="M8 1.7 9.65 6h4.55l-3.68 2.72 1.42 4.52L8 10.56l-3.94 2.68 1.42-4.52L1.8 6h4.55L8 1.7z" fill="currentColor" />
               </svg>
             </span>
-            <span v-if="!sidebarCollapsed" class="nav-text">{{ $t(item.label) }}</span>
-            <span v-if="!sidebarCollapsed && SHORTCUT_LABELS[item.path]" class="shortcut-hint">{{ SHORTCUT_LABELS[item.path] }}</span>
+            <span class="top-nav-label">{{ $t(item.label) }}</span>
           </router-link>
-          <div v-if="!sidebarCollapsed && item.path === '/projects' && recentProjects.length" class="nav-sub">
-            <div v-if="projectsStore.unavailableRemoteProjectCount > 0" class="nav-sub-note">
-              {{ $t('dashboard.remoteUnavailableHint') }}
-            </div>
-            <router-link
-              v-for="p in recentProjects"
-              :key="p.globalProjectKey"
-              :to="buildProjectRouteLocation(p)"
-              class="nav-sub-item"
-            >
-              {{ p.name }}
-            </router-link>
-          </div>
-        </template>
-      </nav>
-      <div class="sidebar-footer">
-        <router-link to="/settings" class="nav-item" :title="sidebarCollapsed ? $t('settings.title') : undefined">
-          <span class="nav-icon">
-<svg viewBox="0 0 16 16" aria-hidden="true">
-              <circle cx="8" cy="8" r="5" fill="currentColor" />
-              <rect x="7" y="1" width="2" height="3" fill="currentColor" />
-              <rect x="7" y="12" width="2" height="3" fill="currentColor" />
-              <rect x="1" y="7" width="3" height="2" fill="currentColor" />
-              <rect x="12" y="7" width="3" height="2" fill="currentColor" />
-              <rect x="2.5" y="2.5" width="2.5" height="2.5" fill="currentColor" />
-              <rect x="11" y="2.5" width="2.5" height="2.5" fill="currentColor" />
-              <rect x="2.5" y="11" width="2.5" height="2.5" fill="currentColor" />
-              <rect x="11" y="11" width="2.5" height="2.5" fill="currentColor" />
-              <circle cx="8" cy="8" r="2.5" fill="var(--bg-secondary)" />
-            </svg>
+        </nav>
+
+        <nav v-if="contextCrumbs.length" class="context-trail" :aria-label="$t('nav.projects')" @dblclick.stop>
+          <span class="context-divider" aria-hidden="true"></span>
+          <span class="breadcrumb-item" v-for="(crumb, i) in contextCrumbs" :key="`${crumb.label}-${i}`">
+            <span v-if="i > 0" class="breadcrumb-sep">/</span>
+            <router-link v-if="crumb.path" :to="crumb.path" class="breadcrumb-link">{{ crumb.label }}</router-link>
+            <span v-else class="breadcrumb-current">{{ crumb.label }}</span>
           </span>
-          <span v-if="!sidebarCollapsed" class="nav-text">{{ $t('settings.title') }}</span>
-          <span v-if="!sidebarCollapsed" class="shortcut-hint">{{ SHORTCUT_LABELS['/settings'] }}</span>
-        </router-link>
-        <div v-if="!sidebarCollapsed" class="sidebar-version">v{{ appStore.version }}</div>
-        <button class="collapse-btn" @click="toggleSidebar" :title="$t(sidebarCollapsed ? 'sidebar.expand' : 'sidebar.collapse')">
-          <svg v-if="sidebarCollapsed" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M6 3l5 5-5 5V3z" fill="currentColor" />
-          </svg>
-          <svg v-else viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M10 3l-5 5 5 5V3z" fill="currentColor" />
-          </svg>
-        </button>
+        </nav>
       </div>
-    </aside>
-    <div class="main-area">
-      <header class="topbar" @dblclick="toggleMaximize">
-        <div class="topbar-left">
-          <nav class="breadcrumb">
-            <span class="breadcrumb-item" v-for="(crumb, i) in breadcrumbs" :key="i">
-              <span v-if="i > 0" class="breadcrumb-sep">/</span>
-              <router-link v-if="crumb.path" :to="crumb.path" class="breadcrumb-link">{{ crumb.label }}</router-link>
-              <span v-else class="breadcrumb-current">{{ crumb.label }}</span>
-            </span>
-          </nav>
+
+      <div class="topbar-right" @dblclick.stop>
+        <div class="status-indicators">
+          <button
+            class="cli-status-btn"
+            type="button"
+            :title="getCliStatusTitle(appStore.claudeAvailable ? 'topbar.claudeOnline' : 'topbar.claudeOffline')"
+            :aria-label="getCliStatusTitle(appStore.claudeAvailable ? 'topbar.claudeOnline' : 'topbar.claudeOffline')"
+            @click="openCliSettings"
+          >
+            <span class="status-dot" :class="appStore.claudeAvailable ? 'online' : 'offline'"></span>
+            <span class="status-label">Claude</span>
+          </button>
+          <button
+            class="cli-status-btn"
+            type="button"
+            :title="getCliStatusTitle(appStore.codexAvailable ? 'topbar.codexOnline' : 'topbar.codexOffline')"
+            :aria-label="getCliStatusTitle(appStore.codexAvailable ? 'topbar.codexOnline' : 'topbar.codexOffline')"
+            @click="openCliSettings"
+          >
+            <span class="status-dot" :class="appStore.codexAvailable ? 'online' : 'offline'"></span>
+            <span class="status-label">Codex</span>
+          </button>
+          <button
+            class="cli-status-btn"
+            type="button"
+            :title="getCliStatusTitle(appStore.opencodeAvailable ? 'topbar.opencodeOnline' : 'topbar.opencodeOffline')"
+            :aria-label="getCliStatusTitle(appStore.opencodeAvailable ? 'topbar.opencodeOnline' : 'topbar.opencodeOffline')"
+            @click="openCliSettings"
+          >
+            <span class="status-dot" :class="appStore.opencodeAvailable ? 'online' : 'offline'"></span>
+            <span class="status-label">OpenCode</span>
+          </button>
+          <span
+            v-if="remoteRefreshSummary"
+            class="remote-status-summary"
+            :class="{ warning: remoteFailureCount > 0 }"
+            :title="remoteRefreshSummary"
+          >
+            {{ remoteRefreshSummary }}
+          </span>
+          <span class="session-count" v-if="activeSessionCount > 0">{{ activeSessionCount }} {{ $t('topbar.activeSessions') }}</span>
         </div>
-        <div class="topbar-right">
-          <div class="status-indicators">
-            <button
-              class="cli-status-btn"
-              type="button"
-              :title="getCliStatusTitle(appStore.claudeAvailable ? 'topbar.claudeOnline' : 'topbar.claudeOffline')"
-              :aria-label="getCliStatusTitle(appStore.claudeAvailable ? 'topbar.claudeOnline' : 'topbar.claudeOffline')"
-              @click="openCliSettings"
-            >
-              <span class="status-dot" :class="appStore.claudeAvailable ? 'online' : 'offline'"></span>
-              <span class="status-label">Claude</span>
-            </button>
-            <button
-              class="cli-status-btn"
-              type="button"
-              :title="getCliStatusTitle(appStore.codexAvailable ? 'topbar.codexOnline' : 'topbar.codexOffline')"
-              :aria-label="getCliStatusTitle(appStore.codexAvailable ? 'topbar.codexOnline' : 'topbar.codexOffline')"
-              @click="openCliSettings"
-            >
-              <span class="status-dot" :class="appStore.codexAvailable ? 'online' : 'offline'"></span>
-              <span class="status-label">Codex</span>
-            </button>
-            <button
-              class="cli-status-btn"
-              type="button"
-              :title="getCliStatusTitle(appStore.opencodeAvailable ? 'topbar.opencodeOnline' : 'topbar.opencodeOffline')"
-              :aria-label="getCliStatusTitle(appStore.opencodeAvailable ? 'topbar.opencodeOnline' : 'topbar.opencodeOffline')"
-              @click="openCliSettings"
-            >
-              <span class="status-dot" :class="appStore.opencodeAvailable ? 'online' : 'offline'"></span>
-              <span class="status-label">OpenCode</span>
-            </button>
-            <span
-              v-if="remoteRefreshSummary"
-              class="remote-status-summary"
-              :class="{ warning: remoteFailureCount > 0 }"
-              :title="remoteRefreshSummary"
-            >
-              {{ remoteRefreshSummary }}
-            </span>
-            <span class="session-count" v-if="activeSessionCount > 0">{{ activeSessionCount }} {{ $t('topbar.activeSessions') }}</span>
-          </div>
-          <div class="window-controls">
-            <button class="win-btn" @click="minimize" title="最小化">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
-            <button class="win-btn" @click="toggleMaximize" title="最大化/还原">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <rect x="2" y="2" width="8" height="8" stroke="currentColor" stroke-width="1.5" rx="1"/>
-              </svg>
-            </button>
-            <button class="win-btn win-btn-close" @click="closeWindow" title="关闭">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
-          </div>
+
+        <router-link
+          class="settings-entry"
+          :class="{ active: route.path === '/settings' }"
+          to="/settings"
+          :title="$t('settings.title')"
+          :aria-label="$t('settings.title')"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="2.25" fill="none" stroke="currentColor" stroke-width="1.7" />
+            <path d="M8 2.5v1.35M8 12.15v1.35M12.75 5.25l-1.18.68M4.43 10.07l-1.18.68M12.75 10.75l-1.18-.68M4.43 5.93l-1.18-.68" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7" />
+          </svg>
+        </router-link>
+
+        <div class="window-controls">
+          <button class="win-btn" @click="minimize" title="最小化">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="win-btn" @click="toggleMaximize" title="最大化/还原">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <rect x="2" y="2" width="8" height="8" stroke="currentColor" stroke-width="1.5" rx="1"/>
+            </svg>
+          </button>
+          <button class="win-btn win-btn-close" @click="closeWindow" title="关闭">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
-      </header>
-      <main class="content">
-        <ErrorBoundary>
-          <router-view v-slot="{ Component }">
-            <transition name="fade" mode="out-in">
-              <component :is="Component" />
-            </transition>
-          </router-view>
-        </ErrorBoundary>
-      </main>
-    </div>
+      </div>
+    </header>
+
+    <main class="content">
+      <ErrorBoundary>
+        <router-view v-slot="{ Component }">
+          <transition name="fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </ErrorBoundary>
+    </main>
   </div>
 </template>
 
@@ -179,9 +150,8 @@ import { useInstancesStore } from '@/stores/instances'
 import { useSettingsStore } from '@/stores/settings'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
-import { SHORTCUT_LABELS } from '@/composables/useShortcuts'
 import logoSrc from '@/assets/logo-easy-session-light.png'
-import { buildProjectRouteLocation, resolveProjectRouteRef } from '@/utils/project-routing'
+import { resolveProjectRouteRef } from '@/utils/project-routing'
 import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
 
 const route = useRoute()
@@ -193,15 +163,13 @@ const sessionsStore = useSessionsStore()
 const instancesStore = useInstancesStore()
 const settingsStore = useSettingsStore()
 const confirmDialog = useConfirmDialog()
-const navItems = [
-  { path: "/dashboard", icon: "dashboard", label: "nav.dashboard" },
-  { path: "/sessions", icon: "sessions", label: "nav.sessions" },
-  { path: "/projects", icon: "projects", label: "nav.projects" },
-  { path: "/skills", icon: "skills", label: "nav.skills" }
-]
 
-const recentProjects = computed(() => projectsStore.quickAccessRecentProjects.slice(0, 3))
-const sidebarCollapsed = computed(() => settingsStore.settings.sidebarCollapsed)
+const navItems = [
+  { path: '/dashboard', icon: 'dashboard', label: 'nav.dashboard' },
+  { path: '/sessions', icon: 'sessions', label: 'nav.sessions' },
+  { path: '/projects', icon: 'projects', label: 'nav.projects' },
+  { path: '/skills', icon: 'skills', label: 'nav.skills' }
+]
 
 const activeSessionCount = computed(() =>
   sessionsStore.unifiedSessions.filter((session) => session.status === 'running').length
@@ -239,14 +207,16 @@ const remoteRefreshSummary = computed(() => {
     parts.push(t('session.remoteNotRefreshed'))
   }
 
-  parts.push(remoteFailureCount.value > 0
-    ? t('session.remoteFailureCount', { count: remoteFailureCount.value })
-    : t('session.remoteAllHealthy'))
+  parts.push(
+    remoteFailureCount.value > 0
+      ? t('session.remoteFailureCount', { count: remoteFailureCount.value })
+      : t('session.remoteAllHealthy')
+  )
 
   return parts.join(' · ')
 })
 
-const breadcrumbs = computed(() => {
+const contextCrumbs = computed(() => {
   const crumbs: { label: string; path?: string }[] = []
   if (route.path === '/settings') {
     crumbs.push({ label: t('settings.title') })
@@ -258,20 +228,25 @@ const breadcrumbs = computed(() => {
       crumbs.push({ label: formatProjectInstanceCrumb(projectRef.instanceId) })
     }
     crumbs.push({ label: project?.name || String(projectRef?.projectId || route.params.id || route.params.projectId) })
-  } else {
-    const item = navItems.find((n) => route.path.startsWith(n.path))
-    if (item) crumbs.push({ label: t(item.label) })
   }
   return crumbs
 })
 
-function toggleSidebar() {
-  settingsStore.update({ sidebarCollapsed: !settingsStore.settings.sidebarCollapsed })
+const api = window.electronAPI
+
+function isNavActive(path: string): boolean {
+  if (path === '/projects' && route.name === 'instanceProjectDetail') return true
+  return route.path === path || route.path.startsWith(`${path}/`)
 }
 
-const api = window.electronAPI
-function minimize() { api.invoke('window:minimize') }
-function toggleMaximize() { api.invoke('window:maximize') }
+function minimize() {
+  api.invoke('window:minimize')
+}
+
+function toggleMaximize() {
+  api.invoke('window:maximize')
+}
+
 async function closeWindow() {
   if (activeSessionCount.value > 0) {
     const confirmed = await confirmDialog.confirm({
@@ -326,6 +301,7 @@ onMounted(() => {
 <style scoped lang="scss">
 .layout {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   min-width: 960px;
   min-height: 600px;
@@ -333,276 +309,180 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-.sidebar {
-  width: var(--sidebar-width);
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  transition: width var(--transition-normal);
-
-  .collapsed & {
-    width: var(--sidebar-collapsed-width);
-  }
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  border-bottom: 1px solid var(--border-color);
-  -webkit-app-region: drag;
-  min-height: 72px;
-
-  .collapsed & {
-    justify-content: center;
-    padding: var(--spacing-md) var(--spacing-sm);
-  }
-}
-
-.logo {
-  width: 52px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0;
-  background: transparent;
-  flex-shrink: 0;
-}
-
-.logo-image {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-.brand-title {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-}
-
-.brand-subtitle {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-}
-
-.nav-menu {
-  padding: var(--spacing-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.sidebar-footer {
-  padding: var(--spacing-sm);
-  border-top: 1px solid var(--border-color);
-}
-
-.sidebar-version {
-  text-align: center;
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  padding: var(--spacing-xs) 0;
-}
-
-.collapse-btn {
-  width: 100%;
-  height: 28px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 0;
-  transition: all var(--transition-fast);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-
-  &:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: 0;
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: var(--font-size-sm);
-  transition: all var(--transition-fast);
-  white-space: nowrap;
-  overflow: hidden;
-  position: relative;
-  user-select: none;
-
-  .collapsed & {
-    justify-content: center;
-    padding: var(--spacing-sm);
-  }
-
-  &:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  &.router-link-active {
-    background: var(--bg-tertiary);
-    color: var(--accent-primary);
-
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 6px;
-      bottom: 6px;
-      width: 3px;
-      border-radius: 0;
-      background: var(--accent-primary);
-    }
-  }
-}
-
-.nav-icon {
-  font-size: 11px;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border-radius: 0;
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
-  transition: all var(--transition-fast);
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-
-  .nav-item:hover &,
-  .router-link-active & {
-    background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
-    color: var(--accent-primary);
-  }
-}
-
-.shortcut-hint {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--text-muted);
-  opacity: 0.4;
-  font-family: var(--font-mono);
-  padding: 1px 4px;
-  border-radius: 0;
-  background: var(--bg-primary);
-}
-
-.nav-sub {
-  padding-left: 40px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.nav-sub-note {
-  padding: 4px var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.nav-sub-item {
-  padding: 4px var(--spacing-sm);
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-  text-decoration: none;
-  border-radius: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: all var(--transition-fast);
-
-  &:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  &.router-link-active {
-    color: var(--accent-primary);
-  }
-}
-
-.main-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-width: 0;
-}
-
 .topbar {
   height: var(--topbar-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--spacing-md);
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  -webkit-app-region: drag;
   gap: var(--spacing-md);
+  padding: 0 0 0 10px;
+  border-bottom: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-secondary) 94%, var(--bg-primary));
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+}
+
+.topbar-left,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .topbar-left {
-  display: flex;
-  align-items: center;
+  flex: 1;
+  gap: 10px;
+  align-self: stretch;
+  -webkit-app-region: drag;
+}
+
+.topbar-right {
+  gap: 12px;
+  flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
 
-.breadcrumb {
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-primary);
+  text-decoration: none;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.logo-image {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  display: block;
+}
+
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brand-title {
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.global-nav {
   display: flex;
   align-items: center;
-  font-size: var(--font-size-md);
+  gap: 4px;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--bg-primary) 68%, transparent);
+  -webkit-app-region: no-drag;
+}
+
+.top-nav-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  &.active {
+    background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-tertiary));
+    color: var(--text-primary);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 18%, transparent);
+  }
+}
+
+.top-nav-icon {
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  svg {
+    width: 15px;
+    height: 15px;
+    display: block;
+  }
+}
+
+.top-nav-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-trail {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+
+.context-divider {
+  width: 1px;
+  height: 22px;
+  margin-right: 12px;
+  background: var(--border-color);
+}
+
+.breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .breadcrumb-sep {
-  margin: 0 6px;
+  margin: 0 7px;
   color: var(--text-muted);
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
 .breadcrumb-link {
   color: var(--text-secondary);
   text-decoration: none;
-  &:hover { color: var(--accent-primary); }
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover {
+    color: var(--accent-primary);
+  }
 }
 
 .breadcrumb-current {
   color: var(--text-primary);
-  font-weight: 500;
-}
-
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  -webkit-app-region: no-drag;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status-indicators {
@@ -618,9 +498,16 @@ onMounted(() => {
   flex-shrink: 0;
   width: 7px;
   height: 7px;
-  border-radius: 0;
-  &.online { background: var(--status-success); box-shadow: 0 0 4px color-mix(in srgb, var(--status-success) 45%, transparent); }
-  &.offline { background: var(--text-muted); }
+  border-radius: 50%;
+
+  &.online {
+    background: var(--status-success);
+    box-shadow: 0 0 4px color-mix(in srgb, var(--status-success) 45%, transparent);
+  }
+
+  &.offline {
+    background: var(--text-muted);
+  }
 }
 
 .status-label {
@@ -633,7 +520,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 24px;
+  min-height: 22px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -650,22 +537,19 @@ onMounted(() => {
     outline: 1px solid var(--accent-primary);
     outline-offset: 3px;
   }
-
-  .status-label {
-    margin-right: var(--spacing-sm);
-  }
 }
 
 .remote-status-summary {
   max-width: 240px;
   min-width: 0;
   overflow: hidden;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 
@@ -677,21 +561,48 @@ onMounted(() => {
 }
 
 .session-count {
-  padding: 2px 8px;
+  padding: 3px 8px;
   background: var(--bg-tertiary);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   font-size: var(--font-size-xs);
   color: var(--accent-primary);
+  white-space: nowrap;
+}
+
+.settings-entry {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  text-decoration: none;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover,
+  &.active {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
 }
 
 .window-controls {
   display: flex;
-  gap: 2px;
+  align-self: stretch;
+  gap: 0;
 }
 
 .win-btn {
   width: 46px;
-  height: 32px;
+  height: 100%;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -727,15 +638,45 @@ onMounted(() => {
 .content {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
-// 页面切换过渡动画
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.15s ease;
 }
+
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+@media (max-width: 1160px) {
+  .brand-title {
+    display: none;
+  }
+
+  .topbar-left {
+    gap: 8px;
+  }
+
+  .top-nav-item {
+    padding: 0 9px;
+  }
+}
+
+@media (max-width: 1040px) {
+  .top-nav-label {
+    display: none;
+  }
+
+  .top-nav-item {
+    width: 28px;
+    padding: 0;
+  }
+
+  .context-trail {
+    display: none;
+  }
 }
 </style>

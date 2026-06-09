@@ -854,10 +854,6 @@ settings: {
     autoDetect: 'Auto Detect',
     comingSoon: 'Coming Soon'
   },
-  sidebar: {
-    collapse: 'Collapse Sidebar',
-    expand: 'Expand Sidebar'
-  },
   topbar: {
     activeSessions: 'Active Sessions',
     claudeOnline: 'Claude Online',

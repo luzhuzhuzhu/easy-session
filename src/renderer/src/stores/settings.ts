@@ -12,7 +12,6 @@ export interface AppSettings {
   terminalFont: string
   terminalFontSize: number
   terminalFontSizeByPane: Record<string, number>
-  sidebarCollapsed: boolean
   sessionWakeConfirm: boolean
   sessionsPanelCollapsed: boolean
   sessionsListPosition: 'left' | 'top'
@@ -61,7 +60,6 @@ const defaults: AppSettings = {
   terminalFont: 'Consolas, monospace',
   terminalFontSize: 13,
   terminalFontSizeByPane: {},
-  sidebarCollapsed: false,
   sessionWakeConfirm: true,
   sessionsPanelCollapsed: false,
   sessionsListPosition: 'left',
@@ -136,7 +134,6 @@ function normalizeSettings(input: unknown): AppSettings {
     terminalFont: normalizeString(raw.terminalFont, defaults.terminalFont),
     terminalFontSize: normalizeNumber(raw.terminalFontSize, defaults.terminalFontSize),
     terminalFontSizeByPane: normalizeFontSizeByPane(),
-    sidebarCollapsed: normalizeBoolean(raw.sidebarCollapsed, defaults.sidebarCollapsed),
     sessionWakeConfirm: normalizeBoolean(raw.sessionWakeConfirm, defaults.sessionWakeConfirm),
     sessionsPanelCollapsed: normalizeBoolean(raw.sessionsPanelCollapsed, defaults.sessionsPanelCollapsed),
     sessionsListPosition: raw.sessionsListPosition === 'top' ? 'top' : defaults.sessionsListPosition,
