@@ -186,7 +186,7 @@ useI18n()
   height: 18px;
   padding: 0 7px;
   border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--bg-secondary) 84%, var(--bg-primary) 16%);
   color: var(--text-secondary);
   font-size: 10px;

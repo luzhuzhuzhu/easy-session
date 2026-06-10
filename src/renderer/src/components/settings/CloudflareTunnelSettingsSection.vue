@@ -186,7 +186,7 @@ defineExpose({
 .settings-section {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-lg);
 
@@ -219,7 +219,7 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
@@ -243,7 +243,7 @@ defineExpose({
 .remote-form-panel {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), color-mix(in srgb, var(--accent-primary) 3%, transparent));
   border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, var(--border-color));
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
 }
@@ -269,7 +269,7 @@ defineExpose({
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     padding: 10px 12px;
     font-size: var(--font-size-sm);
 
@@ -303,6 +303,7 @@ defineExpose({
   margin-bottom: var(--spacing-md);
   padding: var(--spacing-md);
   border: 1px solid color-mix(in srgb, var(--status-warning) 34%, var(--border-color));
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--status-warning) 8%, var(--bg-secondary));
   color: var(--text-secondary);
 }
@@ -322,6 +323,7 @@ defineExpose({
   flex-shrink: 0;
   padding: 3px 7px;
   border: 1px solid color-mix(in srgb, var(--status-warning) 38%, var(--border-color));
+  border-radius: var(--radius-xs);
   color: var(--status-warning);
   font-size: 11px;
   font-weight: 600;
@@ -360,7 +362,7 @@ defineExpose({
   gap: 6px;
   padding: 10px 12px;
   background: var(--bg-secondary);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .meta-item-full {

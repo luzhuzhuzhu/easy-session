@@ -162,7 +162,7 @@ onMounted(() => loadCurrent())
   padding: 4px 10px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   color: var(--text-muted);
   font-size: var(--font-size-xs);
   cursor: pointer;
@@ -185,7 +185,7 @@ onMounted(() => loadCurrent())
   overflow: auto;
   background: var(--bg-card);
   padding: var(--spacing-sm);
-  border-radius: 0;
+  border-radius: var(--radius-md);
 }
 
 .file-path {
@@ -202,7 +202,7 @@ onMounted(() => loadCurrent())
     font-size: var(--font-size-xs);
     background: var(--bg-tertiary);
     padding: 2px 6px;
-    border-radius: 0;
+    border-radius: var(--radius-xs);
   }
 }
 
@@ -212,7 +212,7 @@ onMounted(() => loadCurrent())
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   padding: var(--spacing-sm);
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
@@ -252,7 +252,7 @@ onMounted(() => loadCurrent())
   margin-top: var(--spacing-sm);
   font-size: var(--font-size-xs);
   padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 
   &.success {
     color: var(--status-success);

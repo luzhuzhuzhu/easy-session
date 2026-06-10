@@ -40,7 +40,7 @@ useI18n()
 .settings-section {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-lg);
 
@@ -63,7 +63,7 @@ useI18n()
   gap: 2px;
   padding: var(--spacing-sm);
   background: var(--bg-primary);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .about-label {

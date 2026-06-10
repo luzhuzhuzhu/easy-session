@@ -346,7 +346,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   padding: 1px 5px;
   border: 1px solid var(--border-color);
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-size: 10px;

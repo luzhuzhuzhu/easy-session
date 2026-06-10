@@ -159,7 +159,7 @@ function handleSmartPriorityModeChange(event: Event): void {
 .settings-section {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-lg);
 
@@ -191,7 +191,7 @@ function handleSmartPriorityModeChange(event: Event): void {
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-sm);
     min-width: 200px;
@@ -230,7 +230,7 @@ function handleSmartPriorityModeChange(event: Event): void {
   min-height: 32px;
   padding: 5px 9px;
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--bg-primary);
   color: var(--text-secondary);
   font-size: var(--font-size-xs);

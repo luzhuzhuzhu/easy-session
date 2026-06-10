@@ -316,14 +316,14 @@ onMounted(async () => {
   height: 16px;
   line-height: 16px;
   text-align: center;
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   flex-shrink: 0;
 }
 
 .skill-tag {
   font-size: 9px;
   padding: 1px 5px;
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   flex-shrink: 0;
   line-height: 14px;
   &.builtin { color: var(--accent-primary); background: color-mix(in srgb, var(--accent-primary) 12%, transparent); }
@@ -385,7 +385,7 @@ onMounted(async () => {
 .field-badge {
   font-size: var(--font-size-xs);
   padding: 0 4px;
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   &.required { color: var(--status-error); }
   &.optional { color: var(--text-muted); }
 }
@@ -395,7 +395,7 @@ onMounted(async () => {
 .prompt-block {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   padding: var(--spacing-sm);
   font-size: var(--font-size-xs);
   white-space: pre-wrap;

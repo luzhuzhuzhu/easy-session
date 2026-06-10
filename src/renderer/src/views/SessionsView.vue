@@ -13,7 +13,6 @@
           :on-create="openCreateDialog"
           :on-refresh-remote="handleRefreshRemoteData"
           :on-open-projects="openProjectsPage"
-          :on-open-remote-settings="openRemoteSettings"
           :on-toggle-list-position="toggleListPosition"
           :on-toggle-list-collapsed="toggleListCollapsed"
       :on-session-click="handleSessionClick"

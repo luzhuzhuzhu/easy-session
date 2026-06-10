@@ -186,7 +186,7 @@ onMounted(() => {
 .config-panel {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: var(--spacing-md);
 }
 
@@ -205,7 +205,7 @@ onMounted(() => {
     font-size: var(--font-size-xs);
     background: var(--bg-tertiary);
     padding: 2px 6px;
-    border-radius: 0;
+    border-radius: var(--radius-xs);
   }
 }
 
@@ -216,7 +216,7 @@ onMounted(() => {
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   padding: var(--spacing-md);
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
@@ -248,7 +248,7 @@ onMounted(() => {
   justify-content: center;
   color: var(--text-muted);
   background: rgba(15, 20, 25, 0.32);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   backdrop-filter: blur(1px);
 }
 
@@ -268,7 +268,7 @@ onMounted(() => {
   margin-top: var(--spacing-md);
   font-size: var(--font-size-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 
   &.success {
     color: var(--status-success);

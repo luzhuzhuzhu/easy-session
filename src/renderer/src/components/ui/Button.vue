@@ -50,7 +50,7 @@ defineExpose({ focus })
   gap: 6px;
   min-width: 0;
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text-secondary);
   cursor: pointer;

@@ -942,7 +942,7 @@ watch(projectDetailTabs, (tabs) => {
   font-weight: 600;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   padding: 2px 6px;
   transition: border-color var(--transition-fast);
@@ -970,6 +970,7 @@ watch(projectDetailTabs, (tabs) => {
   margin-top: var(--spacing-sm);
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--status-warning) 30%, var(--border-color));
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--status-warning) 8%, var(--bg-card));
   color: var(--text-secondary);
   font-size: var(--font-size-xs);
@@ -980,7 +981,7 @@ watch(projectDetailTabs, (tabs) => {
 
 .detect-badge {
   padding: 1px 6px;
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   font-size: var(--font-size-xs);
   font-family: var(--font-mono);
   background: var(--bg-tertiary);
@@ -991,7 +992,7 @@ watch(projectDetailTabs, (tabs) => {
 .panel {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   margin-bottom: var(--spacing-sm);
 }
 
@@ -1038,7 +1039,9 @@ watch(projectDetailTabs, (tabs) => {
   gap: 0;
   border-top: 1px solid var(--border-color);
   border-bottom: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
+  overflow: hidden;
 }
 
 .session-card {
@@ -1133,6 +1136,7 @@ watch(projectDetailTabs, (tabs) => {
   min-height: 26px;
   padding: 3px 8px;
   border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   cursor: pointer;
@@ -1148,7 +1152,7 @@ watch(projectDetailTabs, (tabs) => {
 .options-json {
   margin: 0;
   padding: var(--spacing-sm);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background: var(--bg-tertiary);
   color: var(--text-primary);
@@ -1166,6 +1170,7 @@ watch(projectDetailTabs, (tabs) => {
   margin-top: var(--spacing-sm);
   padding: var(--spacing-sm);
   border: 1px solid color-mix(in srgb, var(--status-error) 30%, var(--border-color));
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--status-error) 7%, var(--bg-tertiary));
 
   strong {
@@ -1187,7 +1192,7 @@ watch(projectDetailTabs, (tabs) => {
   background: var(--bg-tertiary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
   font-family: var(--font-mono);
   resize: vertical;
@@ -1237,7 +1242,7 @@ watch(projectDetailTabs, (tabs) => {
     font-size: var(--font-size-xs);
     background: var(--bg-tertiary);
     padding: 2px 6px;
-    border-radius: 0;
+    border-radius: var(--radius-xs);
     word-break: break-all;
   }
 }
@@ -1261,7 +1266,7 @@ watch(projectDetailTabs, (tabs) => {
   justify-content: center;
   color: var(--text-muted);
   background: rgba(15, 20, 25, 0.32);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   backdrop-filter: blur(1px);
 }
 
@@ -1288,7 +1293,7 @@ watch(projectDetailTabs, (tabs) => {
   margin-top: var(--spacing-md);
   font-size: var(--font-size-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   &.success { color: var(--status-success); background: color-mix(in srgb, var(--status-success) 12%, transparent); }
   &.error { color: var(--status-error); background: color-mix(in srgb, var(--status-error) 12%, transparent); }
 }
@@ -1301,7 +1306,9 @@ watch(projectDetailTabs, (tabs) => {
   gap: 0;
   border-top: 1px solid var(--border-color);
   border-bottom: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
+  overflow: hidden;
 }
 
 .skill-card {

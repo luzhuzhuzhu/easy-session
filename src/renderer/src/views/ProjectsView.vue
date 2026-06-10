@@ -583,7 +583,7 @@ watch(
   background: var(--bg-card);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   font-size: var(--font-size-xs);
   outline: none;
   transition: border-color var(--transition-fast);
@@ -598,7 +598,7 @@ watch(
   background: var(--bg-card);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   padding: 4px 8px;
   font-size: var(--font-size-xs);
   min-width: 100px;
@@ -636,7 +636,7 @@ watch(
 .project-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: var(--spacing-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -687,7 +687,7 @@ watch(
   display: inline-flex;
   align-items: center;
   padding: 1px 6px;
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
   color: var(--accent-primary);
   font-size: var(--font-size-xs);
@@ -704,7 +704,7 @@ watch(
   display: inline-flex;
   align-items: center;
   padding: 1px 6px;
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   font-size: var(--font-size-xs);
   background: var(--bg-tertiary);
   color: var(--text-muted);
@@ -787,7 +787,7 @@ watch(
   min-width: 180px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 6px;
 }

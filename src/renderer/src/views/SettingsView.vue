@@ -1006,7 +1006,7 @@ onMounted(async () => {
     height: 34px;
     padding: 0 10px 0 32px;
     border: 1px solid var(--border-color);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     background: var(--bg-card);
     color: var(--text-primary);
     font-size: var(--font-size-sm);
@@ -1033,6 +1033,7 @@ onMounted(async () => {
   gap: 6px;
   padding: 8px;
   border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
 }
 
@@ -1044,7 +1045,7 @@ onMounted(async () => {
   min-height: 38px;
   padding: 6px 8px;
   border: 1px solid transparent;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -1074,6 +1075,7 @@ onMounted(async () => {
   width: 22px;
   height: 22px;
   border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
   background: var(--bg-primary);
   color: var(--text-muted);
   font-size: 10px;
@@ -1118,6 +1120,7 @@ onMounted(async () => {
 .settings-empty-state {
   padding: var(--spacing-lg);
   border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
   background: var(--bg-card);
   color: var(--text-muted);
   font-size: var(--font-size-sm);
@@ -1131,6 +1134,7 @@ onMounted(async () => {
   margin-bottom: var(--spacing-lg);
   padding: var(--spacing-lg);
   border: 1px solid color-mix(in srgb, var(--accent-primary) 22%, var(--border-color));
+  border-radius: var(--radius-md);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), transparent),
     var(--bg-card);
@@ -1171,6 +1175,7 @@ onMounted(async () => {
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   background: var(--bg-secondary);
 
   strong {
@@ -1197,7 +1202,7 @@ onMounted(async () => {
 .settings-section {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-lg);
 
@@ -1230,7 +1235,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   padding: 6px 10px;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
@@ -1263,7 +1268,7 @@ onMounted(async () => {
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-sm);
     min-width: 200px;
@@ -1309,7 +1314,7 @@ onMounted(async () => {
 .remote-disabled-state {
   padding: var(--spacing-md);
   border: 1px dashed var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--accent-primary) 6%, transparent);
   color: var(--text-secondary);
   line-height: 1.6;
@@ -1318,7 +1323,7 @@ onMounted(async () => {
 .remote-form-panel {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), color-mix(in srgb, var(--accent-primary) 3%, transparent));
   border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, var(--border-color));
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
 }
@@ -1345,7 +1350,7 @@ onMounted(async () => {
     background: var(--bg-primary);
     color: var(--text-primary);
     border: 1px solid var(--border-color);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     padding: 10px 12px;
     font-size: var(--font-size-sm);
 
@@ -1394,7 +1399,7 @@ onMounted(async () => {
   gap: 4px;
   margin-top: var(--spacing-md);
   padding: 10px 12px;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
 }
 
@@ -1425,7 +1430,7 @@ onMounted(async () => {
   text-align: center;
   color: var(--text-muted);
   border: 1px dashed var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
 }
 
 .remote-instance-list {
@@ -1435,7 +1440,7 @@ onMounted(async () => {
 
 .remote-instance-card {
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: var(--bg-primary);
   padding: var(--spacing-md);
   display: flex;
@@ -1485,7 +1490,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   font-size: 11px;
   border: 1px solid transparent;
 }
@@ -1534,7 +1539,7 @@ onMounted(async () => {
   gap: 6px;
   padding: 10px 12px;
   background: var(--bg-secondary);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .meta-item-full {
@@ -1579,7 +1584,7 @@ onMounted(async () => {
   gap: 2px;
   padding: var(--spacing-sm);
   background: var(--bg-primary);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .about-label {

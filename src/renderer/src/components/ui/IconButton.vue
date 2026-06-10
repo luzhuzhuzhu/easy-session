@@ -49,7 +49,7 @@ withDefaults(defineProps<{
   justify-content: center;
   flex-shrink: 0;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   cursor: pointer;

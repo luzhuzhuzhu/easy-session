@@ -676,7 +676,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   font-size: 10px;
   font-family: var(--font-mono);
   font-weight: 600;

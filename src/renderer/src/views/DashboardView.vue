@@ -265,7 +265,7 @@ watch(
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: var(--spacing-md);
   transition: all var(--transition-fast);
 
@@ -325,7 +325,7 @@ watch(
 .indicator {
   width: 8px;
   height: 8px;
-  border-radius: 0;
+  border-radius: 50%;
   display: inline-block;
   flex-shrink: 0;
 
@@ -359,7 +359,7 @@ watch(
     font-size: var(--font-size-xs);
     background: var(--bg-tertiary);
     padding: 2px 6px;
-    border-radius: 0;
+    border-radius: var(--radius-xs);
   }
 
   div + div { margin-top: 4px; }
@@ -433,7 +433,7 @@ watch(
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
 

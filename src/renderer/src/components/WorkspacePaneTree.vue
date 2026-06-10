@@ -868,7 +868,7 @@ watch(
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   overflow: hidden;
   position: relative;
@@ -950,7 +950,7 @@ watch(
   width: 22px;
   height: 22px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   cursor: pointer;
@@ -1024,7 +1024,7 @@ watch(
   min-width: 48px;
   padding: 0 8px;
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   font-size: 11px;
@@ -1058,7 +1058,7 @@ watch(
   min-width: 72px;
   padding: 4px;
   border: 1px solid var(--border-color);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   background: var(--bg-secondary);
   box-shadow: var(--shadow-md);
 }
@@ -1069,7 +1069,7 @@ watch(
   color: var(--text-secondary);
   font-size: 12px;
   text-align: right;
-  border-radius: 0;
+  border-radius: var(--radius-xs);
   padding: 6px 8px;
   cursor: pointer;
 
@@ -1094,7 +1094,7 @@ watch(
 .pane-header-info :deep(.status-tag) {
   white-space: nowrap;
   flex-shrink: 0;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .pane-header-info :deep(.status-tag.offline) {
@@ -1103,11 +1103,11 @@ watch(
 }
 
 .pane-header-info :deep(.type-badge) {
-  border-radius: 0;
+  border-radius: var(--radius-xs);
 }
 
 .pane-header-info :deep(.session-runtime-info) {
-  border-radius: 0;
+  border-radius: var(--radius-sm);
 }
 
 .pane-header-actions {
@@ -1117,7 +1117,7 @@ watch(
 }
 
 .pane-header-actions :deep(.icon-button) {
-  border-radius: 0;
+  border-radius: var(--radius-xs);
 }
 
 .pane-empty {
@@ -1149,6 +1149,7 @@ watch(
   height: 42px;
   flex-shrink: 0;
   border: 1px solid color-mix(in srgb, var(--status-warning) 36%, var(--border-color));
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--status-warning) 8%, transparent);
   color: var(--status-warning);
 
@@ -1188,6 +1189,7 @@ watch(
   min-height: 28px;
   padding: 0 10px;
   border: 1px solid color-mix(in srgb, var(--accent-primary) 42%, var(--border-color));
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-tertiary));
   color: var(--text-primary);
   font-size: 12px;
