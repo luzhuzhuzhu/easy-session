@@ -198,6 +198,7 @@ const dragOverSessionId = ref('')
 const topFlowRowRef = ref<HTMLElement | null>(null)
 const canScrollLeft = ref(false)
 const canScrollRight = ref(false)
+let scrollAnimationId: number | null = null
 
 function onFilterChange(event: Event): void {
   const target = event.target as HTMLSelectElement | null
@@ -229,14 +230,45 @@ function updateTopFlowScrollState(): void {
   canScrollRight.value = row.scrollLeft < maxScrollLeft - 1
 }
 
+function animateScrollBy(row: HTMLElement, delta: number, duration: number): void {
+  if (scrollAnimationId !== null) {
+    cancelAnimationFrame(scrollAnimationId)
+    scrollAnimationId = null
+  }
+
+  const startLeft = row.scrollLeft
+  const startTime = performance.now()
+  // easeOutCubic：起始略快、结尾柔和，避免末段顿挫。
+  const ease = (t: number): number => 1 - Math.pow(1 - t, 3)
+
+  const step = (now: number): void => {
+    const elapsed = now - startTime
+    const progress = Math.min(1, elapsed / duration)
+    row.scrollLeft = startLeft + delta * ease(progress)
+
+    if (progress < 1) {
+      scrollAnimationId = requestAnimationFrame(step)
+    } else {
+      scrollAnimationId = null
+      updateTopFlowScrollState()
+    }
+  }
+
+  scrollAnimationId = requestAnimationFrame(step)
+}
+
 function scrollTopFlow(direction: 'left' | 'right'): void {
   const row = topFlowRowRef.value
   if (!row) return
 
-  row.scrollBy({
-    left: direction === 'left' ? -Math.max(180, row.clientWidth * 0.66) : Math.max(180, row.clientWidth * 0.66),
-    behavior: 'smooth'
-  })
+  // 一次滚动一个项目泳道宽度；找不到或宽度异常时回退到 1/3 视口宽度，至少 120px。
+  const firstLane = row.querySelector<HTMLElement>('.top-project-lane')
+  const laneWidth = firstLane?.offsetWidth ?? 0
+  const fallback = Math.max(120, row.clientWidth * 0.33)
+  const step = laneWidth > 0 && laneWidth < row.clientWidth ? laneWidth : fallback
+
+  // 比浏览器原生 smooth 略慢一些，体感更从容。
+  animateScrollBy(row, direction === 'left' ? -step : step, 700)
 }
 
 function handleWindowResize(): void {
@@ -250,6 +282,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleWindowResize)
+  if (scrollAnimationId !== null) {
+    cancelAnimationFrame(scrollAnimationId)
+    scrollAnimationId = null
+  }
 })
 
 watch(
