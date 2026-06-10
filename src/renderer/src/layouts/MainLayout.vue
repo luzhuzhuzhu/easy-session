@@ -83,14 +83,6 @@
             <span class="status-dot" :class="appStore.opencodeAvailable ? 'online' : 'offline'"></span>
             <span class="status-label">OpenCode</span>
           </button>
-          <span
-            v-if="remoteRefreshSummary"
-            class="remote-status-summary"
-            :class="{ warning: remoteFailureCount > 0 }"
-            :title="remoteRefreshSummary"
-          >
-            {{ remoteRefreshSummary }}
-          </span>
           <span class="session-count" v-if="activeSessionCount > 0">{{ activeSessionCount }} {{ $t('topbar.activeSessions') }}</span>
         </div>
 
@@ -101,9 +93,8 @@
           :title="$t('settings.title')"
           :aria-label="$t('settings.title')"
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="8" cy="8" r="2.25" fill="none" stroke="currentColor" stroke-width="1.7" />
-            <path d="M8 2.5v1.35M8 12.15v1.35M12.75 5.25l-1.18.68M4.43 10.07l-1.18.68M12.75 10.75l-1.18-.68M4.43 5.93l-1.18-.68" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.7" />
+          <svg viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true">
+            <path d="M6.6 1.1 9.4 1.1 9.1 2.7 11 3.5 11.9 2.2 13.8 4.1 12.5 5 13.3 6.9 14.9 6.6 14.9 9.4 13.3 9.1 12.5 11 13.8 11.9 11.9 13.8 11 12.5 9.1 13.3 9.4 14.9 6.6 14.9 6.9 13.3 5 12.5 4.1 13.8 2.2 11.9 3.5 11 2.7 9.1 1.1 9.4 1.1 6.6 2.7 6.9 3.5 5 2.2 4.1 4.1 2.2 5 3.5 6.9 2.7ZM10.5 8A2.5 2.5 0 1 0 5.5 8 2.5 2.5 0 1 0 10.5 8Z" />
           </svg>
         </router-link>
 
@@ -147,7 +138,6 @@ import { useProjectsStore } from '@/stores/projects'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
 import { useInstancesStore } from '@/stores/instances'
-import { useSettingsStore } from '@/stores/settings'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import logoSrc from '@/assets/logo-easy-session-light.png'
@@ -161,7 +151,6 @@ const projectsStore = useProjectsStore()
 const appStore = useAppStore()
 const sessionsStore = useSessionsStore()
 const instancesStore = useInstancesStore()
-const settingsStore = useSettingsStore()
 const confirmDialog = useConfirmDialog()
 
 const navItems = [
@@ -182,39 +171,6 @@ const runningLocalSessionCount = computed(() =>
 const runningRemoteSessionCount = computed(() =>
   sessionsStore.unifiedSessions.filter((session) => session.instanceId !== 'local' && session.status === 'running').length
 )
-
-const remoteFailureCount = computed(() =>
-  instancesStore.remoteInstances.filter((instance) => instance.status === 'offline' || instance.status === 'error').length
-)
-
-const remoteRefreshSummary = computed(() => {
-  if (!settingsStore.settings.desktopRemoteMountEnabled) return ''
-
-  const remotes = instancesStore.remoteInstances
-  if (remotes.length === 0) {
-    return t('session.remoteRefreshNoInstances')
-  }
-
-  const lastCheckedAt = remotes
-    .map((instance) => instance.lastCheckedAt ?? 0)
-    .filter((value) => value > 0)
-    .sort((a, b) => b - a)[0] ?? 0
-  const parts: string[] = []
-
-  if (lastCheckedAt > 0) {
-    parts.push(t('session.remoteLastRefresh', { time: formatClockTime(lastCheckedAt) }))
-  } else {
-    parts.push(t('session.remoteNotRefreshed'))
-  }
-
-  parts.push(
-    remoteFailureCount.value > 0
-      ? t('session.remoteFailureCount', { count: remoteFailureCount.value })
-      : t('session.remoteAllHealthy')
-  )
-
-  return parts.join(' · ')
-})
 
 const contextCrumbs = computed(() => {
   const crumbs: { label: string; path?: string }[] = []
@@ -282,13 +238,6 @@ function formatProjectInstanceCrumb(instanceId: string): string {
   const name = instance?.name || instanceId
   if (!instance) return name
   return `${name} · ${t(`settings.remoteStatus.${instance.status}`)}`
-}
-
-function formatClockTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit'
-  })
 }
 
 onMounted(() => {
@@ -539,27 +488,6 @@ onMounted(() => {
   }
 }
 
-.remote-status-summary {
-  max-width: 240px;
-  min-width: 0;
-  overflow: hidden;
-  padding: 3px 8px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  &.warning {
-    border-color: color-mix(in srgb, var(--status-warning) 34%, var(--border-color));
-    color: var(--status-warning);
-    background: color-mix(in srgb, var(--status-warning) 10%, var(--bg-tertiary));
-  }
-}
-
 .session-count {
   padding: 3px 8px;
   background: var(--bg-tertiary);
@@ -583,8 +511,8 @@ onMounted(() => {
     color var(--transition-fast);
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
   }
 
   &:hover,
