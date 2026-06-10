@@ -33,6 +33,16 @@
           >
             <span>{{ $t('session.opencode') }}</span>
           </button>
+          <button
+            class="type-option"
+            :class="{ active: form.type === 'terminal' }"
+            type="button"
+            role="radio"
+            :aria-checked="form.type === 'terminal'"
+            @click="form.type = 'terminal'"
+          >
+            <span>{{ $t('session.terminal') }}</span>
+          </button>
         </div>
         <button class="close-btn" type="button" :aria-label="$t('session.dialog.cancel')" @click="$emit('cancel')">&times;</button>
       </div>
@@ -106,7 +116,7 @@
           </div>
         </section>
 
-        <section v-if="form.type === 'claude' || form.type === 'codex' || form.type === 'opencode'" class="form-section advanced-block">
+        <section class="form-section advanced-block">
           <button
             type="button"
             class="advanced-toggle"
@@ -117,103 +127,9 @@
             <span class="advanced-toggle-icon" :class="{ open: showAdvancedOptions }">&gt;</span>
           </button>
 
-          <div v-if="showAdvancedOptions" class="advanced-fields">
-            <template v-if="form.type === 'codex'">
-              <div class="form-group field-wide">
-                <label>{{ $t('session.dialog.approvalMode') }}</label>
-                <select v-model="codexOptions.permissionsMode" class="form-input">
-                  <option value="read-only">Read Only</option>
-                  <option value="default">Default</option>
-                  <option value="full-access">Full Access</option>
-                </select>
-                <p v-if="codexOptions.permissionsMode === 'full-access'" class="warning-text">
-                  {{ $t('session.dialog.fullAccessHint') }}
-                </p>
-              </div>
-            </template>
-
-            <template v-if="supportsCustomLaunchArgs">
-              <div class="custom-args field-wide">
-                <div class="custom-args-head">
-                  <label>{{ $t('session.dialog.customLaunchArgs') }}</label>
-                  <button type="button" class="icon-text-action" @click="addCustomLaunchArg">
-                    <UiIcon name="plus" />
-                    <span>{{ $t('session.dialog.addCustomArg') }}</span>
-                  </button>
-                </div>
-
-                <div class="custom-arg-list">
-                  <div v-for="arg in customLaunchArgs" :key="arg.id" class="custom-arg-row">
-                    <input
-                      v-model="arg.name"
-                      type="text"
-                      class="form-input"
-                      :aria-label="$t('session.dialog.customArgName')"
-                      :placeholder="$t('session.dialog.customArgNamePlaceholder')"
-                    />
-                    <input
-                      v-model="arg.value"
-                      type="text"
-                      class="form-input"
-                      :aria-label="$t('session.dialog.customArgValue')"
-                      :placeholder="$t('session.dialog.customArgValuePlaceholder')"
-                    />
-                    <button
-                      type="button"
-                      class="arg-remove-btn"
-                      :aria-label="$t('session.dialog.removeCustomArg')"
-                      :title="$t('session.dialog.removeCustomArg')"
-                      @click="removeCustomLaunchArg(arg.id)"
-                    >
-                      <UiIcon name="x" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </template>
-
-            <template v-if="form.type === 'opencode'">
-              <div class="form-group">
-                <label>{{ $t('session.dialog.opencodeModel') }}</label>
-                <input v-model="opencodeOptions.model" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeModelPlaceholder')" />
-              </div>
-              <div class="form-group">
-                <label>{{ $t('session.dialog.opencodeAgent') }}</label>
-                <input v-model="opencodeOptions.agent" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeAgentPlaceholder')" />
-              </div>
-              <div class="form-group field-wide">
-                <label>{{ $t('session.dialog.opencodePrompt') }}</label>
-                <input v-model="opencodeOptions.prompt" type="text" class="form-input" :placeholder="$t('session.dialog.opencodePromptPlaceholder')" />
-              </div>
-              <div class="form-group field-wide">
-                <label>{{ $t('session.dialog.opencodeSessionId') }}</label>
-                <input v-model="opencodeOptions.sessionId" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeSessionIdPlaceholder')" />
-              </div>
-              <div class="form-group">
-                <label>{{ $t('session.dialog.opencodeServerMode') }}</label>
-                <select v-model="opencodeOptions.serverMode" class="form-input">
-                  <option value="off">{{ $t('session.dialog.opencodeServerModeOff') }}</option>
-                  <option value="attach">{{ $t('session.dialog.opencodeServerModeAttach') }}</option>
-                </select>
-              </div>
-              <div class="form-group field-wide" v-if="opencodeOptions.serverMode === 'attach'">
-                <label>{{ $t('session.dialog.opencodeAttachUrl') }}</label>
-                <input v-model="opencodeOptions.attachUrl" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeAttachUrlPlaceholder')" />
-              </div>
-              <div class="form-row">
-                <label class="check-label">
-                  <input v-model="opencodeOptions.continueLast" type="checkbox" />
-                  {{ $t('session.dialog.opencodeContinueLast') }}
-                </label>
-                <label class="check-label">
-                  <input v-model="opencodeOptions.fork" type="checkbox" />
-                  {{ $t('session.dialog.opencodeFork') }}
-                </label>
-              </div>
-              <p v-if="opencodeOptions.sessionId && opencodeOptions.continueLast" class="warning-text">
-                {{ $t('session.dialog.opencodeConflictHint') }}
-              </p>
-            </template>
+          <!-- v-show 而非 v-if：折叠面板时保留表单状态，提交时参数不丢失 -->
+          <div v-show="showAdvancedOptions" class="advanced-fields">
+            <SessionOptionsForm ref="optionsFormRef" :cli-type="form.type" />
           </div>
         </section>
 
@@ -244,9 +160,10 @@ import { useInstancesStore } from '@/stores/instances'
 import { useToast } from '@/composables/useToast'
 import { useOverlayStack } from '@/composables/useOverlayStack'
 import Button from '@/components/ui/Button.vue'
-import UiIcon from '@/components/ui/UiIcon.vue'
+import SessionOptionsForm from '@/components/SessionOptionsForm.vue'
 import { ipc } from '@/api/ipc'
 import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
+import { CLI_TYPE_DISPLAY_NAMES } from '@shared/cli-types'
 
 const props = withDefaults(defineProps<{
   visible: boolean
@@ -291,38 +208,11 @@ useOverlayStack({
   onEscape: () => emit('cancel')
 })
 
-type CodexPermissionsMode = 'read-only' | 'default' | 'full-access'
+type SessionType = 'claude' | 'codex' | 'opencode' | 'terminal'
 type CliStatus = 'checking' | 'available' | 'unavailable' | 'remote'
-interface CustomLaunchArg {
-  id: string
-  name: string
-  value: string
-}
 
-let customLaunchArgId = 0
-
-function createCustomLaunchArg(): CustomLaunchArg {
-  customLaunchArgId += 1
-  return {
-    id: `custom-arg-${customLaunchArgId}`,
-    name: '',
-    value: ''
-  }
-}
-
-const form = ref({ name: '', icon: '', type: 'claude' as 'claude' | 'codex' | 'opencode', projectPath: '' })
-const codexOptions = ref({ permissionsMode: 'default' as CodexPermissionsMode })
-const customLaunchArgs = ref<CustomLaunchArg[]>([createCustomLaunchArg()])
-const opencodeOptions = ref({
-  model: '',
-  agent: '',
-  prompt: '',
-  sessionId: '',
-  continueLast: false,
-  fork: false,
-  attachUrl: '',
-  serverMode: 'off' as 'off' | 'attach'
-})
+const form = ref({ name: '', icon: '', type: 'claude' as SessionType, projectPath: '' })
+const optionsFormRef = ref<InstanceType<typeof SessionOptionsForm> | null>(null)
 const pathError = ref('')
 const showEmojiPicker = ref(false)
 const showAdvancedOptions = ref(false)
@@ -338,8 +228,7 @@ const emojiList = [
 
 const defaultName = computed(() => {
   const count = sessionsStore.unifiedSessions.filter((s) => s.type === form.value.type).length + 1
-  const typeDisplayName = form.value.type === 'claude' ? 'Claude' : form.value.type === 'codex' ? 'Codex' : 'OpenCode'
-  return `${typeDisplayName}-${String(count).padStart(3, '0')}`
+  return `${CLI_TYPE_DISPLAY_NAMES[form.value.type]}-${String(count).padStart(3, '0')}`
 })
 
 const canBrowseProjectPath = computed(() => {
@@ -352,16 +241,19 @@ const targetCanCreateSession = computed(() => targetInstance.value?.capabilities
 const selectedCliDisplayName = computed(() => {
   if (form.value.type === 'claude') return t('session.claude')
   if (form.value.type === 'codex') return t('session.codex')
-  return t('session.opencode')
+  if (form.value.type === 'opencode') return t('session.opencode')
+  return t('session.terminal')
 })
-const supportsCustomLaunchArgs = computed(() => form.value.type === 'claude' || form.value.type === 'codex')
 const selectedCliAvailable = computed(() => {
   if (form.value.type === 'claude') return appStore.claudeAvailable
   if (form.value.type === 'codex') return appStore.codexAvailable
-  return appStore.opencodeAvailable
+  if (form.value.type === 'opencode') return appStore.opencodeAvailable
+  // 终端会话不依赖外部 CLI，系统 shell 总是可用
+  return true
 })
 const selectedCliStatus = computed<CliStatus>(() => {
   if (!isLocalTarget.value) return 'remote'
+  if (form.value.type === 'terminal') return 'available'
   if (cliStatusLoading.value) return 'checking'
   return selectedCliAvailable.value ? 'available' : 'unavailable'
 })
@@ -409,18 +301,6 @@ watch(
     }
     showEmojiPicker.value = false
     showAdvancedOptions.value = false
-    codexOptions.value = { permissionsMode: 'default' }
-    customLaunchArgs.value = [createCustomLaunchArg()]
-    opencodeOptions.value = {
-      model: '',
-      agent: '',
-      prompt: '',
-      sessionId: '',
-      continueLast: false,
-      fork: false,
-      attachUrl: '',
-      serverMode: 'off'
-    }
     pathError.value = ''
     refreshCliStatus()
   }
@@ -441,30 +321,6 @@ async function refreshCliStatus(): Promise<void> {
 function openCliSettings(): void {
   emit('cancel')
   void router.push('/settings')
-}
-
-function addCustomLaunchArg(): void {
-  customLaunchArgs.value.push(createCustomLaunchArg())
-}
-
-function removeCustomLaunchArg(id: string): void {
-  customLaunchArgs.value = customLaunchArgs.value.filter((arg) => arg.id !== id)
-  if (customLaunchArgs.value.length === 0) {
-    customLaunchArgs.value = [createCustomLaunchArg()]
-  }
-}
-
-function buildCustomLaunchArgs(): Array<{ name: string; value?: string }> {
-  return customLaunchArgs.value
-    .map((arg) => ({
-      name: arg.name.trim(),
-      value: arg.value.trim()
-    }))
-    .filter((arg) => arg.name)
-    .map((arg) => ({
-      name: arg.name,
-      ...(arg.value ? { value: arg.value } : {})
-    }))
 }
 
 async function selectFolder() {
@@ -498,38 +354,16 @@ async function handleSubmit() {
     return
   }
 
-  const customArgs = supportsCustomLaunchArgs.value ? buildCustomLaunchArgs() : []
-  const options =
-    form.value.type === 'claude'
-      ? Object.fromEntries(Object.entries({
-          customArgs: customArgs.length > 0 ? customArgs : undefined
-        }).filter(([, v]) => v))
-      : form.value.type === 'codex'
-        ? Object.fromEntries(Object.entries({
-            ...codexOptions.value,
-            customArgs: customArgs.length > 0 ? customArgs : undefined
-          }).filter(([, v]) => v))
-        : form.value.type === 'opencode'
-        ? Object.fromEntries(
-            Object.entries({
-              cliPath: settingsStore.settings.opencodePath?.trim() || undefined,
-              model: opencodeOptions.value.model.trim() || undefined,
-              agent: opencodeOptions.value.agent.trim() || undefined,
-              prompt: opencodeOptions.value.prompt.trim() || undefined,
-              sessionId: opencodeOptions.value.sessionId.trim() || undefined,
-              continueLast: opencodeOptions.value.continueLast || undefined,
-              fork: opencodeOptions.value.fork || undefined,
-              attachUrl:
-                opencodeOptions.value.serverMode === 'attach'
-                  ? opencodeOptions.value.attachUrl.trim() || undefined
-                  : undefined,
-              serverMode: opencodeOptions.value.serverMode
-            }).filter(([, v]) => v)
-          )
-        : undefined
+  let options = optionsFormRef.value?.buildOptions() ?? {}
+  if (form.value.type === 'opencode') {
+    const cliPath = settingsStore.settings.opencodePath?.trim()
+    if (cliPath && !options.cliPath) {
+      options = { cliPath, ...options }
+    }
+  }
 
   try {
-    if (form.value.type === 'opencode' && opencodeOptions.value.sessionId && opencodeOptions.value.continueLast) {
+    if (optionsFormRef.value?.hasOpencodeConflict()) {
       toast.warning(t('session.dialog.opencodeConflictHint'))
     }
     const session = await sessionsStore.createSessionForInstance(
@@ -540,7 +374,7 @@ async function handleSubmit() {
         type: form.value.type,
         projectId: props.targetProjectId || undefined,
         projectPath: resolvedProjectPath || undefined,
-        options: options && Object.keys(options).length > 0 ? options : undefined,
+        options: Object.keys(options).length > 0 ? options : undefined,
         startPaused: props.startPaused
       },
       { activate: props.activateOnCreate }
@@ -561,8 +395,8 @@ async function handleSubmit() {
 <style scoped lang="scss">
 // dialog-overlay is defined in global.scss
 .dialog {
-  width: min(92vw, 560px);
-  max-height: 84vh;
+  width: min(92vw, 760px);
+  max-height: 88vh;
   overflow-y: auto;
 }
 
@@ -633,7 +467,7 @@ async function handleSubmit() {
 
 .header-type-selector {
   flex: 1 1 auto;
-  max-width: 360px;
+  max-width: 480px;
   min-width: 0;
   height: 42px;
   padding: 4px;
@@ -737,26 +571,6 @@ async function handleSubmit() {
   }
 }
 
-.form-row {
-  display: flex;
-  gap: var(--spacing-md);
-  flex-wrap: wrap;
-}
-
-.check-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--font-size-sm);
-  color: var(--text-primary);
-}
-
-.warning-text {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  color: var(--status-warning);
-}
-
 .path-hint {
   color: var(--text-muted);
   font-size: var(--font-size-xs);
@@ -796,118 +610,8 @@ async function handleSubmit() {
 }
 
 .advanced-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
   padding: 12px;
   border-top: 1px solid var(--border-color);
-
-  .form-group,
-  .form-row,
-  .warning-text {
-    min-width: 0;
-  }
-
-  .form-row,
-  .field-wide,
-  .warning-text {
-    grid-column: 1 / -1;
-  }
-}
-
-.custom-args {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.custom-args-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-
-  label {
-    font-size: var(--font-size-sm);
-    color: var(--text-secondary);
-  }
-}
-
-.icon-text-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--bg-primary);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: var(--font-size-xs);
-  line-height: 1;
-  transition:
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    color var(--transition-fast);
-
-  .ui-icon {
-    width: 14px;
-    height: 14px;
-  }
-
-  &:hover {
-    border-color: color-mix(in srgb, var(--accent-primary) 36%, var(--border-color));
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-}
-
-.custom-arg-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.custom-arg-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 30px;
-  gap: 6px;
-  align-items: center;
-
-  .form-input {
-    min-width: 0;
-  }
-}
-
-.arg-remove-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    color var(--transition-fast);
-
-  .ui-icon {
-    width: 14px;
-    height: 14px;
-  }
-
-  &:hover {
-    border-color: color-mix(in srgb, var(--danger-color, #ef4444) 36%, var(--border-color));
-    background: color-mix(in srgb, var(--danger-color, #ef4444) 10%, transparent);
-    color: var(--text-primary);
-  }
 }
 
 .path-input {
@@ -1011,28 +715,6 @@ async function handleSubmit() {
     max-width: none;
   }
 
-  .advanced-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .custom-args-head {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .icon-text-action {
-    justify-content: center;
-    width: 100%;
-  }
-
-  .custom-arg-row {
-    grid-template-columns: 1fr 30px;
-
-    .form-input:first-child {
-      grid-column: 1 / -1;
-    }
-  }
-
   .path-input,
   .dialog-footer {
     flex-direction: column;
@@ -1042,5 +724,4 @@ async function handleSubmit() {
     width: 100%;
   }
 }
-
 </style>

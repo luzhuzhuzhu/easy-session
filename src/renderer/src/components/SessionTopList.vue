@@ -31,6 +31,7 @@
           <option value="claude">Claude</option>
           <option value="codex">Codex</option>
           <option value="opencode">OpenCode</option>
+          <option value="terminal">{{ $t('session.terminal') }}</option>
         </select>
       </div>
 
@@ -104,7 +105,7 @@
                   @contextmenu.prevent="onSessionContextMenu($event, session)"
                 >
                   <span v-if="session.icon" class="session-icon">{{ session.icon }}</span>
-                  <span v-else class="type-badge" :class="session.type">{{ session.type === 'claude' ? 'C' : session.type === 'codex' ? 'X' : 'O' }}</span>
+                  <span v-else class="type-badge" :class="session.type">{{ cliTypeBadgeLetter(session.type) }}</span>
                   <span v-if="!isListCollapsed" class="top-item-name">{{ session.name }}</span>
                   <span
                     class="status-dot"
@@ -156,6 +157,7 @@
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProjectSessionGroup, SessionTreeSessionItem } from '@/features/sessions/session-tree'
+import { cliTypeBadgeLetter } from '@shared/cli-types'
 import Button from '@/components/ui/Button.vue'
 import IconButton from '@/components/ui/IconButton.vue'
 import UiIcon from '@/components/ui/UiIcon.vue'

@@ -10,6 +10,7 @@ import {
   restartSession as apiRestartSession,
   startSession as apiStartSession,
   pauseSession as apiPauseSession,
+  updateSessionOptions as apiUpdateSessionOptions,
   onSessionStatusChange,
   type Session,
   type CreateSessionParams,
@@ -552,6 +553,23 @@ export const useSessionsStore = defineStore('sessions', () => {
     return updateSessionIcon(sessionRef.sessionId, icon)
   }
 
+  async function updateSessionOptions(id: string, options: Record<string, unknown>) {
+    const updated = await apiUpdateSessionOptions(id, options)
+    if (updated) {
+      const idx = sessions.value.findIndex((s) => s.id === id)
+      if (idx !== -1) sessions.value[idx] = updated
+    }
+    return updated
+  }
+
+  async function updateSessionOptionsRef(
+    sessionRef: SessionRef,
+    options: Record<string, unknown>
+  ) {
+    assertLocalSessionRef(sessionRef, '修改会话启动参数')
+    return updateSessionOptions(sessionRef.sessionId, options)
+  }
+
   return {
     sessions,
     remoteSessionsByInstance,
@@ -584,6 +602,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     renameSessionRef,
     updateSessionIcon,
     updateSessionIconRef,
+    updateSessionOptions,
+    updateSessionOptionsRef,
     clearRemoteSessions,
     getSessionRef,
     getSessionRefByGlobalKey,

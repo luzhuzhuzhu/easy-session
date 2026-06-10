@@ -3,7 +3,7 @@ import { LOCAL_INSTANCE_ID, type UnifiedSession } from '@/models/unified-resourc
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string
 
 function sessionTypeLabel(session: UnifiedSession, t: TranslateFn): string {
-  const knownTypes = new Set(['claude', 'codex', 'opencode'])
+  const knownTypes = new Set(['claude', 'codex', 'opencode', 'terminal'])
   return knownTypes.has(session.type) ? t(`session.${session.type}`) : session.type
 }
 

@@ -108,7 +108,7 @@
         >
           <div class="pane-header-info">
             <span v-if="activeSession.icon" class="session-icon">{{ activeSession.icon }}</span>
-            <span v-else class="type-badge" :class="activeSession.type">{{ activeSession.type === 'claude' ? 'C' : activeSession.type === 'codex' ? 'X' : 'O' }}</span>
+            <span v-else class="type-badge" :class="activeSession.type">{{ cliTypeBadgeLetter(activeSession.type) }}</span>
             <span class="pane-session-name">{{ activeSession.name }}</span>
             <span
               v-if="activeTabOffline"
@@ -261,6 +261,7 @@ import type {
   WorkspaceTabState
 } from '@/api/workspace'
 import TerminalOutput from '@/components/TerminalOutput.vue'
+import { cliTypeBadgeLetter } from '@shared/cli-types'
 import SessionRuntimeInfo from '@/components/SessionRuntimeInfo.vue'
 import Button from '@/components/ui/Button.vue'
 import IconButton from '@/components/ui/IconButton.vue'

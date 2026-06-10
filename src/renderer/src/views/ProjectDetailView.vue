@@ -65,7 +65,7 @@
             <div v-for="s in projectSessions" :key="s.globalSessionKey" class="session-card">
               <div class="session-main" @click="toggleSessionExpand(s.sessionId)">
                 <div class="session-main-left">
-                  <span class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : s.type === 'codex' ? 'X' : 'O' }}</span>
+                  <span class="type-badge" :class="s.type">{{ cliTypeBadgeLetter(s.type) }}</span>
                   <div class="session-main-text">
                     <span class="session-name">{{ s.name }}</span>
                     <span class="session-sub">
@@ -240,6 +240,7 @@ import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useProjectsStore } from '@/stores/projects'
+import { cliTypeBadgeLetter } from '@shared/cli-types'
 import { useInstancesStore } from '@/stores/instances'
 import { useSessionsStore } from '@/stores/sessions'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'

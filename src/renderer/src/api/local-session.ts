@@ -1,7 +1,9 @@
 import type { IpcRendererEvent } from 'electron'
 import { ipc } from './ipc'
 
-export type CliType = 'claude' | 'codex' | 'opencode'
+import type { CliType } from '@shared/cli-types'
+
+export type { CliType }
 export type SessionStatus = 'idle' | 'running' | 'stopped' | 'error'
 
 export interface Session {
@@ -142,6 +144,20 @@ export function startSession(id: string): Promise<Session> {
 
 export function pauseSession(id: string): Promise<Session> {
   return ipc.invoke<Session>('session:pause', id)
+}
+
+export function updateSessionOptions(id: string, options: Record<string, unknown>): Promise<Session | null> {
+  return ipc.invoke<Session | null>('session:updateOptions', id, options)
+}
+
+export interface DetectedShell {
+  id: string
+  label: string
+  path: string
+}
+
+export function detectShells(): Promise<DetectedShell[]> {
+  return withReadDedupe('terminal:detectShells', [], () => ipc.invoke<DetectedShell[]>('terminal:detectShells'))
 }
 
 export function onSessionOutput(callback: (event: OutputEvent) => void): () => void {

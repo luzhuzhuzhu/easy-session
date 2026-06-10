@@ -1,11 +1,13 @@
 import { randomUUID } from 'crypto'
 import { BrowserWindow } from 'electron'
+import { CLI_TYPE_DISPLAY_NAMES, CLI_TYPE_NAME_PATTERN } from '../../shared/cli-types'
 import { CliManager } from './cli-manager'
 import { SessionOutputManager } from './session-output'
 import { DataStore } from './data-store'
 import type { ClaudeSessionLifecycle } from './claude-session-lifecycle'
 import type { CodexSessionLifecycle } from './codex-session-lifecycle'
 import type { OpenCodeSessionLifecycle } from './opencode-session-lifecycle'
+import type { TerminalSessionLifecycle } from './terminal-session-lifecycle'
 import type { ISessionLifecycle } from './session-lifecycle'
 import type { CliType } from './types'
 import type { Session, CodexSession, OpenCodeSession, CreateSessionParams, SessionFilter } from './session-types'
@@ -37,27 +39,29 @@ export class SessionManager {
     claudeLifecycle: ClaudeSessionLifecycle,
     private codexLifecycle: CodexSessionLifecycle,
     outputManager: SessionOutputManager,
-    private opencodeLifecycle?: OpenCodeSessionLifecycle
+    private opencodeLifecycle?: OpenCodeSessionLifecycle,
+    private terminalLifecycle?: TerminalSessionLifecycle
   ) {
     this.outputManager = outputManager
 
-    const noopOpenCodeLifecycle: ISessionLifecycle = {
+    const createNoopLifecycle = (label: string): ISessionLifecycle => ({
       create: (_id, _name, _params) => {
-        throw new Error('OpenCode lifecycle is not configured')
+        throw new Error(`${label} lifecycle is not configured`)
       },
       startProcess: () => {
-        throw new Error('OpenCode lifecycle is not configured')
+        throw new Error(`${label} lifecycle is not configured`)
       },
       handleOutput: () => {},
       cleanup: () => {},
       migrateOnLoad: () => false,
       hydrateSessionId: () => false
-    }
+    })
 
     this.lifecycles = {
       claude: claudeLifecycle,
       codex: codexLifecycle,
-      opencode: this.opencodeLifecycle || noopOpenCodeLifecycle
+      opencode: this.opencodeLifecycle || createNoopLifecycle('OpenCode'),
+      terminal: this.terminalLifecycle || createNoopLifecycle('Terminal')
     }
     claudeLifecycle.setPersistCallback(() => this.persist())
     codexLifecycle.setPersistCallback(() => this.persist())
@@ -159,7 +163,7 @@ export class SessionManager {
 
     for (const session of this.sessions.values()) {
       const current = this.sessionCounter.get(session.type) || 0
-      const match = session.name.match(/^(?:Claude|Codex|OpenCode)-(\d+)$/)
+      const match = session.name.match(CLI_TYPE_NAME_PATTERN)
       if (match) {
         const num = parseInt(match[1], 10)
         if (num > current) this.sessionCounter.set(session.type, num)
@@ -180,7 +184,7 @@ export class SessionManager {
     const type = params.type
     const count = (this.sessionCounter.get(type) || 0) + 1
     this.sessionCounter.set(type, count)
-    const typeDisplayName = type === 'claude' ? 'Claude' : type === 'codex' ? 'Codex' : 'OpenCode'
+    const typeDisplayName = CLI_TYPE_DISPLAY_NAMES[type]
     const name = params.name || `${typeDisplayName}-${String(count).padStart(3, '0')}`
 
     const session = this.lifecycles[type].create(id, name, params)
@@ -368,6 +372,18 @@ export class SessionManager {
     session.icon = icon
     this.persist()
     return true
+  }
+
+  // 更新会话启动参数，运行中的进程不受影响，下次启动/重启时生效
+  updateSessionOptions(id: string, options: Session['options']): Session | null {
+    const session = this.sessions.get(id)
+    if (!session) return null
+    if (!options || typeof options !== 'object' || Array.isArray(options)) return null
+
+    // 跨越联合类型的边界赋值：options 形状由调用方（会话设置表单）按会话类型构建
+    ;(session as { options: Session['options'] }).options = options
+    this.persist()
+    return session
   }
 
   destroyAll(): void {

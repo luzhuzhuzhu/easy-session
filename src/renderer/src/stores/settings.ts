@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, toRaw } from 'vue'
+import { normalizeLaunchArgPresets, type LaunchArgPreset } from '@/models/cli-launch-args'
 
 export interface AppSettings {
   theme: AppTheme
@@ -20,6 +21,7 @@ export interface AppSettings {
   smartPriorityMode: 'recent' | 'balanced'
   manualProjectOrder: string[]
   manualSessionOrder: Record<string, string[]>
+  launchArgPresets: LaunchArgPreset[]
 }
 
 export type AppTheme =
@@ -67,7 +69,8 @@ const defaults: AppSettings = {
   smartPriorityScope: 'both',
   smartPriorityMode: 'balanced',
   manualProjectOrder: [],
-  manualSessionOrder: {}
+  manualSessionOrder: {},
+  launchArgPresets: []
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -144,7 +147,8 @@ function normalizeSettings(input: unknown): AppSettings {
         : defaults.smartPriorityScope,
     smartPriorityMode: raw.smartPriorityMode === 'recent' ? 'recent' : defaults.smartPriorityMode,
     manualProjectOrder: normalizeStringArray(raw.manualProjectOrder, defaults.manualProjectOrder),
-    manualSessionOrder: normalizeManualSessionOrder()
+    manualSessionOrder: normalizeManualSessionOrder(),
+    launchArgPresets: normalizeLaunchArgPresets(raw.launchArgPresets)
   }
 }
 
@@ -175,5 +179,16 @@ export const useSettingsStore = defineStore('settings', () => {
     await save()
   }
 
-  return { settings, loaded, load, save, update }
+  async function saveLaunchArgPreset(preset: LaunchArgPreset) {
+    const others = settings.value.launchArgPresets.filter((p) => p.id !== preset.id)
+    settings.value.launchArgPresets = [...others, preset]
+    await save()
+  }
+
+  async function deleteLaunchArgPreset(id: string) {
+    settings.value.launchArgPresets = settings.value.launchArgPresets.filter((p) => p.id !== id)
+    await save()
+  }
+
+  return { settings, loaded, load, save, update, saveLaunchArgPreset, deleteLaunchArgPreset }
 })

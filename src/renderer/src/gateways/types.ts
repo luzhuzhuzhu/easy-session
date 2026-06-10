@@ -7,7 +7,7 @@ import type {
 } from '../models/unified-resource'
 
 export interface GatewayCreateSessionParams {
-  type: 'claude' | 'codex' | 'opencode'
+  type: 'claude' | 'codex' | 'opencode' | 'terminal'
   projectId?: string
   projectPath?: string
   name?: string

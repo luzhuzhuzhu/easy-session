@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { SessionManager } from '../services/session-manager'
-import type { CreateSessionParams, SessionFilter } from '../services/session-types'
+import { detectShells } from '../services/shell-detector'
+import type { CreateSessionParams, SessionFilter, Session } from '../services/session-types'
 
 function assertString(value: unknown, name: string): asserts value is string {
   if (typeof value !== 'string' || !value) {
@@ -95,5 +96,17 @@ export function registerSessionHandlers(
   ipcMain.handle('session:pause', (_event, id: string) => {
     assertString(id, 'id')
     return sessionManager.pauseSession(id)
+  })
+
+  ipcMain.handle('session:updateOptions', (_event, id: string, options: Session['options']) => {
+    assertString(id, 'id')
+    if (!options || typeof options !== 'object' || Array.isArray(options)) {
+      throw new Error('参数 options 必须为普通对象')
+    }
+    return sessionManager.updateSessionOptions(id, options)
+  })
+
+  ipcMain.handle('terminal:detectShells', () => {
+    return detectShells()
   })
 }

@@ -19,6 +19,7 @@ import type {
 } from './types'
 import { buildRemoteCapabilityMap } from './capabilities'
 import { renderLoginPage, renderSessionsPage } from './web'
+import { isCliType, type CliType } from '../../shared/cli-types'
 
 const moduleRequire = createRequire(import.meta.url)
 
@@ -50,14 +51,14 @@ function sendError(res: Response, requestId: string, status: number, code: strin
 }
 
 function parseSessionListFilter(req: Request): {
-  type?: 'claude' | 'codex' | 'opencode'
+  type?: CliType
   status?: 'idle' | 'running' | 'stopped' | 'error'
   projectId?: string
   projectPath?: string
   parentId?: string
 } {
   const filter: {
-    type?: 'claude' | 'codex' | 'opencode'
+    type?: CliType
     status?: 'idle' | 'running' | 'stopped' | 'error'
     projectId?: string
     projectPath?: string
@@ -65,8 +66,8 @@ function parseSessionListFilter(req: Request): {
   } = {}
 
   const typeRaw = req.query.type
-  if (typeof typeRaw === 'string' && ['claude', 'codex', 'opencode'].includes(typeRaw)) {
-    filter.type = typeRaw as 'claude' | 'codex' | 'opencode'
+  if (isCliType(typeRaw)) {
+    filter.type = typeRaw
   }
 
   const statusRaw = req.query.status
@@ -123,7 +124,7 @@ function parseCreateBody(body: unknown): RemoteSessionCreateBody {
 
   const candidate = body as Record<string, unknown>
   const type = candidate.type
-  if (type !== 'claude' && type !== 'codex' && type !== 'opencode') {
+  if (!isCliType(type)) {
     throw new HttpError(400, 'BAD_REQUEST', 'Invalid session type')
   }
 

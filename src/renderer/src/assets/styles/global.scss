@@ -332,6 +332,7 @@ textarea.form-input { resize: vertical; font-family: inherit; }
   &.claude { background: color-mix(in srgb, var(--accent-primary) 15%, transparent); color: var(--accent-primary); }
   &.codex { background: color-mix(in srgb, var(--accent-secondary) 15%, transparent); color: var(--accent-secondary); }
   &.opencode { background: color-mix(in srgb, var(--status-info) 16%, transparent); color: var(--status-info); }
+  &.terminal { background: color-mix(in srgb, var(--status-success) 15%, transparent); color: var(--status-success); }
   &.lg { width: 32px; height: 32px; font-size: var(--font-size-md); }
   &.sm { width: auto; height: auto; padding: 2px 8px; font-weight: 500; }
 }

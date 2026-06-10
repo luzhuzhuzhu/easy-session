@@ -130,7 +130,7 @@
           @contextmenu.prevent="onSessionContextMenu($event, node.session)"
         >
           <span v-if="node.session.icon" class="session-icon">{{ node.session.icon }}</span>
-          <span v-else class="type-badge" :class="node.session.type">{{ node.session.type === 'claude' ? 'C' : node.session.type === 'codex' ? 'X' : 'O' }}</span>
+          <span v-else class="type-badge" :class="node.session.type">{{ cliTypeBadgeLetter(node.session.type) }}</span>
           <div class="item-info">
             <span class="item-name">{{ node.session.name }}</span>
             <span class="item-time">{{ formatTime(node.session.createdAt) }}</span>
@@ -165,6 +165,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VirtualTree from '@/components/tree/VirtualTree.vue'
+import { cliTypeBadgeLetter } from '@shared/cli-types'
 import IconButton from '@/components/ui/IconButton.vue'
 import UiIcon from '@/components/ui/UiIcon.vue'
 import type {

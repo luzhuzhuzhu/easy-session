@@ -8,11 +8,13 @@ import { CliManager } from './services/cli-manager'
 import { ClaudeAdapter } from './services/claude-adapter'
 import { CodexAdapter } from './services/codex-adapter'
 import { OpenCodeAdapter } from './services/opencode-adapter'
+import { TerminalAdapter } from './services/terminal-adapter'
 import { ConfigService } from './services/config-service'
 import { SessionManager } from './services/session-manager'
 import { ClaudeSessionLifecycle } from './services/claude-session-lifecycle'
 import { CodexSessionLifecycle } from './services/codex-session-lifecycle'
 import { OpenCodeSessionLifecycle } from './services/opencode-session-lifecycle'
+import { TerminalSessionLifecycle } from './services/terminal-session-lifecycle'
 import { ProjectManager } from './services/project-manager'
 import { SkillManager } from './services/skill-manager'
 import { DataStore } from './services/data-store'
@@ -45,17 +47,20 @@ const cliManager = new CliManager()
 const claudeAdapter = new ClaudeAdapter(cliManager)
 const codexAdapter = new CodexAdapter(cliManager)
 const openCodeAdapter = new OpenCodeAdapter(cliManager)
+const terminalAdapter = new TerminalAdapter(cliManager)
 const configService = new ConfigService()
 const outputManager = new SessionOutputManager()
 const claudeLifecycle = new ClaudeSessionLifecycle(claudeAdapter, outputManager)
 const codexLifecycle = new CodexSessionLifecycle(codexAdapter, outputManager)
 const opencodeLifecycle = new OpenCodeSessionLifecycle(openCodeAdapter, outputManager)
+const terminalLifecycle = new TerminalSessionLifecycle(terminalAdapter, outputManager)
 const sessionManager = new SessionManager(
   cliManager,
   claudeLifecycle,
   codexLifecycle,
   outputManager,
-  opencodeLifecycle
+  opencodeLifecycle,
+  terminalLifecycle
 )
 const projectManager = new ProjectManager()
 const skillManager = new SkillManager(sessionManager)

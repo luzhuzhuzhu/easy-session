@@ -1,9 +1,8 @@
 import * as pty from 'node-pty'
 import { BrowserWindow } from 'electron'
-import { existsSync } from 'fs'
 import { homedir } from 'os'
-import { join } from 'path'
-import type { ProcessInfo, ProcessOutput } from './types'
+import { findExecutableInPath, findGitBashPath } from './shell-detector'
+import type { CliType, ProcessInfo, ProcessOutput } from './types'
 import type { RemoteNetworkSettingsManager } from './remote-network-settings-manager'
 
 export type OutputListener = (id: string, data: string, stream: 'stdout' | 'stderr') => void
@@ -29,12 +28,6 @@ function redactProxyUrl(rawValue: string | null): string | null {
 }
 
 export class CliManager {
-  private static readonly GIT_BASH_CANDIDATES = [
-    'C:\\Program Files\\Git\\bin\\bash.exe',
-    'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
-    'C:\\Program Files (x86)\\Git\\bin\\bash.exe'
-  ]
-
   private static readonly MAX_BUFFER_BYTES = 1 * 1024 * 1024
 
   private processes = new Map<string, pty.IPty>()
@@ -89,10 +82,6 @@ export class CliManager {
     }
   }
 
-  private resolveGitBashPath(): string | undefined {
-    return CliManager.GIT_BASH_CANDIDATES.find((p) => existsSync(p))
-  }
-
   private resolveWindowsCommand(command: string): string {
     if (command.includes('\\') || command.includes('/') || command.includes(':')) {
       return command
@@ -103,20 +92,7 @@ export class CliManager {
       return command
     }
 
-    const pathEnv = process.env.PATH || ''
-    const pathList = pathEnv.split(';').filter(Boolean)
-    const extCandidates = ['.exe', '.cmd', '.bat', '.com', '']
-
-    for (const dir of pathList) {
-      for (const ext of extCandidates) {
-        const candidate = join(dir, `${command}${ext}`)
-        if (existsSync(candidate)) {
-          return candidate
-        }
-      }
-    }
-
-    return command
+    return findExecutableInPath(command) ?? command
   }
 
   private buildSpawnEnv(command: string): Record<string, string> {
@@ -137,7 +113,7 @@ export class CliManager {
       env.FORCE_COLOR = env.FORCE_COLOR || '1'
 
       if (command.includes('claude') && !env.CLAUDE_CODE_GIT_BASH_PATH) {
-        const gitBashPath = this.resolveGitBashPath()
+        const gitBashPath = findGitBashPath()
         if (gitBashPath) {
           env.CLAUDE_CODE_GIT_BASH_PATH = gitBashPath
         }
@@ -156,7 +132,12 @@ export class CliManager {
     return env
   }
 
-  spawn(id: string, command: string, args: string[], options?: { cwd?: string }): ProcessInfo {
+  spawn(
+    id: string,
+    command: string,
+    args: string[],
+    options?: { cwd?: string; cliType?: CliType }
+  ): ProcessInfo {
     if (this.processes.has(id)) {
       throw new Error(`Process with id "${id}" already exists`)
     }
@@ -174,11 +155,13 @@ export class CliManager {
     })
 
     const lowerCommand = command.toLowerCase()
-    const cliType = lowerCommand.includes('opencode')
-      ? 'opencode'
-      : lowerCommand.includes('codex')
-        ? 'codex'
-        : 'claude'
+    const cliType: CliType =
+      options?.cliType ??
+      (lowerCommand.includes('opencode')
+        ? 'opencode'
+        : lowerCommand.includes('codex')
+          ? 'codex'
+          : 'claude')
 
     const info: ProcessInfo = {
       id,
@@ -199,7 +182,9 @@ export class CliManager {
       this.appendToBuffer(id, data)
       const output: ProcessOutput = { id, stream: 'stdout', data, timestamp: Date.now() }
       this.sendToRenderer('cli:output', output)
-      if (this.remoteNetworkSettingsManager) {
+      // 终端会话输出是任意 shell 内容（ping/npm 等都会出现 timeout 字样），
+      // 不参与 CLI 网络失败诊断，避免污染 lastFailureCli 状态
+      if (this.remoteNetworkSettingsManager && cliType !== 'terminal') {
         const analysis = this.remoteNetworkSettingsManager.analyzeCliFailure(data)
         if (analysis.matched && analysis.category) {
           const reason = analysis.reason

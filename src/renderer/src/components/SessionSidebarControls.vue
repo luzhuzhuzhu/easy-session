@@ -7,6 +7,7 @@
           <option value="claude">Claude</option>
           <option value="codex">Codex</option>
           <option value="opencode">OpenCode</option>
+          <option value="terminal">{{ $t('session.terminal') }}</option>
         </select>
         <div class="toolbar-actions">
           <IconButton
@@ -57,6 +58,7 @@
       <option value="claude">C</option>
       <option value="codex">X</option>
       <option value="opencode">O</option>
+      <option value="terminal">T</option>
     </select>
   </div>
 

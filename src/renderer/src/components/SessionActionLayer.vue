@@ -64,6 +64,13 @@
     >
       {{ $t('session.changeIcon') }}
     </MenuItem>
+    <MenuItem
+      v-if="contextSession?.instanceId === 'local'"
+      :label="$t('session.sessionSettings')"
+      @click="emit('session-settings')"
+    >
+      {{ $t('session.sessionSettings') }}
+    </MenuItem>
     <div v-if="showDestroyAction" class="context-separator" role="separator"></div>
     <MenuItem
       v-if="showDestroyAction"
@@ -171,6 +178,7 @@ const emit = defineEmits<{
   'restart-context': []
   'rename': []
   'change-icon': []
+  'session-settings': []
   'destroy-context': []
   'update:renameInput': [value: string]
   'close-rename': []

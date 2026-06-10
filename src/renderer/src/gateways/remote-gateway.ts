@@ -25,7 +25,7 @@ interface RemoteSessionDto {
   id: string
   name: string
   icon: string | null
-  type: 'claude' | 'codex' | 'opencode'
+  type: 'claude' | 'codex' | 'opencode' | 'terminal'
   projectId: string | null
   projectPath: string
   status: UnifiedSession['status']

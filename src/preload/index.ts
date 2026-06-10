@@ -26,6 +26,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'session:input', 'session:write', 'session:output:history', 'session:output:clear',
   'session:resize', 'session:rename', 'session:updateIcon',
   'session:restart', 'session:start', 'session:pause',
+  'session:updateOptions', 'terminal:detectShells',
   // skill
   'skill:list', 'skill:get', 'skill:create', 'skill:delete',
   'skill:execute', 'skill:preview',

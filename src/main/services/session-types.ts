@@ -1,4 +1,10 @@
-import type { CliType, ClaudeSessionOptions, CodexSessionOptions, OpenCodeSessionOptions } from './types'
+import type {
+  CliType,
+  ClaudeSessionOptions,
+  CodexSessionOptions,
+  OpenCodeSessionOptions,
+  TerminalSessionOptions
+} from './types'
 
 export type SessionStatus = 'idle' | 'running' | 'stopped' | 'error'
 
@@ -40,14 +46,19 @@ export interface OpenCodeSession extends SessionBase {
   opencodeSessionIdSource?: 'user' | 'output' | 'list' | null
 }
 
-export type Session = ClaudeSession | CodexSession | OpenCodeSession
+export interface TerminalSession extends SessionBase {
+  type: 'terminal'
+  options: TerminalSessionOptions
+}
+
+export type Session = ClaudeSession | CodexSession | OpenCodeSession | TerminalSession
 
 export interface CreateSessionParams {
   name?: string
   icon?: string
   type: CliType
   projectPath: string
-  options?: ClaudeSessionOptions | CodexSessionOptions | OpenCodeSessionOptions
+  options?: ClaudeSessionOptions | CodexSessionOptions | OpenCodeSessionOptions | TerminalSessionOptions
   parentId?: string
   startPaused?: boolean
 }

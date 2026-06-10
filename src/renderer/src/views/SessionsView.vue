@@ -118,7 +118,7 @@
             @contextmenu.prevent="openContextMenu($event, s)"
           >
             <span v-if="s.icon" class="session-icon">{{ s.icon }}</span>
-            <span v-else class="type-badge" :class="s.type">{{ s.type === 'claude' ? 'C' : s.type === 'codex' ? 'X' : 'O' }}</span>
+            <span v-else class="type-badge" :class="s.type">{{ cliTypeBadgeLetter(s.type) }}</span>
             <span
               class="status-dot"
               :class="s.status"
@@ -215,6 +215,7 @@
       @restart-context="handleRestartContext"
       @rename="handleRenameFromContext"
       @change-icon="handleChangeIconFromContext"
+      @session-settings="handleSessionSettingsFromContext"
       @destroy-context="handleDestroyContext"
       @update:rename-input="renameInput = $event"
       @close-rename="closeRenameDialog"
@@ -224,6 +225,13 @@
       @confirm-wake="confirmWakeSession"
       @close-icon-picker="closeIconPicker"
       @pick-icon="confirmIconPick"
+    />
+
+    <SessionSettingsDialog
+      :visible="!!sessionSettingsTarget"
+      :session="sessionSettingsTarget"
+      @cancel="sessionSettingsTarget = null"
+      @saved="handleSessionSettingsSaved"
     />
   </div>
 </template>
@@ -250,6 +258,7 @@ import UiIcon from '@/components/ui/UiIcon.vue'
 import CreateSessionDialog from '@/components/CreateSessionDialog.vue'
 import InspectorPanel from '@/components/InspectorPanel.vue'
 import SessionActionLayer from '@/components/SessionActionLayer.vue'
+import SessionSettingsDialog from '@/components/SessionSettingsDialog.vue'
 import SessionSidebarControls from '@/components/SessionSidebarControls.vue'
 import SessionSidebarFooterControls from '@/components/SessionSidebarFooterControls.vue'
 import SessionTopList from '@/components/SessionTopList.vue'
@@ -272,6 +281,7 @@ import {
   type UnifiedSession
 } from '@/models/unified-resource'
 import { buildProjectRouteLocation } from '@/utils/project-routing'
+import { cliTypeBadgeLetter } from '@shared/cli-types'
 import { buildSessionRestartConfirmCopy } from '@/utils/session-confirm'
 
 const { t } = useI18n()
@@ -640,6 +650,19 @@ const contextSessionInstance = computed(() =>
 const contextSessionPassthroughOnly = computed(
   () => contextSessionInstance.value?.type === 'remote' && contextSessionInstance.value.passthroughOnly
 )
+
+const sessionSettingsTarget = ref<UnifiedSession | null>(null)
+
+function handleSessionSettingsFromContext(): void {
+  const session = contextMenu.value.session
+  contextMenu.value.visible = false
+  if (!session) return
+  sessionSettingsTarget.value = sessionsStore.getUnifiedSession(session.id) ?? null
+}
+
+function handleSessionSettingsSaved(): void {
+  sessionSettingsTarget.value = null
+}
 
 const isTopLayout = computed(() => settingsStore.settings.sessionsListPosition === 'top')
 const isListCollapsed = computed(() => settingsStore.settings.sessionsPanelCollapsed)

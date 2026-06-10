@@ -1,4 +1,6 @@
-export type CliType = 'claude' | 'codex' | 'opencode'
+import type { CliType, CustomCliArgument } from '../../shared/cli-types'
+
+export type { CliType, CustomCliArgument }
 
 export interface ProcessInfo {
   id: string
@@ -26,11 +28,6 @@ export interface SpawnRequest {
   options?: { cwd?: string }
 }
 
-export interface CustomCliArgument {
-  name: string
-  value?: string
-}
-
 export interface ClaudeSessionOptions {
   model?: string
   maxTurns?: number
@@ -51,6 +48,14 @@ export interface CodexSessionOptions {
   approvalMode?: SupportedCodexApprovalMode
   inlineMode?: boolean
   customArgs?: CustomCliArgument[]
+}
+
+export interface TerminalSessionOptions {
+  // shell 可执行文件：检测到的 id（cmd/powershell/pwsh/git-bash/wsl）或任意可执行文件路径
+  shell?: string
+  shellArgs?: CustomCliArgument[]
+  // 启动后逐行写入终端的初始命令（如激活 venv、运行脚本）
+  startupCommands?: string[]
 }
 
 export interface OpenCodeSessionOptions {

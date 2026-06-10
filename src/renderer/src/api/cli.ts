@@ -1,6 +1,7 @@
 import { ipc } from './ipc'
+import type { CliType } from '@shared/cli-types'
 
-export type CliType = 'claude' | 'codex' | 'opencode'
+export type { CliType }
 
 export interface ProcessInfo {
   id: string
