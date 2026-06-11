@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type FontWeight } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import ToolbarButton from '@/components/ui/ToolbarButton.vue'
@@ -63,6 +63,14 @@ import { useSessionsStore } from '@/stores/sessions'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { getSharedGatewayResolver, type GatewayOutputEvent } from '@/gateways'
 import type { SessionRef } from '@/models/unified-resource'
+import {
+  DEFAULT_TERMINAL_FONT_FAMILY,
+  clampTerminalLetterSpacing,
+  clampTerminalLineHeight,
+  ensureMonospaceFallback,
+  isTerminalFontWeight,
+  parseSessionAppearance
+} from '@/models/terminal-appearance'
 
 const props = defineProps<{ sessionRef?: SessionRef | null; processKey?: string | null; paneId?: string | null }>()
 const emit = defineEmits<{ clear: [] }>()
@@ -295,6 +303,77 @@ function resolveFontSizeByPane(paneId?: string | null): number {
 }
 
 const activePaneFontSize = computed(() => resolveFontSizeByPane(props.paneId))
+
+// 字体/字重：会话级覆盖（options.appearance）优先，其次全局设置
+const sessionAppearance = computed(() => parseSessionAppearance(currentSession.value?.options))
+
+const effectiveFontFamily = computed(() => {
+  const perSession = sessionAppearance.value.fontFamily
+  if (perSession) return ensureMonospaceFallback(perSession)
+  const global = settingsStore.settings.terminalFont?.trim()
+  return global ? ensureMonospaceFallback(global) : DEFAULT_TERMINAL_FONT_FAMILY
+})
+
+const effectiveFontWeight = computed<FontWeight>(() => {
+  const perSession = sessionAppearance.value.fontWeight
+  if (isTerminalFontWeight(perSession)) return perSession
+  const global = settingsStore.settings.terminalFontWeight
+  return isTerminalFontWeight(global) ? global : 'normal'
+})
+
+const effectiveFontWeightBold = computed<FontWeight>(() => {
+  const perSession = sessionAppearance.value.fontWeightBold
+  if (isTerminalFontWeight(perSession)) return perSession
+  const global = settingsStore.settings.terminalFontWeightBold
+  return isTerminalFontWeight(global) ? global : 'bold'
+})
+
+const effectiveLineHeight = computed(() => {
+  const perSession = sessionAppearance.value.lineHeight
+  if (typeof perSession === 'number') return clampTerminalLineHeight(perSession)
+  return clampTerminalLineHeight(settingsStore.settings.terminalLineHeight)
+})
+
+const effectiveLetterSpacing = computed(() => {
+  const perSession = sessionAppearance.value.letterSpacing
+  if (typeof perSession === 'number') return clampTerminalLetterSpacing(perSession)
+  return clampTerminalLetterSpacing(settingsStore.settings.terminalLetterSpacing)
+})
+
+function applyTerminalFontAppearance(): void {
+  if (!term) return
+  let changed = false
+  if (term.options.fontFamily !== effectiveFontFamily.value) {
+    term.options.fontFamily = effectiveFontFamily.value
+    changed = true
+  }
+  if (term.options.fontWeight !== effectiveFontWeight.value) {
+    term.options.fontWeight = effectiveFontWeight.value
+    changed = true
+  }
+  if (term.options.fontWeightBold !== effectiveFontWeightBold.value) {
+    term.options.fontWeightBold = effectiveFontWeightBold.value
+    changed = true
+  }
+  if (term.options.lineHeight !== effectiveLineHeight.value) {
+    term.options.lineHeight = effectiveLineHeight.value
+    changed = true
+  }
+  if (term.options.letterSpacing !== effectiveLetterSpacing.value) {
+    term.options.letterSpacing = effectiveLetterSpacing.value
+    changed = true
+  }
+  if (changed) {
+    fitAndSync(true)
+  }
+}
+
+watch(
+  [effectiveFontFamily, effectiveFontWeight, effectiveFontWeightBold, effectiveLineHeight, effectiveLetterSpacing],
+  () => {
+    applyTerminalFontAppearance()
+  }
+)
 
 function applyTermFontSize(size: number, forceSync = true): void {
   if (!term) return
@@ -541,7 +620,11 @@ function initTerminal(): void {
     convertEol: false,
     scrollback: 20000,
     fontSize: activePaneFontSize.value,
-    fontFamily: 'Consolas, "Courier New", monospace',
+    fontFamily: effectiveFontFamily.value,
+    fontWeight: effectiveFontWeight.value,
+    fontWeightBold: effectiveFontWeightBold.value,
+    lineHeight: effectiveLineHeight.value,
+    letterSpacing: effectiveLetterSpacing.value,
     rightClickSelectsWord: true,
     theme: buildTerminalTheme(),
     ...(isWindows ? { windowsPty: { backend: 'conpty' as const } } : {})

@@ -42,9 +42,6 @@
               :placeholder="$t('settings.cloudflareTunnelBinaryPathPlaceholder')"
               @input="$emit('update:binary-path', ($event.target as HTMLInputElement).value)"
             />
-            <span class="setting-hint inline-hint">
-              {{ $t('settings.cloudflareTunnelBinaryPathHint') }}
-            </span>
           </div>
         </div>
 

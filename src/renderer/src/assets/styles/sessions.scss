@@ -273,13 +273,19 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    max-width: 150px;
+    max-width: 180px;
     min-width: 0;
-    min-height: 22px;
-    padding: 0 7px;
+    height: 26px;
+    align-self: center;
+    padding: 0 8px;
     border: 1px solid color-mix(in srgb, var(--border-color) 58%, transparent);
     border-radius: var(--radius-xs);
-    background: color-mix(in srgb, var(--bg-primary) 56%, transparent);
+    // 横向滚动时钉在容器左缘，宽泳道滚动到中段也能看清会话属于哪个项目；
+    // 背景必须不透明，否则会话项会从标签底下穿透
+    position: sticky;
+    left: 2px;
+    z-index: 2;
+    background: color-mix(in srgb, var(--bg-primary) 56%, var(--bg-secondary));
   }
 
   .top-project-label,
@@ -287,20 +293,22 @@
     min-width: 0;
     overflow: hidden;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     font-weight: 700;
     letter-spacing: 0;
-    line-height: 1;
+    // 行高必须大于 1：中文字形占满 em 框，line-height: 1 时字底
+    // 会超出行框、被 overflow: hidden 裁掉，文字看起来下沉且底部缺口
+    line-height: 1.4;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .top-project-label {
-    max-width: 92px;
+    max-width: 116px;
   }
 
   .top-instance-label {
-    max-width: 54px;
+    max-width: 64px;
     color: var(--text-muted);
     font-weight: 600;
   }
@@ -333,8 +341,11 @@
       color var(--transition-fast),
       box-shadow var(--transition-fast);
 
+    // 悬停时父泳道也处于 hover 态（底色已混入 --bg-hover），
+    // 所以这里用不透明背景 + 主题色描边才能和泳道拉开层次
     &:hover {
-      background: color-mix(in srgb, var(--bg-hover) 72%, transparent);
+      border-color: color-mix(in srgb, var(--accent-primary) 32%, var(--border-color));
+      background: var(--bg-hover);
     }
 
     &.active {
@@ -410,7 +421,7 @@
       max-width: 72px;
       min-width: 44px;
       width: auto;
-      min-height: 18px;
+      height: 18px;
       justify-content: flex-start;
       gap: 0;
       padding: 0 6px;
@@ -422,7 +433,6 @@
       max-width: 58px;
       color: var(--text-secondary);
       font-size: 10px;
-      line-height: 1;
       text-overflow: ellipsis;
     }
 

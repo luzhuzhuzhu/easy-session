@@ -3,7 +3,6 @@
     <header class="settings-header">
       <div class="settings-title-block">
         <h1>{{ $t('settings.title') }}</h1>
-        <p>{{ $t('settings.subtitle') }}</p>
       </div>
       <div class="settings-search">
         <UiIcon name="search" />
@@ -72,30 +71,6 @@
     </div>
 
     <div v-show="shouldShowSettingsSection('remote')" class="settings-remote-stack">
-    <section class="remote-access-map" aria-labelledby="remote-access-map-title">
-      <div class="remote-access-map-head">
-        <h2 id="remote-access-map-title">{{ $t('settings.remoteAccessMapTitle') }}</h2>
-        <p>{{ $t('settings.remoteAccessMapHint') }}</p>
-      </div>
-      <div class="remote-access-map-grid">
-        <article class="remote-access-map-item">
-          <span class="remote-access-map-kicker">{{ $t('settings.remoteAccessMapServiceKicker') }}</span>
-          <strong>{{ $t('settings.remoteAccessMapServiceTitle') }}</strong>
-          <p>{{ $t('settings.remoteAccessMapServiceDescription') }}</p>
-        </article>
-        <article class="remote-access-map-item">
-          <span class="remote-access-map-kicker">{{ $t('settings.remoteAccessMapWebKicker') }}</span>
-          <strong>{{ $t('settings.remoteAccessMapWebTitle') }}</strong>
-          <p>{{ $t('settings.remoteAccessMapWebDescription') }}</p>
-        </article>
-        <article class="remote-access-map-item">
-          <span class="remote-access-map-kicker">{{ $t('settings.remoteAccessMapDesktopKicker') }}</span>
-          <strong>{{ $t('settings.remoteAccessMapDesktopTitle') }}</strong>
-          <p>{{ $t('settings.remoteAccessMapDesktopDescription') }}</p>
-        </article>
-      </div>
-    </section>
-
     <RemoteServiceSettingsSection
       ref="remoteServiceSectionRef"
       :active="deferredSections.remoteService"
@@ -166,8 +141,16 @@
       <TerminalSettingsSection
         :buffer-size="settingsStore.settings.bufferSize"
         :terminal-font="settingsStore.settings.terminalFont"
+        :terminal-font-weight="settingsStore.settings.terminalFontWeight"
+        :terminal-font-weight-bold="settingsStore.settings.terminalFontWeightBold"
+        :terminal-line-height="settingsStore.settings.terminalLineHeight"
+        :terminal-letter-spacing="settingsStore.settings.terminalLetterSpacing"
         @update:buffer-size="settingsStore.settings.bufferSize = $event; handleSave()"
         @update:terminal-font="settingsStore.settings.terminalFont = $event; handleSave()"
+        @update:terminal-font-weight="handleTerminalFontWeightChange"
+        @update:terminal-font-weight-bold="handleTerminalFontWeightBoldChange"
+        @update:terminal-line-height="settingsStore.settings.terminalLineHeight = $event; handleSave()"
+        @update:terminal-letter-spacing="settingsStore.settings.terminalLetterSpacing = $event; handleSave()"
       />
     </div>
 
@@ -226,6 +209,7 @@ import {
   type RemoteServiceTokenMode
 } from '@/api/remote-service'
 import { LOCAL_INSTANCE_ID, type RemoteInstance } from '@/models/unified-resource'
+import { isTerminalFontWeight } from '@/models/terminal-appearance'
 
 interface RemoteFormState {
   id: string | null
@@ -414,7 +398,11 @@ const settingsSections = computed<SettingsSectionMeta[]>(() => [
     keywords: [
       t('settings.terminal'),
       t('settings.bufferSize'),
-      t('settings.terminalFont')
+      t('settings.terminalFont'),
+      t('settings.terminalFontWeight'),
+      t('settings.terminalFontWeightBold'),
+      t('settings.terminalLineHeight'),
+      t('settings.terminalLetterSpacing')
     ]
   },
   {
@@ -586,6 +574,18 @@ function formatLastChecked(timestamp: number | null): string {
 
 function handleSave(showToast = false): void {
   scheduleSettingsSave(showToast)
+}
+
+function handleTerminalFontWeightChange(value: string): void {
+  if (!isTerminalFontWeight(value)) return
+  settingsStore.settings.terminalFontWeight = value
+  handleSave()
+}
+
+function handleTerminalFontWeightBoldChange(value: string): void {
+  if (!isTerminalFontWeight(value)) return
+  settingsStore.settings.terminalFontWeightBold = value
+  handleSave()
 }
 
 async function loadRemoteInstances(): Promise<void> {
@@ -977,12 +977,6 @@ onMounted(async () => {
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-
-  p {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: var(--font-size-sm);
-  }
 }
 
 .settings-search {
@@ -1128,75 +1122,6 @@ onMounted(async () => {
 
 .settings-remote-stack {
   display: contents;
-}
-
-.remote-access-map {
-  margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-lg);
-  border: 1px solid color-mix(in srgb, var(--accent-primary) 22%, var(--border-color));
-  border-radius: var(--radius-md);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 7%, transparent), transparent),
-    var(--bg-card);
-}
-
-.remote-access-map-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-md);
-
-  h2 {
-    margin: 0;
-    color: var(--text-primary);
-    font-size: var(--font-size-lg);
-  }
-
-  p {
-    max-width: 560px;
-    margin: 0;
-    color: var(--text-muted);
-    font-size: var(--font-size-sm);
-    line-height: 1.6;
-  }
-}
-
-.remote-access-map-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.remote-access-map-item {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--bg-secondary);
-
-  strong {
-    color: var(--text-primary);
-    font-size: var(--font-size-sm);
-  }
-
-  p {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: var(--font-size-xs);
-    line-height: 1.55;
-  }
-}
-
-.remote-access-map-kicker {
-  color: var(--accent-primary);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .settings-section {
@@ -1624,15 +1549,6 @@ onMounted(async () => {
   .settings-nav-item {
     flex: 0 0 auto;
     width: 152px;
-  }
-
-  .remote-access-map-head {
-    flex-direction: column;
-    gap: var(--spacing-xs);
-  }
-
-  .remote-access-map-grid {
-    grid-template-columns: 1fr;
   }
 
   .section-head,

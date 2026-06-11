@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, toRaw } from 'vue'
 import { normalizeLaunchArgPresets, type LaunchArgPreset } from '@/models/cli-launch-args'
+import {
+  clampTerminalLetterSpacing,
+  clampTerminalLineHeight,
+  isTerminalFontWeight,
+  type TerminalFontWeight
+} from '@/models/terminal-appearance'
 
 export interface AppSettings {
   theme: AppTheme
@@ -11,6 +17,10 @@ export interface AppSettings {
   desktopRemoteMountEnabled: boolean
   bufferSize: number
   terminalFont: string
+  terminalFontWeight: TerminalFontWeight
+  terminalFontWeightBold: TerminalFontWeight
+  terminalLineHeight: number
+  terminalLetterSpacing: number
   terminalFontSize: number
   terminalFontSizeByPane: Record<string, number>
   sessionWakeConfirm: boolean
@@ -60,6 +70,10 @@ const defaults: AppSettings = {
   desktopRemoteMountEnabled: false,
   bufferSize: 5000,
   terminalFont: 'Consolas, monospace',
+  terminalFontWeight: 'normal',
+  terminalFontWeightBold: 'bold',
+  terminalLineHeight: 1,
+  terminalLetterSpacing: 0,
   terminalFontSize: 13,
   terminalFontSizeByPane: {},
   sessionWakeConfirm: true,
@@ -135,6 +149,18 @@ function normalizeSettings(input: unknown): AppSettings {
     desktopRemoteMountEnabled: normalizeBoolean(raw.desktopRemoteMountEnabled, defaults.desktopRemoteMountEnabled),
     bufferSize: normalizeNumber(raw.bufferSize, defaults.bufferSize),
     terminalFont: normalizeString(raw.terminalFont, defaults.terminalFont),
+    terminalFontWeight: isTerminalFontWeight(raw.terminalFontWeight)
+      ? raw.terminalFontWeight
+      : defaults.terminalFontWeight,
+    terminalFontWeightBold: isTerminalFontWeight(raw.terminalFontWeightBold)
+      ? raw.terminalFontWeightBold
+      : defaults.terminalFontWeightBold,
+    terminalLineHeight: clampTerminalLineHeight(
+      normalizeNumber(raw.terminalLineHeight, defaults.terminalLineHeight)
+    ),
+    terminalLetterSpacing: clampTerminalLetterSpacing(
+      normalizeNumber(raw.terminalLetterSpacing, defaults.terminalLetterSpacing)
+    ),
     terminalFontSize: normalizeNumber(raw.terminalFontSize, defaults.terminalFontSize),
     terminalFontSizeByPane: normalizeFontSizeByPane(),
     sessionWakeConfirm: normalizeBoolean(raw.sessionWakeConfirm, defaults.sessionWakeConfirm),

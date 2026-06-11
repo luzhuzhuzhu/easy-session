@@ -25,26 +25,34 @@ export interface BuiltinArgDescriptor {
   // select 的候选值；同时允许手动输入其他值（候选只是快捷方式）
   options?: string[]
   placeholder?: string
+  // 参数作用说明的 i18n 键后缀（session.dialog.argHelp.<help>），hover 小问号展示
+  help?: string
 }
 
 export const CLAUDE_BUILTIN_ARGS: BuiltinArgDescriptor[] = [
-  { flag: '--model', control: 'select', options: ['fable', 'opus', 'sonnet', 'haiku'] },
+  { flag: '--model', control: 'select', options: ['fable', 'opus', 'sonnet', 'haiku'], help: 'claudeModel' },
   {
     flag: '--permission-mode',
     control: 'select',
-    options: ['default', 'acceptEdits', 'plan', 'dontAsk', 'auto', 'bypassPermissions']
+    options: ['default', 'acceptEdits', 'plan', 'dontAsk', 'auto', 'bypassPermissions'],
+    help: 'claudePermissionMode'
   },
-  { flag: '--effort', control: 'select', options: ['low', 'medium', 'high', 'xhigh', 'max'] },
-  { flag: '--dangerously-skip-permissions', control: 'toggle' },
-  { flag: '--agent', control: 'text', placeholder: 'agent-name' },
-  { flag: '--add-dir', control: 'text', placeholder: 'D:\\path\\to\\dir' }
+  {
+    flag: '--effort',
+    control: 'select',
+    options: ['low', 'medium', 'high', 'xhigh', 'max'],
+    help: 'claudeEffort'
+  },
+  { flag: '--dangerously-skip-permissions', control: 'toggle', help: 'claudeSkipPermissions' },
+  { flag: '--agent', control: 'text', placeholder: 'agent-name', help: 'claudeAgent' },
+  { flag: '--add-dir', control: 'text', placeholder: 'D:\\path\\to\\dir', help: 'claudeAddDir' }
 ]
 
 export const CODEX_BUILTIN_ARGS: BuiltinArgDescriptor[] = [
-  { flag: '--model', control: 'text', placeholder: 'gpt-5.5-codex' },
-  { flag: '--search', control: 'toggle' },
-  { flag: '--profile', control: 'text', placeholder: 'profile-name' },
-  { flag: '--enable', control: 'text', placeholder: 'feature-name' }
+  // 模型名依据 Codex 官方文档（2026-06）：gpt-5.5 / gpt-5.4 / gpt-5.4-mini 等
+  { flag: '--model', control: 'text', placeholder: 'gpt-5.5', help: 'codexModel' },
+  { flag: '--profile', control: 'text', placeholder: 'profile-name', help: 'codexProfile' },
+  { flag: '--enable', control: 'text', placeholder: 'feature-name', help: 'codexEnable' }
 ]
 
 export function getBuiltinArgDescriptors(cliType: string): BuiltinArgDescriptor[] {

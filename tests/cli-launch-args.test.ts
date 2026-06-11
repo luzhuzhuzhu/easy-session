@@ -87,8 +87,8 @@ describe('splitArgsForForm', () => {
 
   it('round-trips builtin state through args and back', () => {
     const state = createEmptyBuiltinState(CODEX_BUILTIN_ARGS)
-    state['--model'] = 'gpt-5.5-codex'
-    state['--search'] = true
+    state['--model'] = 'gpt-5.5'
+    state['--profile'] = 'work'
 
     const args = builtinStateToArgs(state, CODEX_BUILTIN_ARGS)
     const { builtinState, customArgs } = splitArgsForForm(args, CODEX_BUILTIN_ARGS)

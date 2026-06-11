@@ -38,7 +38,6 @@ export class ClaudeAdapter {
 
     if (claudeSessionId) args.push('--session-id', claudeSessionId)
     if (options?.model) args.push('--model', options.model)
-    if (options?.maxTurns) args.push('--max-turns', String(options.maxTurns))
     if (options?.allowedTools) {
       for (const tool of options.allowedTools) {
         args.push('--allowed-tools', tool)
@@ -56,7 +55,6 @@ export class ClaudeAdapter {
     const args: string[] = ['--resume', claudeSessionId]
 
     if (options?.model) args.push('--model', options.model)
-    if (options?.maxTurns) args.push('--max-turns', String(options.maxTurns))
     if (options?.allowedTools) {
       for (const tool of options.allowedTools) {
         args.push('--allowed-tools', tool)

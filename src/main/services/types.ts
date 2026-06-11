@@ -29,8 +29,9 @@ export interface SpawnRequest {
 }
 
 export interface ClaudeSessionOptions {
+  // model 为旧字段：新表单统一通过 customArgs 的 --model 表达，保存时会清理；
+  // adapter 仍读取它以兼容未重新保存过的旧会话数据
   model?: string
-  maxTurns?: number
   allowedTools?: string[]
   customArgs?: CustomCliArgument[]
 }

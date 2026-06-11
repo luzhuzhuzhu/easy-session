@@ -4,20 +4,7 @@
       <div v-if="!project" class="loading-state">{{ $t('config.loading') }}</div>
 
       <template v-else>
-        <nav class="project-detail-tabs" :aria-label="$t('projectDetail.tabsLabel')">
-          <button
-            v-for="tab in projectDetailTabs"
-            :key="tab.id"
-            class="project-detail-tab"
-            :class="{ active: activeProjectTab === tab.id }"
-            type="button"
-            @click="activeProjectTab = tab.id"
-          >
-            {{ tab.label }}
-          </button>
-        </nav>
-
-        <section v-show="activeProjectTab === 'overview'" class="overview-section">
+        <section class="overview-section">
         <div class="overview-header">
           <input
             v-model="editName"
@@ -42,7 +29,7 @@
         </div>
       </section>
 
-      <section v-show="activeProjectTab === 'sessions'" class="panel">
+      <section class="panel">
         <div class="panel-header">
           <span class="panel-title">{{ $t('projectDetail.sessions') }} ({{ projectSessions.length }})</span>
           <div class="panel-header-actions">
@@ -133,7 +120,7 @@
         </div>
       </section>
 
-      <section v-if="showPromptPanel" v-show="activeProjectTab === 'prompts'" class="panel">
+      <section v-if="showPromptPanel" class="panel">
         <div class="panel-header">
           <span class="panel-title">{{ $t('projectDetail.prompts') }}</span>
         </div>
@@ -188,7 +175,7 @@
         </div>
       </section>
 
-      <section v-if="showSkillsPanel" v-show="activeProjectTab === 'skills'" class="panel">
+      <section v-if="showSkillsPanel" class="panel">
         <div class="panel-header">
           <span class="panel-title">{{ $t('projectDetail.skills') }} ({{ projectSkills.length }})</span>
         </div>
@@ -278,9 +265,6 @@ const expandedSessionOptionsIds = ref<string[]>([])
 
 const projectSkills = ref<Skill[]>([])
 
-type ProjectDetailTab = 'overview' | 'sessions' | 'prompts' | 'skills'
-
-const activeProjectTab = ref<ProjectDetailTab>('overview')
 const promptTab = ref<ProjectPromptCliType>('claude')
 const promptLoading = ref(false)
 const promptSaving = ref(false)
@@ -308,15 +292,6 @@ const canReadPrompt = computed(() => !!projectCapabilities.value?.projectPromptR
 const canWritePrompt = computed(() => !!projectCapabilities.value?.projectPromptWrite)
 const showPromptPanel = computed(() => canReadPrompt.value || canWritePrompt.value)
 const showSkillsPanel = computed(() => project.value?.instanceId === LOCAL_INSTANCE_ID)
-const projectDetailTabs = computed<Array<{ id: ProjectDetailTab; label: string }>>(() => {
-  const tabs: Array<{ id: ProjectDetailTab; label: string }> = [
-    { id: 'overview', label: t('projectDetail.overview') },
-    { id: 'sessions', label: t('projectDetail.sessions') }
-  ]
-  if (showPromptPanel.value) tabs.push({ id: 'prompts', label: t('projectDetail.prompts') })
-  if (showSkillsPanel.value) tabs.push({ id: 'skills', label: t('projectDetail.skills') })
-  return tabs
-})
 const remoteCapabilityNotice = computed(() => {
   if (!project.value || project.value.instanceId === LOCAL_INSTANCE_ID) return ''
   const capabilities = projectCapabilities.value
@@ -869,11 +844,6 @@ watch(promptTab, (_next, prev) => {
     void loadPromptContent()
   }
 })
-
-watch(projectDetailTabs, (tabs) => {
-  if (tabs.some((tab) => tab.id === activeProjectTab.value)) return
-  activeProjectTab.value = tabs[0]?.id ?? 'overview'
-})
 </script>
 
 <style scoped lang="scss">
@@ -894,37 +864,6 @@ watch(projectDetailTabs, (tabs) => {
   text-align: center;
   padding: var(--spacing-xl);
   color: var(--text-muted);
-}
-
-.project-detail-tabs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: var(--spacing-sm);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.project-detail-tab {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-  position: relative;
-  bottom: -1px;
-
-  &:hover {
-    color: var(--text-primary);
-    background: color-mix(in srgb, var(--bg-hover) 72%, transparent);
-  }
-
-  &.active {
-    color: var(--accent-primary);
-    border-bottom-color: var(--accent-primary);
-  }
 }
 
 .overview-section {

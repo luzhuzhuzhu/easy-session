@@ -36,6 +36,9 @@
               <svg v-else-if="item.icon === 'skills'" viewBox="0 0 16 16" aria-hidden="true">
                 <path d="M8 1.7 9.65 6h4.55l-3.68 2.72 1.42 4.52L8 10.56l-3.94 2.68 1.42-4.52L1.8 6h4.55L8 1.7z" fill="currentColor" />
               </svg>
+              <svg v-else-if="item.icon === 'settings'" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true">
+                <path d="M6.6 1.1 9.4 1.1 9.1 2.7 11 3.5 11.9 2.2 13.8 4.1 12.5 5 13.3 6.9 14.9 6.6 14.9 9.4 13.3 9.1 12.5 11 13.8 11.9 11.9 13.8 11 12.5 9.1 13.3 9.4 14.9 6.6 14.9 6.9 13.3 5 12.5 4.1 13.8 2.2 11.9 3.5 11 2.7 9.1 1.1 9.4 1.1 6.6 2.7 6.9 3.5 5 2.2 4.1 4.1 2.2 5 3.5 6.9 2.7ZM10.5 8A2.5 2.5 0 1 0 5.5 8 2.5 2.5 0 1 0 10.5 8Z" />
+              </svg>
             </span>
             <span class="top-nav-label">{{ $t(item.label) }}</span>
           </router-link>
@@ -85,18 +88,6 @@
           </button>
           <span class="session-count" v-if="activeSessionCount > 0">{{ activeSessionCount }} {{ $t('topbar.activeSessions') }}</span>
         </div>
-
-        <router-link
-          class="settings-entry"
-          :class="{ active: route.path === '/settings' }"
-          to="/settings"
-          :title="$t('settings.title')"
-          :aria-label="$t('settings.title')"
-        >
-          <svg viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true">
-            <path d="M6.6 1.1 9.4 1.1 9.1 2.7 11 3.5 11.9 2.2 13.8 4.1 12.5 5 13.3 6.9 14.9 6.6 14.9 9.4 13.3 9.1 12.5 11 13.8 11.9 11.9 13.8 11 12.5 9.1 13.3 9.4 14.9 6.6 14.9 6.9 13.3 5 12.5 4.1 13.8 2.2 11.9 3.5 11 2.7 9.1 1.1 9.4 1.1 6.6 2.7 6.9 3.5 5 2.2 4.1 4.1 2.2 5 3.5 6.9 2.7ZM10.5 8A2.5 2.5 0 1 0 5.5 8 2.5 2.5 0 1 0 10.5 8Z" />
-          </svg>
-        </router-link>
 
         <div class="window-controls">
           <button class="win-btn" @click="minimize" title="最小化">
@@ -157,7 +148,8 @@ const navItems = [
   { path: '/dashboard', icon: 'dashboard', label: 'nav.dashboard' },
   { path: '/sessions', icon: 'sessions', label: 'nav.sessions' },
   { path: '/projects', icon: 'projects', label: 'nav.projects' },
-  { path: '/skills', icon: 'skills', label: 'nav.skills' }
+  { path: '/skills', icon: 'skills', label: 'nav.skills' },
+  { path: '/settings', icon: 'settings', label: 'nav.settings' }
 ]
 
 const activeSessionCount = computed(() =>
@@ -174,9 +166,7 @@ const runningRemoteSessionCount = computed(() =>
 
 const contextCrumbs = computed(() => {
   const crumbs: { label: string; path?: string }[] = []
-  if (route.path === '/settings') {
-    crumbs.push({ label: t('settings.title') })
-  } else if (route.name === 'projectDetail' || route.name === 'instanceProjectDetail') {
+  if (route.name === 'projectDetail' || route.name === 'instanceProjectDetail') {
     crumbs.push({ label: t('nav.projects'), path: '/projects' })
     const projectRef = resolveProjectRouteRef(route)
     const project = projectRef ? projectsStore.getUnifiedProject(projectRef.globalProjectKey) : null
@@ -495,31 +485,6 @@ onMounted(() => {
   font-size: var(--font-size-xs);
   color: var(--accent-primary);
   white-space: nowrap;
-}
-
-.settings-entry {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-lg);
-  color: var(--text-muted);
-  text-decoration: none;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast);
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  &:hover,
-  &.active {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
 }
 
 .window-controls {

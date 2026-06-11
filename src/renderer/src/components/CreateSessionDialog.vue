@@ -1,152 +1,130 @@
 <template>
-  <div v-if="visible" class="dialog-overlay" @click.self="$emit('cancel')">
-    <div class="dialog">
-      <div class="dialog-header">
-        <div class="type-selector header-type-selector" role="radiogroup" :aria-label="$t('session.selectType')">
-          <button
-            class="type-option"
-            :class="{ active: form.type === 'claude' }"
-            type="button"
-            role="radio"
-            :aria-checked="form.type === 'claude'"
-            @click="form.type = 'claude'"
-          >
-            <span>{{ $t('session.claude') }}</span>
-          </button>
-          <button
-            class="type-option"
-            :class="{ active: form.type === 'codex' }"
-            type="button"
-            role="radio"
-            :aria-checked="form.type === 'codex'"
-            @click="form.type = 'codex'"
-          >
-            <span>{{ $t('session.codex') }}</span>
-          </button>
-          <button
-            class="type-option"
-            :class="{ active: form.type === 'opencode' }"
-            type="button"
-            role="radio"
-            :aria-checked="form.type === 'opencode'"
-            @click="form.type = 'opencode'"
-          >
-            <span>{{ $t('session.opencode') }}</span>
-          </button>
-          <button
-            class="type-option"
-            :class="{ active: form.type === 'terminal' }"
-            type="button"
-            role="radio"
-            :aria-checked="form.type === 'terminal'"
-            @click="form.type = 'terminal'"
-          >
-            <span>{{ $t('session.terminal') }}</span>
-          </button>
-        </div>
-        <button class="close-btn" type="button" :aria-label="$t('session.dialog.cancel')" @click="$emit('cancel')">&times;</button>
+  <ModalDialog
+    v-if="visible"
+    :aria-label="$t('session.create')"
+    :close-label="$t('session.dialog.cancel')"
+    @close="$emit('cancel')"
+  >
+    <template #header>
+      <div class="type-selector" role="radiogroup" :aria-label="$t('session.selectType')">
+        <button
+          v-for="type in CLI_TYPES"
+          :key="type"
+          class="type-option"
+          :class="{ active: form.type === type }"
+          type="button"
+          role="radio"
+          :aria-checked="form.type === type"
+          @click="form.type = type"
+        >
+          <span>{{ $t(`session.${type}`) }}</span>
+        </button>
+      </div>
+    </template>
+
+    <section class="form-section">
+      <div
+        v-if="statusMessage"
+        class="cli-status-row"
+        :class="{
+          available: selectedCliStatus === 'available' && targetCanCreateSession,
+          unavailable: selectedCliStatus === 'unavailable' || !targetCanCreateSession,
+          muted: selectedCliStatus === 'remote' || selectedCliStatus === 'checking'
+        }"
+      >
+        <span>{{ statusMessage }}</span>
+        <button
+          v-if="selectedCliStatus === 'unavailable'"
+          type="button"
+          class="text-action"
+          @click="openCliSettings"
+        >
+          {{ $t('session.dialog.openCliSettings') }}
+        </button>
       </div>
 
-      <form class="dialog-body" @submit.prevent="handleSubmit">
-        <section class="form-section">
-          <div
-            v-if="statusMessage"
-            class="cli-status-row"
-            :class="{
-              available: selectedCliStatus === 'available' && targetCanCreateSession,
-              unavailable: selectedCliStatus === 'unavailable' || !targetCanCreateSession,
-              muted: selectedCliStatus === 'remote' || selectedCliStatus === 'checking'
-            }"
-          >
-            <span>{{ statusMessage }}</span>
-            <button
-              v-if="selectedCliStatus === 'unavailable'"
-              type="button"
-              class="text-action"
-              @click="openCliSettings"
-            >
-              {{ $t('session.dialog.openCliSettings') }}
-            </button>
-          </div>
-
-          <div class="form-group">
-            <label>{{ $t('session.dialog.projectPath') }} *</label>
-            <div class="path-input">
-              <input v-model="form.projectPath" type="text" class="form-input" readonly />
-              <Button
-                v-if="canBrowseProjectPath"
-                size="sm"
-                @click="selectFolder"
-              >
-                {{ $t('session.dialog.browse') }}
-              </Button>
-            </div>
-            <span v-if="projectPathHint" class="path-hint">{{ projectPathHint }}</span>
-            <span v-if="pathError" class="error-text">{{ pathError }}</span>
-          </div>
-
-          <div class="form-group">
-            <label>{{ $t('session.dialog.name') }}</label>
-            <div class="name-row">
-              <div class="icon-picker-wrap">
-                <button
-                  type="button"
-                  class="icon-pick-btn"
-                  :aria-label="$t('session.dialog.pickIcon')"
-                  @click="showEmojiPicker = !showEmojiPicker"
-                >
-                  {{ form.icon || '😀' }}
-                </button>
-                <div v-if="showEmojiPicker" class="emoji-grid">
-                  <button
-                    v-for="e in emojiList" :key="e" type="button" class="emoji-cell"
-                    :class="{ selected: form.icon === e }"
-                    @click="form.icon = e; showEmojiPicker = false"
-                  >{{ e }}</button>
-                  <button
-                    type="button"
-                    class="emoji-cell clear-cell"
-                    :aria-label="$t('session.dialog.clearIcon')"
-                    @click="form.icon = ''; showEmojiPicker = false"
-                  >✕</button>
-                </div>
-              </div>
-              <input v-model="form.name" type="text" :placeholder="defaultName" class="form-input" />
-            </div>
-          </div>
-        </section>
-
-        <section class="form-section advanced-block">
-          <button
-            type="button"
-            class="advanced-toggle"
-            :aria-expanded="showAdvancedOptions"
-            @click="showAdvancedOptions = !showAdvancedOptions"
-          >
-            <span>{{ $t('session.dialog.advancedOptions') }}</span>
-            <span class="advanced-toggle-icon" :class="{ open: showAdvancedOptions }">&gt;</span>
-          </button>
-
-          <!-- v-show 而非 v-if：折叠面板时保留表单状态，提交时参数不丢失 -->
-          <div v-show="showAdvancedOptions" class="advanced-fields">
-            <SessionOptionsForm ref="optionsFormRef" :cli-type="form.type" />
-          </div>
-        </section>
-
-        <div class="dialog-footer">
-          <Button @click="$emit('cancel')">{{ $t('session.dialog.cancel') }}</Button>
+      <div class="form-group">
+        <label>{{ $t('session.dialog.projectPath') }} *</label>
+        <div class="path-input">
+          <input v-model="form.projectPath" type="text" class="form-input" readonly />
           <Button
-            type="submit"
-            tone="primary"
-            :disabled="!!createDisabledReason"
-            :title="createDisabledReason"
+            v-if="canBrowseProjectPath"
+            size="sm"
+            @click="selectFolder"
           >
-            {{ $t('session.dialog.confirm') }}
+            {{ $t('session.dialog.browse') }}
           </Button>
         </div>
-      </form>
-    </div>
-  </div>
+        <span v-if="projectPathHint" class="path-hint">{{ projectPathHint }}</span>
+        <span v-if="pathError" class="error-text">{{ pathError }}</span>
+      </div>
+
+      <div class="form-group">
+        <label>{{ $t('session.dialog.name') }}</label>
+        <div class="name-row">
+          <div class="icon-picker-wrap">
+            <button
+              type="button"
+              class="icon-pick-btn"
+              :aria-label="$t('session.dialog.pickIcon')"
+              @click="showEmojiPicker = !showEmojiPicker"
+            >
+              {{ form.icon || '😀' }}
+            </button>
+            <div v-if="showEmojiPicker" class="emoji-grid">
+              <button
+                v-for="e in emojiList" :key="e" type="button" class="emoji-cell"
+                :class="{ selected: form.icon === e }"
+                @click="form.icon = e; showEmojiPicker = false"
+              >{{ e }}</button>
+              <button
+                type="button"
+                class="emoji-cell clear-cell"
+                :aria-label="$t('session.dialog.clearIcon')"
+                @click="form.icon = ''; showEmojiPicker = false"
+              >✕</button>
+            </div>
+          </div>
+          <input
+            v-model="form.name"
+            type="text"
+            :placeholder="defaultName"
+            class="form-input"
+            @keydown.enter.prevent="handleSubmit"
+          />
+        </div>
+      </div>
+    </section>
+
+    <section class="advanced-block">
+      <button
+        type="button"
+        class="advanced-toggle"
+        :aria-expanded="showAdvancedOptions"
+        @click="showAdvancedOptions = !showAdvancedOptions"
+      >
+        <span>{{ $t('session.dialog.advancedOptions') }}</span>
+        <span class="advanced-toggle-icon" :class="{ open: showAdvancedOptions }">&gt;</span>
+      </button>
+
+      <!-- v-show 而非 v-if：折叠面板时保留表单状态，提交时参数不丢失 -->
+      <div v-show="showAdvancedOptions" class="advanced-fields">
+        <SessionOptionsForm ref="optionsFormRef" :cli-type="form.type" />
+      </div>
+    </section>
+
+    <template #footer>
+      <Button @click="$emit('cancel')">{{ $t('session.dialog.cancel') }}</Button>
+      <Button
+        tone="primary"
+        :disabled="!!createDisabledReason"
+        :title="createDisabledReason"
+        @click="handleSubmit"
+      >
+        {{ $t('session.dialog.confirm') }}
+      </Button>
+    </template>
+  </ModalDialog>
 </template>
 
 <script setup lang="ts">
@@ -160,10 +138,11 @@ import { useInstancesStore } from '@/stores/instances'
 import { useToast } from '@/composables/useToast'
 import { useOverlayStack } from '@/composables/useOverlayStack'
 import Button from '@/components/ui/Button.vue'
+import ModalDialog from '@/components/ui/ModalDialog.vue'
 import SessionOptionsForm from '@/components/SessionOptionsForm.vue'
 import { ipc } from '@/api/ipc'
 import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
-import { CLI_TYPE_DISPLAY_NAMES } from '@shared/cli-types'
+import { CLI_TYPES, CLI_TYPE_DISPLAY_NAMES } from '@shared/cli-types'
 
 const props = withDefaults(defineProps<{
   visible: boolean
@@ -238,12 +217,7 @@ const canBrowseProjectPath = computed(() => {
 const isLocalTarget = computed(() => (props.targetInstanceId || LOCAL_INSTANCE_ID) === LOCAL_INSTANCE_ID)
 const targetInstance = computed(() => instancesStore.getInstance(props.targetInstanceId || LOCAL_INSTANCE_ID))
 const targetCanCreateSession = computed(() => targetInstance.value?.capabilities.sessionCreate ?? true)
-const selectedCliDisplayName = computed(() => {
-  if (form.value.type === 'claude') return t('session.claude')
-  if (form.value.type === 'codex') return t('session.codex')
-  if (form.value.type === 'opencode') return t('session.opencode')
-  return t('session.terminal')
-})
+const selectedCliDisplayName = computed(() => t(`session.${form.value.type}`))
 const selectedCliAvailable = computed(() => {
   if (form.value.type === 'claude') return appStore.claudeAvailable
   if (form.value.type === 'codex') return appStore.codexAvailable
@@ -393,59 +367,16 @@ async function handleSubmit() {
 </script>
 
 <style scoped lang="scss">
-// dialog-overlay is defined in global.scss
-.dialog {
-  width: min(92vw, 760px);
-  max-height: 88vh;
-  overflow-y: auto;
-}
-
-.dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px var(--spacing-lg);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 20px;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-fast);
-
-  &:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-}
-
-.dialog-body {
-  padding: 18px var(--spacing-lg) var(--spacing-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
 .form-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
 
   label {
     font-size: var(--font-size-sm);
@@ -458,30 +389,15 @@ async function handleSubmit() {
 .type-selector {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: var(--bg-primary);
-}
-
-.header-type-selector {
+  gap: var(--spacing-xs);
   flex: 1 1 auto;
   max-width: 480px;
   min-width: 0;
   height: 42px;
   padding: 4px;
-  border-color: color-mix(in srgb, var(--border-color) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg-primary) 70%, var(--bg-secondary));
-
-  .type-option {
-    height: 100%;
-    min-height: 0;
-    padding: 0 10px;
-    font-size: 13px;
-    line-height: 1;
-    white-space: nowrap;
-  }
 }
 
 .type-option {
@@ -489,8 +405,8 @@ async function handleSubmit() {
   place-items: center;
   flex: 1 1 0;
   min-width: 0;
-  height: 32px;
-  padding: 0 8px;
+  height: 100%;
+  padding: 0 10px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -500,9 +416,9 @@ async function handleSubmit() {
   font-size: var(--font-size-sm);
   font-weight: 700;
   line-height: 1;
+  white-space: nowrap;
   overflow: hidden;
   user-select: none;
-  vertical-align: top;
   transition:
     background var(--transition-fast),
     border-color var(--transition-fast),
@@ -514,9 +430,7 @@ async function handleSubmit() {
     justify-content: center;
     min-width: 0;
     max-width: 100%;
-    height: 14px;
     overflow: hidden;
-    line-height: 14px;
     text-overflow: ellipsis;
   }
 
@@ -536,9 +450,9 @@ async function handleSubmit() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--spacing-sm);
   min-height: 26px;
-  padding: 5px 8px;
+  padding: 5px var(--spacing-sm);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background: var(--bg-tertiary);
@@ -594,6 +508,7 @@ async function handleSubmit() {
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
   border: none;
+  cursor: pointer;
 
   &:hover {
     color: var(--text-primary);
@@ -610,7 +525,7 @@ async function handleSubmit() {
 }
 
 .advanced-fields {
-  padding: 12px;
+  padding: var(--spacing-md) 12px;
   border-top: 1px solid var(--border-color);
 }
 
@@ -624,18 +539,10 @@ async function handleSubmit() {
   }
 }
 
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
-  padding-top: 14px;
-  border-top: 1px solid var(--border-color);
-}
-
 .name-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-xs);
 
   .form-input {
     flex: 1;
@@ -677,7 +584,7 @@ async function handleSubmit() {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   width: min(280px, calc(100vw - 48px));
 }
 
@@ -703,25 +610,12 @@ async function handleSubmit() {
 }
 
 @media (max-width: 560px) {
-  .dialog {
-    width: min(94vw, 520px);
-  }
-
-  .dialog-header {
-    align-items: center;
-  }
-
-  .header-type-selector {
+  .type-selector {
     max-width: none;
   }
 
-  .path-input,
-  .dialog-footer {
+  .path-input {
     flex-direction: column;
-  }
-
-  .dialog-footer :deep(.ui-button) {
-    width: 100%;
   }
 }
 </style>
