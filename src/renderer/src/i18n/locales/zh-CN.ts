@@ -116,6 +116,7 @@ session: {
     dropOpenInPane: '放入当前分窗',
     dropSplitRight: '拆到右侧新分窗',
     dropSplitBottom: '拆到下方新分窗',
+    dropSwapPane: '与该分窗交换位置',
     status: {
       idle: '空闲',
       running: '运行中',

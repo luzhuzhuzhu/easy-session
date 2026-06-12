@@ -67,11 +67,16 @@
               type="button"
               class="icon-pick-btn"
               :aria-label="$t('session.dialog.pickIcon')"
-              @click="showEmojiPicker = !showEmojiPicker"
+              @click="toggleEmojiPicker"
             >
               {{ form.icon || '😀' }}
             </button>
-            <div v-if="showEmojiPicker" class="emoji-grid">
+            <!-- fixed 定位脱离 modal-body 的 overflow 裁剪，z 轴高于弹窗遮罩(300) -->
+            <div
+              v-if="showEmojiPicker"
+              class="emoji-grid"
+              :style="{ top: `${emojiPickerPos.top}px`, left: `${emojiPickerPos.left}px` }"
+            >
               <button
                 v-for="e in emojiList" :key="e" type="button" class="emoji-cell"
                 :class="{ selected: form.icon === e }"
@@ -142,6 +147,7 @@ import ModalDialog from '@/components/ui/ModalDialog.vue'
 import SessionOptionsForm from '@/components/SessionOptionsForm.vue'
 import { ipc } from '@/api/ipc'
 import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
+import { SESSION_EMOJI_LIST } from '@/models/session-emoji'
 import { CLI_TYPES, CLI_TYPE_DISPLAY_NAMES } from '@shared/cli-types'
 
 const props = withDefaults(defineProps<{
@@ -194,16 +200,30 @@ const form = ref({ name: '', icon: '', type: 'claude' as SessionType, projectPat
 const optionsFormRef = ref<InstanceType<typeof SessionOptionsForm> | null>(null)
 const pathError = ref('')
 const showEmojiPicker = ref(false)
+const emojiPickerPos = ref({ top: 0, left: 0 })
 const showAdvancedOptions = ref(false)
+
+const EMOJI_GRID_WIDTH = 280
+const EMOJI_GRID_MAX_HEIGHT = 248
+
+// fixed 定位的面板需要按按钮位置计算坐标，并夹取到视口内
+function toggleEmojiPicker(event: MouseEvent): void {
+  if (showEmojiPicker.value) {
+    showEmojiPicker.value = false
+    return
+  }
+  const button = event.currentTarget as HTMLElement | null
+  if (!button) return
+  const rect = button.getBoundingClientRect()
+  emojiPickerPos.value = {
+    top: Math.min(rect.bottom + 4, Math.max(8, window.innerHeight - EMOJI_GRID_MAX_HEIGHT - 8)),
+    left: Math.min(rect.left, Math.max(8, window.innerWidth - EMOJI_GRID_WIDTH - 16))
+  }
+  showEmojiPicker.value = true
+}
 const cliStatusLoading = ref(false)
 
-const emojiList = [
-  '🤖','🧠','💡','🔥','⚡','🚀','🎯','🛠️',
-  '📦','📁','🔧','🔍','💻','🖥️','📝','✏️',
-  '🧪','🔬','🎨','🌟','⭐','💎','🏗️','🔗',
-  '📊','📈','🗂️','🧩','🎮','🕹️','🤝','👾',
-  '🐛','🐍','🦀','🐳','🐙','🦊','🐱','🐶'
-]
+const emojiList = SESSION_EMOJI_LIST
 
 const defaultName = computed(() => {
   const count = sessionsStore.unifiedSessions.filter((s) => s.type === form.value.type).length + 1
@@ -573,10 +593,9 @@ async function handleSubmit() {
 }
 
 .emoji-grid {
-  position: absolute;
-  top: 40px;
-  left: 0;
-  z-index: 100;
+  // fixed：脱离 modal-body 的 overflow 裁剪；z-index 高于弹窗遮罩(300)
+  position: fixed;
+  z-index: 400;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 2px;
@@ -586,6 +605,8 @@ async function handleSubmit() {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   width: min(280px, calc(100vw - 48px));
+  max-height: 248px;
+  overflow-y: auto;
 }
 
 .emoji-cell {

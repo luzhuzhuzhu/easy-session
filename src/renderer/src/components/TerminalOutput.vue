@@ -1204,6 +1204,17 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+  // 平时完全隐藏，悬停到终端区域或键盘聚焦到按钮时才浮现，
+  // 避免四个常驻按钮压在终端右上角内容上
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.terminal-output:hover .terminal-toolbar,
+.terminal-toolbar:focus-within {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .history-window-hint {
@@ -1225,8 +1236,21 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow: hidden;
   box-sizing: border-box;
-  padding: 4px 8px 8px;
+  // 留白必须放在 .xterm 元素上而不是容器上：FitAddon 计算行列数时
+  // 只会扣除 .xterm 自身的 padding（容器的 padding 它不感知），
+  // 放容器上会导致网格超高、提示行被顶到底边没有呼吸空间
+  padding: 0;
   background: var(--bg-primary);
+
+  :deep(.xterm) {
+    padding: 6px 8px 14px;
+  }
+
+  // xterm.css 把 .xterm-viewport（绝对定位铺满 .xterm，含 padding）写死为 #000，
+  // 主题背景只被 JS 设到内部滚动层上，导致 padding 一圈露出黑边——按主题变量覆盖
+  :deep(.xterm-viewport) {
+    background-color: var(--bg-primary);
+  }
 }
 
 .terminal-scroll-state {

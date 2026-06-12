@@ -36,12 +36,16 @@
       >
         <SessionSidebarControls
           :is-list-collapsed="isEffectiveListCollapsed"
+          :is-auto-collapsed="isListAutoCollapsed"
+          :is-top-layout="isTopLayout"
           :filter-type="filterType"
           :desktop-remote-mount-enabled="settingsStore.settings.desktopRemoteMountEnabled"
           :refreshing-remote-data="refreshingRemoteData"
           :remote-refresh-summary="remoteRefreshSummary"
           @create="openCreateDialog()"
           @refresh-remote="handleRefreshRemoteData"
+          @toggle-list-position="toggleListPosition"
+          @toggle-list-collapsed="toggleListCollapsed"
           @update:filter-type="filterType = $event"
         />
 
@@ -130,13 +134,6 @@
         </template>
         </div>
 
-        <SessionSidebarFooterControls
-          :is-list-collapsed="isEffectiveListCollapsed"
-          :is-auto-collapsed="isListAutoCollapsed"
-          :is-top-layout="isTopLayout"
-          @toggle-list-position="toggleListPosition"
-          @toggle-list-collapsed="toggleListCollapsed"
-        />
       </aside>
 
       <main class="session-detail-panel">
@@ -260,7 +257,6 @@ import InspectorPanel from '@/components/InspectorPanel.vue'
 import SessionActionLayer from '@/components/SessionActionLayer.vue'
 import SessionSettingsDialog from '@/components/SessionSettingsDialog.vue'
 import SessionSidebarControls from '@/components/SessionSidebarControls.vue'
-import SessionSidebarFooterControls from '@/components/SessionSidebarFooterControls.vue'
 import SessionTopList from '@/components/SessionTopList.vue'
 import SessionSidebarTree from '@/components/SessionSidebarTree.vue'
 import WorkspacePaneTree from '@/components/WorkspacePaneTree.vue'

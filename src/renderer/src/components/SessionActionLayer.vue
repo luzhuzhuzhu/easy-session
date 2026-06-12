@@ -265,14 +265,18 @@ function handleWakeReminderChange(event: Event): void {
 }
 
 .icon-picker-dialog {
-  width: 320px;
+  width: min(520px, 92vw);
 }
 
 .icon-grid {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(12, 1fr);
+  justify-items: center;
   gap: 2px;
   padding: var(--spacing-sm) 0;
+  // 全量 emoji 有 300+ 个，必须限制高度内部滚动，否则弹窗超出屏幕
+  max-height: min(56vh, 480px);
+  overflow-y: auto;
 }
 
 .icon-grid-cell {

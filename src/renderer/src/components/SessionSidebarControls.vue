@@ -1,40 +1,62 @@
 <template>
   <template v-if="!isListCollapsed">
     <div class="list-toolbar">
-      <div class="toolbar-head">
-        <select :value="filterType" class="filter-select session-filter" @change="onFilterChange">
-          <option value="">{{ $t('session.filter') }}</option>
-          <option value="claude">Claude</option>
-          <option value="codex">Codex</option>
-          <option value="opencode">OpenCode</option>
-          <option value="terminal">{{ $t('session.terminal') }}</option>
-        </select>
-        <div class="toolbar-actions">
-          <IconButton
-            class="toolbar-icon-btn toolbar-icon-btn-primary"
-            tone="primary"
-            :label="$t('session.create')"
-            @click="emit('create')"
-          >
-            <UiIcon name="plus" />
-          </IconButton>
-          <IconButton
-            v-if="desktopRemoteMountEnabled"
-            class="toolbar-icon-btn"
-            :title="refreshingRemoteData ? $t('session.refreshingRemote') : $t('session.refreshRemote')"
-            :label="refreshingRemoteData ? $t('session.refreshingRemote') : $t('session.refreshRemote')"
-            :disabled="refreshingRemoteData"
-            @click="emit('refresh-remote')"
-          >
-            <UiIcon name="refresh" />
-          </IconButton>
-        </div>
+      <select
+        :value="filterType"
+        class="filter-select session-filter"
+        :class="{ filtering: !!filterType }"
+        @change="onFilterChange"
+      >
+        <option value="">{{ $t('session.filter') }}</option>
+        <option value="claude">Claude</option>
+        <option value="codex">Codex</option>
+        <option value="opencode">OpenCode</option>
+        <option value="terminal">{{ $t('session.terminal') }}</option>
+      </select>
+      <div class="toolbar-actions">
+        <IconButton
+          tone="primary"
+          :label="$t('session.create')"
+          @click="emit('create')"
+        >
+          <UiIcon name="plus" />
+        </IconButton>
+        <IconButton
+          v-if="desktopRemoteMountEnabled"
+          :title="refreshingRemoteData ? $t('session.refreshingRemote') : $t('session.refreshRemote')"
+          :label="refreshingRemoteData ? $t('session.refreshingRemote') : $t('session.refreshRemote')"
+          :disabled="refreshingRemoteData"
+          @click="emit('refresh-remote')"
+        >
+          <UiIcon name="refresh" />
+        </IconButton>
+        <span class="toolbar-divider" aria-hidden="true"></span>
+        <IconButton
+          :label="$t('session.listPosition')"
+          @click="emit('toggle-list-position')"
+        >
+          <UiIcon :name="isTopLayout ? 'list-left' : 'list-top'" />
+        </IconButton>
+        <IconButton
+          :label="$t('session.collapseList')"
+          @click="emit('toggle-list-collapsed')"
+        >
+          <UiIcon name="chevron-left" />
+        </IconButton>
       </div>
     </div>
   </template>
   <div v-else class="collapsed-toolbar">
     <IconButton
-      class="collapsed-create-btn"
+      :title="isAutoCollapsed ? $t('session.autoCollapsedList') : $t('session.expandList')"
+      :label="isAutoCollapsed ? $t('session.autoCollapsedList') : $t('session.expandList')"
+      :disabled="isAutoCollapsed"
+      block
+      @click="emit('toggle-list-collapsed')"
+    >
+      <UiIcon name="chevron-right" />
+    </IconButton>
+    <IconButton
       tone="primary"
       block
       :label="$t('session.create')"
@@ -44,7 +66,6 @@
     </IconButton>
     <IconButton
       v-if="desktopRemoteMountEnabled"
-      class="collapsed-create-btn"
       :title="remoteRefreshSummary || $t('session.refreshRemote')"
       :label="$t('session.refreshRemote')"
       :disabled="refreshingRemoteData"
@@ -60,6 +81,13 @@
       <option value="opencode">O</option>
       <option value="terminal">T</option>
     </select>
+    <IconButton
+      :label="$t('session.listPosition')"
+      block
+      @click="emit('toggle-list-position')"
+    >
+      <UiIcon :name="isTopLayout ? 'list-left' : 'list-top'" />
+    </IconButton>
   </div>
 
 </template>
@@ -71,6 +99,8 @@ import UiIcon from '@/components/ui/UiIcon.vue'
 
 defineProps<{
   isListCollapsed: boolean
+  isAutoCollapsed?: boolean
+  isTopLayout: boolean
   filterType: string
   desktopRemoteMountEnabled: boolean
   refreshingRemoteData: boolean
@@ -80,6 +110,8 @@ defineProps<{
 const emit = defineEmits<{
   create: []
   'refresh-remote': []
+  'toggle-list-position': []
+  'toggle-list-collapsed': []
   'update:filterType': [value: string]
 }>()
 

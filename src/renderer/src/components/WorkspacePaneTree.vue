@@ -98,13 +98,10 @@
       <template v-if="activeSession">
         <div
           class="pane-header"
-          :class="{ 'pane-header-drop': headerDropActive, 'pane-header-offline': activeTabOffline }"
+          :class="{ 'pane-header-offline': activeTabOffline }"
           draggable="true"
           @dragstart="handleHeaderDragStart"
-          @dragover.prevent="handleHeaderDragOver"
-          @dragleave="handleHeaderDragLeave"
-          @drop="handleHeaderDrop"
-          @dragend="headerDropActive = false"
+          @dragend="handleHeaderDragEnd"
         >
           <div class="pane-header-info">
             <span v-if="activeSession.icon" class="session-icon">{{ activeSession.icon }}</span>
@@ -251,6 +248,17 @@
   </div>
 </template>
 
+<script lang="ts">
+const PANE_HEADER_MIME = 'application/x-easysession-pane-header'
+const TAB_MIME = 'application/x-easysession-tab'
+const SESSION_MIME = 'application/x-easysession-session'
+
+// dragover 阶段 dataTransfer 处于 protected mode（getData 恒为空串），
+// 读不出拖拽源的 paneId；用模块级变量在递归的各个 pane 实例之间共享，
+// 才能在悬停时区分"自己"和"别的分窗"
+let draggingHeaderPaneId: string | null = null
+</script>
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -316,10 +324,10 @@ const emit = defineEmits<{
 
 const edgeDropDirection = ref<WorkspaceSplitDirection | null>(null)
 const paneDropActive = ref(false)
+const paneDropKind = ref<'pane' | 'tab' | 'session' | null>(null)
 const paneMenu = ref({ visible: false, x: 0, y: 0 })
 const paneMenuRef = ref<HTMLElement | null>(null)
 const isResizingSplit = ref(false)
-const headerDropActive = ref(false)
 const zoomMenuOpen = ref(false)
 const zoomControlRef = ref<HTMLElement | null>(null)
 const paneZoomMenuRef = ref<HTMLElement | null>(null)
@@ -400,6 +408,7 @@ const activePaneZoomPercent = computed<number>(() => {
   return props.paneZoomPercentById[props.node.paneId] ?? 100
 })
 const paneDropLabel = computed(() => {
+  if (paneDropKind.value === 'pane') return t('session.dropSwapPane')
   if (edgeDropDirection.value === 'horizontal') return t('session.dropSplitRight')
   if (edgeDropDirection.value === 'vertical') return t('session.dropSplitBottom')
   return t('session.dropOpenInPane')
@@ -462,52 +471,16 @@ function handleSetPaneZoom(percent: number): void {
   emit('set-pane-zoom', { paneId: props.node.paneId, percent })
 }
 
-function readHeaderDragPaneId(e: DragEvent): string | null {
-  const raw = e.dataTransfer?.getData('application/x-easysession-pane-header')
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as { paneId?: string }
-    return typeof parsed.paneId === 'string' && parsed.paneId ? parsed.paneId : null
-  } catch {
-    return null
-  }
-}
-
 function handleHeaderDragStart(e: DragEvent): void {
   if (props.node.type !== 'leaf') return
   if (!e.dataTransfer) return
   e.dataTransfer.effectAllowed = 'move'
-  e.dataTransfer.setData(
-    'application/x-easysession-pane-header',
-    JSON.stringify({ paneId: props.node.paneId })
-  )
+  e.dataTransfer.setData(PANE_HEADER_MIME, JSON.stringify({ paneId: props.node.paneId }))
+  draggingHeaderPaneId = props.node.paneId
 }
 
-function handleHeaderDragOver(e: DragEvent): void {
-  if (props.node.type !== 'leaf') return
-  const sourcePaneId = readHeaderDragPaneId(e)
-  if (!sourcePaneId || sourcePaneId === props.node.paneId) return
-  if (e.dataTransfer) {
-    e.dataTransfer.dropEffect = 'move'
-  }
-  headerDropActive.value = true
-}
-
-function handleHeaderDragLeave(e: DragEvent): void {
-  const current = e.currentTarget as HTMLElement | null
-  const related = e.relatedTarget as Node | null
-  if (current && related && current.contains(related)) return
-  headerDropActive.value = false
-}
-
-function handleHeaderDrop(e: DragEvent): void {
-  if (props.node.type !== 'leaf') return
-  e.preventDefault()
-  e.stopPropagation()
-  const sourcePaneId = readHeaderDragPaneId(e)
-  headerDropActive.value = false
-  if (!sourcePaneId || sourcePaneId === props.node.paneId) return
-  emit('swap-pane-tabs', { fromPaneId: sourcePaneId, toPaneId: props.node.paneId })
+function handleHeaderDragEnd(): void {
+  draggingHeaderPaneId = null
 }
 
 let detachResizeListeners: (() => void) | null = null
@@ -592,11 +565,34 @@ function startSplitResize(e: MouseEvent): void {
 }
 
 type WorkspaceDragPayload =
+  | { type: 'pane'; paneId: string }
   | { type: 'tab'; paneId: string; tabId: string }
   | { type: 'session'; sessionRef: SessionRef }
 
+// dragover 阶段只能读 types 不能读数据，按 MIME 类型判断拖拽来源
+function detectWorkspaceDragKind(e: DragEvent): 'pane' | 'tab' | 'session' | null {
+  const types = e.dataTransfer?.types
+  if (!types) return null
+  if (types.includes(PANE_HEADER_MIME)) return 'pane'
+  if (types.includes(TAB_MIME)) return 'tab'
+  if (types.includes(SESSION_MIME)) return 'session'
+  return null
+}
+
 function readWorkspaceDragPayload(e: DragEvent): WorkspaceDragPayload | null {
-  const raw = e.dataTransfer?.getData('application/x-easysession-tab')
+  const headerRaw = e.dataTransfer?.getData(PANE_HEADER_MIME)
+  if (headerRaw) {
+    try {
+      const parsed = JSON.parse(headerRaw) as { paneId?: string }
+      if (typeof parsed.paneId === 'string' && parsed.paneId) {
+        return { type: 'pane', paneId: parsed.paneId }
+      }
+    } catch {
+      // ignore invalid payload
+    }
+  }
+
+  const raw = e.dataTransfer?.getData(TAB_MIME)
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as { paneId?: string; tabId?: string }
@@ -608,7 +604,7 @@ function readWorkspaceDragPayload(e: DragEvent): WorkspaceDragPayload | null {
     }
   }
 
-  const sessionRaw = e.dataTransfer?.getData('application/x-easysession-session')
+  const sessionRaw = e.dataTransfer?.getData(SESSION_MIME)
   if (sessionRaw) {
     try {
       const parsed = JSON.parse(sessionRaw) as Partial<SessionRef> & { sessionId?: string }
@@ -666,23 +662,36 @@ function queueEdgeUpdate(host: HTMLElement, clientX: number, clientY: number): v
 
 function handlePaneDragOver(e: DragEvent): void {
   if (props.node.type !== 'leaf') return
-  const payload = readWorkspaceDragPayload(e)
-  if (!payload) {
+  const kind = detectWorkspaceDragKind(e)
+  if (!kind) {
+    resetPaneDropState()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'none'
+    return
+  }
+
+  if (kind === 'pane') {
+    // 拖动分窗信息栏：整个目标分窗（含终端区域）都是交换目标，悬停在自己身上不响应
+    if (draggingHeaderPaneId === props.node.paneId) {
+      resetPaneDropState()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none'
+      return
+    }
+    paneDropKind.value = 'pane'
+    paneDropActive.value = true
     edgeDropDirection.value = null
-    paneDropActive.value = false
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
     return
   }
 
   const host = e.currentTarget as HTMLElement | null
   if (!host) return
+  paneDropKind.value = kind
   paneDropActive.value = true
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
   queueEdgeUpdate(host, e.clientX, e.clientY)
 }
 
-function clearEdgeDrop(e: DragEvent): void {
-  const current = e.currentTarget as HTMLElement | null
-  const related = e.relatedTarget as Node | null
-  if (current && related && current.contains(related)) return
+function resetPaneDropState(): void {
   if (edgeRaf) {
     window.cancelAnimationFrame(edgeRaf)
     edgeRaf = 0
@@ -690,6 +699,14 @@ function clearEdgeDrop(e: DragEvent): void {
   pendingEdgeUpdate = null
   edgeDropDirection.value = null
   paneDropActive.value = false
+  paneDropKind.value = null
+}
+
+function clearEdgeDrop(e: DragEvent): void {
+  const current = e.currentTarget as HTMLElement | null
+  const related = e.relatedTarget as Node | null
+  if (current && related && current.contains(related)) return
+  resetPaneDropState()
 }
 
 function handlePaneEdgeDrop(e: DragEvent): void {
@@ -698,8 +715,16 @@ function handlePaneEdgeDrop(e: DragEvent): void {
   e.stopPropagation()
   const payload = readWorkspaceDragPayload(e)
   if (!payload) {
-    edgeDropDirection.value = null
-    paneDropActive.value = false
+    resetPaneDropState()
+    return
+  }
+
+  if (payload.type === 'pane') {
+    if (payload.paneId !== props.node.paneId) {
+      emit('swap-pane-tabs', { fromPaneId: payload.paneId, toPaneId: props.node.paneId })
+    }
+    draggingHeaderPaneId = null
+    resetPaneDropState()
     return
   }
 
@@ -732,8 +757,7 @@ function handlePaneEdgeDrop(e: DragEvent): void {
       })
     }
   }
-  edgeDropDirection.value = null
-  paneDropActive.value = false
+  resetPaneDropState()
 }
 
 function closeMenus(): void {
@@ -836,7 +860,7 @@ watch(
 .splitter {
   flex: 0 0 4px;
   border-radius: 4px;
-  background: rgba(58, 68, 89, 0.55);
+  background: color-mix(in srgb, var(--border-light) 55%, transparent);
   cursor: col-resize;
   transition: background 120ms ease, box-shadow 120ms ease;
 }
@@ -982,11 +1006,6 @@ watch(
 
   &:active {
     cursor: grabbing;
-  }
-
-  &.pane-header-drop {
-    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 45%, transparent);
   }
 
   &.pane-header-offline {

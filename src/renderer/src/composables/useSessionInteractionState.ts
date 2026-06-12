@@ -1,5 +1,6 @@
 import { computed, nextTick, ref, type ComputedRef } from 'vue'
 import type { AppSettings } from '@/stores/settings'
+import { SESSION_EMOJI_LIST } from '@/models/session-emoji'
 import type { SessionRef, UnifiedSession } from '@/models/unified-resource'
 import type { ProjectSessionGroup, SessionTreeSessionItem } from '@/features/sessions/session-tree'
 
@@ -87,13 +88,7 @@ export function useSessionInteractionState(options: UseSessionInteractionStateOp
   const iconPickerSessionId = ref<string | null>(null)
   const refreshingRemoteData = ref(false)
 
-  const iconEmojiList = [
-    '🤖', '🧠', '💡', '🔥', '⚡', '🚀', '🎯', '🛠️',
-    '📦', '📁', '🔧', '🔍', '💻', '🖥️', '📝', '✏️',
-    '🧪', '🔬', '🎨', '🌟', '⭐', '💎', '🏗️', '🔗',
-    '📊', '📈', '🗂️', '🧩', '🎮', '🕹️', '🤝', '👾',
-    '🐛', '🐍', '🦀', '🐳', '🐙', '🦊', '🐱', '🐶'
-  ]
+  const iconEmojiList = SESSION_EMOJI_LIST
 
   const iconPickerSessionIcon = computed(() => {
     if (!iconPickerSessionId.value) return null
@@ -146,6 +141,8 @@ export function useSessionInteractionState(options: UseSessionInteractionStateOp
     await nextTick()
 
     if (payload) {
+      // 新建完成后直接在当前选中的分窗里打开新会话
+      options.workspaceStore.openSessionRefInActivePane(options.toSessionRef(payload))
       return
     }
 

@@ -81,6 +81,12 @@ onMounted(() => {
   label {
     margin: 0;
   }
+
+  // 插槽内容是 flex 子项，默认 flex-shrink:1 会被压缩进容器而不产生溢出，
+  // 导致内容"超出但滚不动"——必须禁止收缩让 modal-body 真正滚动
+  .modal-body > * {
+    flex-shrink: 0;
+  }
 }
 
 @media (max-width: 560px) {

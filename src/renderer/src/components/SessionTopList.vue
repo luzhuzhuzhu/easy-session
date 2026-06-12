@@ -24,7 +24,7 @@
         <select
           :value="filterType"
           class="filter-select top-filter"
-          :class="{ compact: isListCollapsed }"
+          :class="{ compact: isListCollapsed, filtering: !!filterType }"
           @change="onFilterChange"
         >
           <option value="">{{ $t('session.filter') }}</option>

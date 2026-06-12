@@ -24,28 +24,14 @@
             <UiIcon :name="node.instance.instanceType === 'local' ? 'desktop' : 'globe'" />
           </span>
           <div class="instance-info">
-            <span class="instance-name" :title="node.instance.instanceName">{{ node.instance.instanceName }}</span>
-            <div class="instance-meta">
-              <span
-                class="instance-type-badge"
-                :class="node.instance.instanceType"
-              >
-                {{ formatInstanceType(node.instance.instanceType) }}
-              </span>
+            <div class="instance-main">
+              <span class="instance-name" :title="node.instance.instanceName">{{ node.instance.instanceName }}</span>
               <span
                 v-if="node.instance.instanceType === 'remote'"
                 class="instance-status-badge"
                 :class="`status-${node.instance.instanceStatus}`"
               >
                 {{ formatInstanceStatus(node.instance.instanceStatus) }}
-              </span>
-              <span
-                v-if="node.instance.instanceType === 'remote'"
-                class="instance-mode-badge"
-                :class="{ passthrough: node.instance.instancePassthroughOnly }"
-                :title="formatInstanceMode(node.instance)"
-              >
-                {{ formatInstanceMode(node.instance) }}
               </span>
               <span class="instance-count">{{ formatInstanceCounts(node.instance) }}</span>
             </div>

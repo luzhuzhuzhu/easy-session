@@ -116,6 +116,7 @@ session: {
     dropOpenInPane: 'Drop into current pane',
     dropSplitRight: 'Split into a new right pane',
     dropSplitBottom: 'Split into a new bottom pane',
+    dropSwapPane: 'Swap with this pane',
     status: {
       idle: 'Idle',
       running: 'Running',
