@@ -1,12 +1,18 @@
 import * as pty from 'node-pty'
 import { BrowserWindow } from 'electron'
 import { homedir } from 'os'
+import { delimiter as pathDelimiter } from 'path'
 import { findExecutableInPath, findGitBashPath } from './shell-detector'
 import type { CliType, ProcessInfo, ProcessOutput } from './types'
 import type { RemoteNetworkSettingsManager } from './remote-network-settings-manager'
 
 export type OutputListener = (id: string, data: string, stream: 'stdout' | 'stderr') => void
 export type ExitListener = (id: string, code: number | null) => void
+
+// 由 AgentBus 提供：返回需注入到 PTY 的 bus 环境变量与 es shim 目录。
+export type AgentBusEnvProvider = (
+  processId: string
+) => { vars: Record<string, string>; shimDir: string } | null
 
 interface OutputBufferState {
   chunks: string[]
@@ -36,6 +42,11 @@ export class CliManager {
   private outputListeners = new Set<OutputListener>()
   private exitListeners = new Set<ExitListener>()
   private remoteNetworkSettingsManager: RemoteNetworkSettingsManager | null = null
+  private agentBusEnvProvider: AgentBusEnvProvider | null = null
+
+  setAgentBusEnvProvider(provider: AgentBusEnvProvider | null): void {
+    this.agentBusEnvProvider = provider
+  }
 
   onOutput(listener: OutputListener): () => void {
     this.outputListeners.add(listener)
@@ -95,7 +106,14 @@ export class CliManager {
     return findExecutableInPath(command) ?? command
   }
 
-  private buildSpawnEnv(command: string): Record<string, string> {
+  // 把 es shim 目录前置进 PATH（Windows 下 PATH 键大小写不定，需大小写不敏感查找）。
+  private prependPath(env: Record<string, string>, shimDir: string): void {
+    const key = Object.keys(env).find((k) => k.toLowerCase() === 'path') ?? 'PATH'
+    const current = env[key]
+    env[key] = current ? `${shimDir}${pathDelimiter}${current}` : shimDir
+  }
+
+  private buildSpawnEnv(command: string, processId: string): Record<string, string> {
     const baseEnv = Object.fromEntries(
       Object.entries(process.env).filter(([, value]) => typeof value === 'string')
     ) as Record<string, string>
@@ -129,6 +147,15 @@ export class CliManager {
       )
     }
 
+    // 注入 agent bus：es shim 进 PATH + 连接所需的 pipe/token/身份。
+    if (this.agentBusEnvProvider) {
+      const bundle = this.agentBusEnvProvider(processId)
+      if (bundle) {
+        Object.assign(env, bundle.vars)
+        this.prependPath(env, bundle.shimDir)
+      }
+    }
+
     return env
   }
 
@@ -151,7 +178,7 @@ export class CliManager {
       cols: 120,
       rows: 30,
       cwd: options?.cwd || process.env.HOME || process.env.USERPROFILE || homedir(),
-      env: this.buildSpawnEnv(command)
+      env: this.buildSpawnEnv(command, id)
     })
 
     const lowerCommand = command.toLowerCase()

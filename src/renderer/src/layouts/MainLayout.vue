@@ -33,6 +33,10 @@
               <svg v-else-if="item.icon === 'projects'" viewBox="0 0 16 16" aria-hidden="true">
                 <path d="M2 4.6A1.6 1.6 0 0 1 3.6 3h3l1.45 1.7h4.35A1.6 1.6 0 0 1 14 6.3v5.1a1.6 1.6 0 0 1-1.6 1.6H3.6A1.6 1.6 0 0 1 2 11.4V4.6z" fill="currentColor" />
               </svg>
+              <svg v-else-if="item.icon === 'collaboration'" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M2 4.2A1.7 1.7 0 0 1 3.7 2.5h6.1A1.7 1.7 0 0 1 11.5 4.2v3a1.7 1.7 0 0 1-1.7 1.7H6.2L3.4 11V8.9H3.7A1.7 1.7 0 0 1 2 7.2V4.2z" fill="currentColor" />
+                <path d="M12.4 5.7h.4A1.7 1.7 0 0 1 14.5 7.4v2.4a1.7 1.7 0 0 1-1.7 1.7h-.2v1.7l-2-1.7H8.1a1.7 1.7 0 0 1-1.5-.9h3.4A2.4 2.4 0 0 0 12.4 8.2V5.7z" fill="currentColor" opacity="0.6" />
+              </svg>
               <svg v-else-if="item.icon === 'skills'" viewBox="0 0 16 16" aria-hidden="true">
                 <path d="M8 1.7 9.65 6h4.55l-3.68 2.72 1.42 4.52L8 10.56l-3.94 2.68 1.42-4.52L1.8 6h4.55L8 1.7z" fill="currentColor" />
               </svg>
@@ -147,6 +151,7 @@ const confirmDialog = useConfirmDialog()
 const navItems = [
   { path: '/dashboard', icon: 'dashboard', label: 'nav.dashboard' },
   { path: '/sessions', icon: 'sessions', label: 'nav.sessions' },
+  { path: '/collaboration', icon: 'collaboration', label: 'nav.collaboration' },
   { path: '/projects', icon: 'projects', label: 'nav.projects' },
   { path: '/skills', icon: 'skills', label: 'nav.skills' },
   { path: '/settings', icon: 'settings', label: 'nav.settings' }

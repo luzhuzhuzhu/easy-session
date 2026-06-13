@@ -326,6 +326,10 @@ export class SessionManager {
     return this.sessions.get(id)
   }
 
+  getSessionIdByProcessId(processId: string): string | undefined {
+    return this.processIndex.get(processId)
+  }
+
   listSessions(filter?: SessionFilter): Session[] {
     let list = Array.from(this.sessions.values())
     if (filter?.type) list = list.filter((s) => s.type === filter.type)

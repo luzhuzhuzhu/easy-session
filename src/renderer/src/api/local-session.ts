@@ -116,6 +116,11 @@ export function writeToSession(id: string, data: string): Promise<boolean> {
   return ipc.invoke<boolean>('session:write', id, data)
 }
 
+// 终端间通信：把一段文本发送到另一个会话（经主进程 agent bus 注入门控）。
+export function sendToSession(targetId: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  return ipc.invoke<{ ok: boolean; error?: string }>('session:sendTo', targetId, text)
+}
+
 export function getOutputHistory(id: string, lines?: number): Promise<OutputLine[]> {
   return withReadDedupe('session:output:history', [id, lines ?? null], () =>
     ipc.invoke<OutputLine[]>('session:output:history', id, lines)

@@ -7,6 +7,7 @@ const router = createRouter({
     { path: '/dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
     { path: '/config', redirect: { path: '/dashboard', query: { panel: 'advanced' } } },
     { path: '/sessions', name: 'sessions', component: () => import('@/views/SessionsView.vue') },
+    { path: '/collaboration', name: 'collaboration', component: () => import('@/views/CollaborationView.vue') },
     { path: '/projects', name: 'projects', component: () => import('@/views/ProjectsView.vue') },
     {
       path: '/instances/:instanceId/projects/:projectId',

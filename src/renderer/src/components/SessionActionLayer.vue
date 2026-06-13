@@ -71,6 +71,13 @@
     >
       {{ $t('session.sessionSettings') }}
     </MenuItem>
+    <MenuItem
+      v-if="contextSession?.instanceId === 'local'"
+      :label="$t('session.sendMessage')"
+      @click="openSendDialog"
+    >
+      {{ $t('session.sendMessage') }}
+    </MenuItem>
     <div v-if="showDestroyAction" class="context-separator" role="separator"></div>
     <MenuItem
       v-if="showDestroyAction"
@@ -139,11 +146,33 @@
       </div>
     </div>
   </div>
+
+  <div v-if="showSendDialog" class="dialog-overlay" @click.self="closeSendDialog">
+    <div class="dialog">
+      <h3>{{ $t('session.sendMessageTitle', { name: sendTargetName }) }}</h3>
+      <textarea
+        ref="sendInputRef"
+        v-model="sendText"
+        class="dialog-input send-textarea"
+        rows="4"
+        :placeholder="$t('session.sendMessagePlaceholder')"
+        @keydown.enter.exact.prevent="confirmSend"
+      ></textarea>
+      <p v-if="sendError" class="send-error">{{ sendError }}</p>
+      <div class="dialog-actions">
+        <Button size="sm" @click="closeSendDialog">{{ $t('session.dialog.cancel') }}</Button>
+        <Button size="sm" tone="primary" :disabled="!sendText.trim() || sending" @click="confirmSend">
+          {{ $t('session.dialog.confirm') }}
+        </Button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { sendToSession } from '@/api/local-session'
 import type { SessionTreeSessionItem } from '@/features/sessions/session-tree'
 import type { InstanceCapabilities } from '@/models/unified-resource'
 import type { WorkspaceSplitDirection } from '@/api/workspace'
@@ -227,6 +256,60 @@ useOverlayStack({
   onEscape: () => emit('close-icon-picker')
 })
 
+// 发送消息到此会话（终端间通信，目标 = 被右键的会话）。状态自包含，不经父组件。
+const showSendDialog = ref(false)
+const sendTarget = ref<{ id: string; name: string } | null>(null)
+const sendText = ref('')
+const sendError = ref('')
+const sending = ref(false)
+const sendInputRef = ref<HTMLTextAreaElement | null>(null)
+
+const sendTargetName = computed(() => sendTarget.value?.name ?? '')
+
+useOverlayStack({
+  isOpen: () => showSendDialog.value,
+  onEscape: () => closeSendDialog()
+})
+
+function openSendDialog(): void {
+  const session = props.contextSession
+  if (!session) return
+  sendTarget.value = { id: session.id, name: session.name }
+  sendText.value = ''
+  sendError.value = ''
+  showSendDialog.value = true
+  emit('close-context')
+  void nextTick(() => sendInputRef.value?.focus())
+}
+
+function closeSendDialog(): void {
+  showSendDialog.value = false
+  sendTarget.value = null
+  sendText.value = ''
+  sendError.value = ''
+  sending.value = false
+}
+
+async function confirmSend(): Promise<void> {
+  const target = sendTarget.value
+  const text = sendText.value.trim()
+  if (!target || !text || sending.value) return
+  sending.value = true
+  sendError.value = ''
+  try {
+    const result = await sendToSession(target.id, text)
+    if (result && result.ok) {
+      closeSendDialog()
+    } else {
+      sendError.value = result?.error || t('session.sendMessageFailed')
+      sending.value = false
+    }
+  } catch (err) {
+    sendError.value = err instanceof Error ? err.message : String(err)
+    sending.value = false
+  }
+}
+
 function capabilityUnavailableReason(): string {
   return props.contextSessionPassthroughOnly
     ? t('session.capabilityUnavailablePassthrough')
@@ -266,6 +349,19 @@ function handleWakeReminderChange(event: Event): void {
 
 .icon-picker-dialog {
   width: min(520px, 92vw);
+}
+
+.send-textarea {
+  resize: vertical;
+  min-height: 76px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.send-error {
+  margin: var(--spacing-xs) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--accent-danger, #e5484d);
 }
 
 .icon-grid {

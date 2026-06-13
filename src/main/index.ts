@@ -32,6 +32,8 @@ import { RemoteNetworkSettingsManager } from './services/remote-network-settings
 import { RemoteGatewayManager } from './services/remote-gateway-manager'
 
 import { SessionOutputManager } from './services/session-output'
+import { AgentBus } from './services/agent-bus'
+import { ES_SYSTEM_PROMPT_HINT } from './services/agent-bus/skill'
 
 function loadEnvironmentFiles(): void {
   const candidates = [join(process.cwd(), '.env.local'), join(process.cwd(), '.env')]
@@ -65,6 +67,7 @@ const sessionManager = new SessionManager(
 const projectManager = new ProjectManager()
 const skillManager = new SkillManager(sessionManager)
 const workspaceLayoutManager = new WorkspaceLayoutManager()
+const agentBus = new AgentBus(sessionManager, cliManager)
 let remoteInstanceManager: RemoteInstanceManager | null = null
 let remoteServiceManager: RemoteServiceManager | null = null
 let cloudflareTunnelManager: CloudflareTunnelManager | null = null
@@ -169,6 +172,8 @@ async function shutdownApp(): Promise<void> {
     }
   }
 
+  await agentBus.stop().catch((err) => console.warn('[agent-bus] stop failed:', err))
+
   sessionManager.shutdownAll()
   cliManager.killAll()
   configService.unwatchAll()
@@ -224,6 +229,16 @@ ipcMain.handle('app:getVersion', () => {
 ipcMain.handle('app:getPlatform', () => {
   return process.platform
 })
+
+// 终端间通信：UI 把文本发送到另一个会话（人触发，走 agent bus 注入门控）。
+ipcMain.handle('session:sendTo', (_event, targetId: string, text: string) => {
+  if (typeof targetId !== 'string' || !targetId) throw new Error('参数 targetId 必须为非空字符串')
+  if (typeof text !== 'string' || !text.trim()) throw new Error('参数 text 必须为非空字符串')
+  return agentBus.sendFromUI(targetId, text)
+})
+
+// Agent 协作面板：拉取在线会话、任务板与消息流快照。
+ipcMain.handle('bus:snapshot', () => agentBus.snapshot())
 
 ipcMain.handle('window:minimize', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.minimize()
@@ -370,6 +385,21 @@ app.whenReady().then(async () => {
     registerCloudflareTunnelHandlers(cloudflareTunnelManager)
     registerRemoteNetworkHandlers(remoteNetworkSettingsManager)
     registerRemoteGatewayHandlers(remoteGatewayManager)
+
+    // 启动 agent bus（终端 / agent 间通信），并把 es 环境注入与 claude 系统提示挂上。
+    try {
+      await agentBus.start({ userDataDir: userData, electronPath: process.execPath })
+      // env provider 始终挂上：bus 未就绪时 getEnvBundle 返回 null，buildSpawnEnv 自动跳过。
+      cliManager.setAgentBusEnvProvider((pid) => agentBus.getEnvBundle(pid))
+      if (agentBus.isReady()) {
+        claudeAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
+      } else {
+        // 未就绪时不挂 es 系统提示（避免 claude 误以为有 es 可用）；协作面板会显示不可用横幅。
+        console.error('[init] agent bus 未就绪，终端间协作不可用:', agentBus.getStartError())
+      }
+    } catch (err) {
+      console.error('[init] agent bus 启动失败:', err)
+    }
 
     electronApp.setAppUserModelId('com.easysession')
 
