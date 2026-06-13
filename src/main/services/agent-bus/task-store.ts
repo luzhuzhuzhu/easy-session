@@ -11,7 +11,7 @@ const ACCEPT_TIMEOUT_MS = 3 * 60_000
 const STALL_TIMEOUT_MS = 5 * 60_000
 // 守护轮询间隔。
 const GUARD_TICK_MS = 20_000
-// 接单超时向派发方升级提醒达此次数后放弃自动提醒（避免无人接单时永久刷屏）。
+// 接单超时向派发方升级提醒达此次数后过期（避免无人接单时永久刷屏）。
 const MAX_ACCEPT_ESCALATIONS = 3
 
 interface TaskStoreDeps {
@@ -70,12 +70,13 @@ export class TaskStore {
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
-  create(fromId: string, toId: string, title: string): AgentTask {
+  create(fromId: string, toId: string, title: string, opts?: { fromName?: string }): AgentTask {
     const now = Date.now()
+    const fromName = opts?.fromName || this.deps.bridge.getName(fromId) || fromId
     const task: AgentTask = {
       id: `t-${shortId()}`,
       from: fromId,
-      fromName: this.deps.bridge.getName(fromId) || fromId,
+      fromName,
       to: toId,
       toName: this.deps.bridge.getName(toId) || toId,
       title,
@@ -91,6 +92,12 @@ export class TaskStore {
       `📋 新任务 ${task.id} 来自「${task.fromName}」：${truncate(title)} — 运行 es task show ${task.id} 查看，accept/reject ${task.id} 应答`,
       { from: fromId, fromName: task.fromName }
     )
+    if (this.deps.bridge.isInjectable(toId)) {
+      task.status = 'delivered'
+      task.statusSince = now
+      task.updatedAt = now
+      task.history.push({ at: now, status: 'delivered', by: 'system', text: '已投递提醒' })
+    }
     this.deps.onChange()
     return task
   }
@@ -108,15 +115,52 @@ export class TaskStore {
     const allowed = this.canTransition(task, by, next)
     if (allowed) return { error: allowed }
 
+    const actualNext = next === 'done' && task.from === 'user' ? 'review' : next
     const now = Date.now()
-    task.status = next
+    task.status = actualNext
     task.statusSince = now
     task.updatedAt = now
-    if (next === 'done' || next === 'failed') task.result = text
-    task.history.push({ at: now, status: next, by, text })
+    if (actualNext === 'done' || actualNext === 'failed' || actualNext === 'review') task.result = text
+    task.history.push({ at: now, status: actualNext, by, text })
     this.clearGuards(id)
 
-    this.wakeForTransition(task, next, text)
+    this.wakeForTransition(task, actualNext, text)
+    this.deps.onChange()
+    return { task }
+  }
+
+  confirm(id: string, by: string): { task?: AgentTask; error?: string } {
+    const task = this.tasks.get(id)
+    if (!task) return { error: `任务 ${id} 不存在` }
+    if (task.from !== by && by !== 'user') return { error: '只有派发方可以确认完成' }
+    if (task.status !== 'review') return { error: `任务当前为 ${task.status}，无需确认` }
+    const now = Date.now()
+    task.status = 'done'
+    task.statusSince = now
+    task.updatedAt = now
+    task.history.push({ at: now, status: 'done', by, text: '确认完成' })
+    this.deps.onChange()
+    return { task }
+  }
+
+  cancel(id: string, by: string, text?: string): { task?: AgentTask; error?: string } {
+    const task = this.tasks.get(id)
+    if (!task) return { error: `任务 ${id} 不存在` }
+    if (task.from !== by && by !== 'user') return { error: '只有派发方可以取消任务' }
+    if (['done', 'failed', 'rejected', 'cancelled', 'expired'].includes(task.status)) {
+      return { error: `任务当前为 ${task.status}，无法取消` }
+    }
+    const now = Date.now()
+    task.status = 'cancelled'
+    task.statusSince = now
+    task.updatedAt = now
+    task.result = text || '派发方取消'
+    task.history.push({ at: now, status: 'cancelled', by, text: task.result })
+    this.clearGuards(id)
+    this.deps.notify(task.to, `🛑 任务 ${task.id}「${truncate(task.title)}」已取消${text ? '：' + truncate(text) : ''}`, {
+      from: task.from,
+      fromName: task.fromName
+    })
     this.deps.onChange()
     return { task }
   }
@@ -142,7 +186,7 @@ export class TaskStore {
 
   // 会话退出/重启：把它名下未完成的任务标记失败并唤醒对端，避免对方永远等待。
   onSessionExit(sessionId: string): void {
-    const open: AgentTaskStatus[] = ['created', 'accepted', 'in_progress', 'blocked']
+    const open: AgentTaskStatus[] = ['created', 'delivered', 'accepted', 'in_progress', 'blocked', 'review']
     let changed = false
     for (const task of this.tasks.values()) {
       if (!open.includes(task.status)) continue
@@ -188,7 +232,7 @@ export class TaskStore {
       case 'accepted':
       case 'rejected':
         if (!isTo) return '只有接单方可以接单/拒单'
-        if (task.status !== 'created') return `任务当前为 ${task.status}，无法${next === 'accepted' ? '接单' : '拒单'}`
+        if (task.status !== 'created' && task.status !== 'delivered') return `任务当前为 ${task.status}，无法${next === 'accepted' ? '接单' : '拒单'}`
         return null
       case 'in_progress':
         if (!isTo) return '只有接单方可以开始任务'
@@ -201,7 +245,7 @@ export class TaskStore {
       case 'done':
       case 'failed':
         if (!isTo) return '只有接单方可以交付/置失败'
-        if (task.status !== 'accepted' && task.status !== 'in_progress' && task.status !== 'blocked') {
+        if (task.status !== 'accepted' && task.status !== 'in_progress' && task.status !== 'blocked' && task.status !== 'review') {
           return `任务当前为 ${task.status}，需先接单/开始才能${next === 'done' ? '交付' : '置失败'}`
         }
         return null
@@ -248,6 +292,9 @@ export class TaskStore {
         // 结果直接随事件进派发方收件箱，使 recv --wait 等结果即时拿到。
         this.deps.notify(task.from, `🎉 任务 ${task.id}「${truncate(task.title)}」已完成${task.result ? '：' + truncate(task.result) : ''} — es task show ${task.id} 查看完整结果`, peer)
         break
+      case 'review':
+        this.deps.notify(task.from, `🧾 任务 ${task.id}「${truncate(task.title)}」已提交待确认${task.result ? '：' + truncate(task.result) : ''}`, peer)
+        break
       case 'failed':
         this.deps.notify(task.from, `❌ 任务 ${task.id}「${truncate(task.title)}」失败${text ? '：' + truncate(text) : ''}`, peer)
         break
@@ -261,7 +308,7 @@ export class TaskStore {
     for (const task of this.tasks.values()) {
       // ① 接单超时
       if (
-        task.status === 'created' &&
+        (task.status === 'created' || task.status === 'delivered') &&
         !this.acceptGaveUp.has(task.id) &&
         now - task.statusSince >= ACCEPT_TIMEOUT_MS
       ) {
@@ -276,9 +323,15 @@ export class TaskStore {
           this.acceptEscalations.set(task.id, escalations)
           const peer: NotifyOptions = { from: task.to, fromName: task.toName }
           if (escalations >= MAX_ACCEPT_ESCALATIONS) {
-            // 多次无响应后放弃自动提醒，交由人工 reject/重派，避免永久刷屏。
+            // 多次无响应后过期，交由人工重派，避免永久刷屏。
             this.acceptGaveUp.add(task.id)
-            this.deps.notify(task.from, `⏰ 任务 ${task.id} 派给「${task.toName}」长时间无响应，已停止自动提醒 — 可 es task fail ${task.id} 或重派`, peer)
+            task.status = 'expired'
+            task.statusSince = now
+            task.updatedAt = now
+            task.result = '接单方长时间无响应'
+            task.history.push({ at: now, status: 'expired', by: task.to, text: task.result })
+            this.deps.notify(task.from, `⏰ 任务 ${task.id} 派给「${task.toName}」长时间无响应，已过期 — 可重新派发`, peer)
+            this.deps.onChange()
           } else {
             this.deps.notify(task.from, `⏰ 任务 ${task.id} 派给「${task.toName}」长时间无响应`, peer)
             // 通知后推进 statusSince 重新计时。

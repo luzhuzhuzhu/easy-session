@@ -7,7 +7,7 @@ import { BrowserWindow } from 'electron'
 import type { SessionManager } from '../session-manager'
 import type { CliManager } from '../cli-manager'
 import { DataStore } from '../data-store'
-import type { AgentIdentity, AgentTask, AgentBusMessage, SessionBridge } from './types'
+import type { AgentCollabMode, AgentIdentity, AgentTask, AgentBusMessage, SessionBridge } from './types'
 import { DispatchGate } from './dispatch-gate'
 import { AgentBroker } from './broker'
 import { AgentBusServer } from './bus-server'
@@ -20,6 +20,7 @@ const PUSH_THROTTLE_MS = 250
 interface BusPersistShape {
   tasks: AgentTask[]
   messages: AgentBusMessage[]
+  collabModes?: Record<string, AgentCollabMode>
 }
 
 export interface AgentBusEnvBundle {
@@ -39,6 +40,7 @@ export class AgentBus {
   private lastPushAt = 0
   private pushTimer: ReturnType<typeof setTimeout> | null = null
   private startError: string | null = null
+  private collabModes = new Map<string, AgentCollabMode>()
 
   constructor(
     private sessionManager: SessionManager,
@@ -68,7 +70,10 @@ export class AgentBus {
     this.store = new DataStore<BusPersistShape>(join(opts.userDataDir, 'agent-bus-state.json'))
     try {
       const loaded = await this.store.load()
-      if (loaded.data) this.broker.hydrate(loaded.data)
+      if (loaded.data) {
+        this.hydrateCollabModes(loaded.data.collabModes)
+        this.broker.hydrate(loaded.data)
+      }
     } catch (err) {
       console.warn('[agent-bus] 状态恢复失败:', err)
     }
@@ -107,6 +112,30 @@ export class AgentBus {
   sendFromUI(targetId: string, text: string): { ok: boolean; error?: string } {
     if (!this.broker) return { ok: false, error: 'bus 未就绪' }
     return this.broker.sendFromUI(targetId, text)
+  }
+
+  createTaskFromUI(targetId: string, title: string): { ok: boolean; taskId?: string; error?: string } {
+    if (!this.broker) return { ok: false, error: 'bus 未就绪' }
+    return this.broker.createTaskFromUI(targetId, title)
+  }
+
+  transitionTaskFromUI(
+    taskId: string,
+    action: 'confirm' | 'cancel' | 'unblock',
+    text?: string
+  ): { ok: boolean; error?: string } {
+    if (!this.broker) return { ok: false, error: 'bus 未就绪' }
+    return this.broker.transitionTaskFromUI(taskId, action, text)
+  }
+
+  setSessionCollabMode(sessionId: string, mode: AgentCollabMode): { ok: boolean; error?: string } {
+    const session = this.sessionManager.getSession(sessionId)
+    if (!session) return { ok: false, error: '会话不存在' }
+    if (!isCollabMode(mode)) return { ok: false, error: '协作模式无效' }
+    const normalized = session.type === 'terminal' ? mode : 'known-agent'
+    this.collabModes.set(sessionId, normalized)
+    this.handleChange()
+    return { ok: true }
   }
 
   isReady(): boolean {
@@ -161,7 +190,10 @@ export class AgentBus {
   private async persist(): Promise<void> {
     if (!this.store || !this.broker) return
     try {
-      await this.store.save(this.broker.persistState())
+      await this.store.save({
+        ...this.broker.persistState(),
+        collabModes: Object.fromEntries(this.collabModes)
+      })
     } catch (err) {
       console.warn('[agent-bus] 持久化失败:', err)
     }
@@ -185,7 +217,14 @@ export class AgentBus {
     const toIdentity = (sessionId: string): AgentIdentity | null => {
       const session = sm.getSession(sessionId)
       if (!session) return null
-      return { sessionId: session.id, name: session.name, type: session.type }
+      const collabMode = this.getCollabMode(session.id, session.type)
+      return {
+        sessionId: session.id,
+        name: session.name,
+        type: session.type,
+        collabMode,
+        injectable: this.isModeInjectable(collabMode)
+      }
     }
     return {
       resolveByProcessId: (processId) => {
@@ -213,9 +252,13 @@ export class AgentBus {
         sm
           .listSessions()
           .filter((s) => s.status === 'running' && s.processId)
-          .map((s) => ({ sessionId: s.id, name: s.name, type: s.type })),
+          .map((s) => toIdentity(s.id))
+          .filter((x): x is AgentIdentity => !!x),
       getName: (sessionId) => sm.getSession(sessionId)?.name ?? null,
-      isInjectable: (sessionId) => sm.getSession(sessionId)?.type !== 'terminal',
+      isInjectable: (sessionId) => {
+        const session = sm.getSession(sessionId)
+        return session ? this.isModeInjectable(this.getCollabMode(session.id, session.type)) : false
+      },
       isRunning: (sessionId) => {
         const s = sm.getSession(sessionId)
         return !!s && s.status === 'running' && !!s.processId
@@ -228,4 +271,30 @@ export class AgentBus {
       writeRaw: (sessionId, data) => sm.writeRaw(sessionId, data)
     }
   }
+
+  private hydrateCollabModes(raw: Record<string, AgentCollabMode> | undefined): void {
+    if (!raw || typeof raw !== 'object') return
+    for (const [sessionId, mode] of Object.entries(raw)) {
+      if (isCollabMode(mode)) this.collabModes.set(sessionId, mode)
+    }
+  }
+
+  private getCollabMode(sessionId: string, type: string): AgentCollabMode {
+    if (type !== 'terminal') return 'known-agent'
+    const configured = this.collabModes.get(sessionId)
+    return configured && configured.startsWith('terminal-') ? configured : 'terminal-readonly'
+  }
+
+  private isModeInjectable(mode: AgentCollabMode): boolean {
+    return mode === 'known-agent' || mode === 'terminal-nudge' || mode === 'terminal-inject'
+  }
+}
+
+function isCollabMode(value: unknown): value is AgentCollabMode {
+  return (
+    value === 'known-agent' ||
+    value === 'terminal-readonly' ||
+    value === 'terminal-nudge' ||
+    value === 'terminal-inject'
+  )
 }

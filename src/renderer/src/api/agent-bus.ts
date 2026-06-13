@@ -3,12 +3,22 @@ import { ipc } from './ipc'
 
 export type AgentTaskStatus =
   | 'created'
+  | 'delivered'
   | 'accepted'
   | 'in_progress'
   | 'blocked'
+  | 'review'
   | 'done'
   | 'failed'
   | 'rejected'
+  | 'cancelled'
+  | 'expired'
+
+export type AgentCollabMode =
+  | 'known-agent'
+  | 'terminal-readonly'
+  | 'terminal-nudge'
+  | 'terminal-inject'
 
 export interface AgentTaskEvent {
   at: number
@@ -47,6 +57,10 @@ export interface AgentIdentity {
   sessionId: string
   name: string
   type: string
+  collabMode: AgentCollabMode
+  injectable: boolean
+  unread?: number
+  activeTaskCount?: number
 }
 
 export interface BusSnapshot {
@@ -60,6 +74,35 @@ export interface BusSnapshot {
 
 export function getBusSnapshot(): Promise<BusSnapshot> {
   return ipc.invoke<BusSnapshot>('bus:snapshot')
+}
+
+export interface BusActionResult {
+  ok: boolean
+  error?: string
+  taskId?: string
+}
+
+export function sendBusMessage(targetId: string, text: string): Promise<BusActionResult> {
+  return ipc.invoke<BusActionResult>('bus:sendMessage', targetId, text)
+}
+
+export function createBusTask(targetId: string, title: string): Promise<BusActionResult> {
+  return ipc.invoke<BusActionResult>('bus:createTask', targetId, title)
+}
+
+export function transitionBusTask(
+  taskId: string,
+  action: 'confirm' | 'cancel' | 'unblock',
+  text?: string
+): Promise<BusActionResult> {
+  return ipc.invoke<BusActionResult>('bus:taskTransition', taskId, action, text)
+}
+
+export function setSessionCollabMode(
+  sessionId: string,
+  mode: AgentCollabMode
+): Promise<BusActionResult> {
+  return ipc.invoke<BusActionResult>('bus:setSessionCollabMode', sessionId, mode)
 }
 
 // 订阅 bus 变化（任务/消息更新），返回取消订阅函数。

@@ -4,6 +4,12 @@
 // 'event' = 任务状态机等系统事件，作为消息进收件箱，使 recv/recv --wait 成为统一收件入口。
 export type AgentBusMessageKind = 'message' | 'request' | 'reply' | 'event'
 
+export type AgentCollabMode =
+  | 'known-agent'
+  | 'terminal-readonly'
+  | 'terminal-nudge'
+  | 'terminal-inject'
+
 // 通知选项：控制事件如何进收件箱与是否注入提醒。
 export interface NotifyOptions {
   from?: string // 归属发送方 sessionId（默认 system）
@@ -26,12 +32,16 @@ export interface AgentBusMessage {
 
 export type AgentTaskStatus =
   | 'created'
+  | 'delivered'
   | 'accepted'
   | 'in_progress'
   | 'blocked'
+  | 'review'
   | 'done'
   | 'failed'
   | 'rejected'
+  | 'cancelled'
+  | 'expired'
 
 export interface AgentTaskEvent {
   at: number
@@ -75,6 +85,10 @@ export interface AgentIdentity {
   sessionId: string
   name: string
   type: string
+  collabMode: AgentCollabMode
+  injectable: boolean
+  unread?: number
+  activeTaskCount?: number
 }
 
 // broker 对外依赖的会话能力（由 SessionManager 适配提供）。

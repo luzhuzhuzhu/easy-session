@@ -164,6 +164,48 @@ function formatRemoteHttpError(status: number, message: string | null, baseUrl: 
   return `Remote request failed: ${status}`
 }
 
+function getErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const direct = (error as { code?: unknown }).code
+  if (typeof direct === 'string') return direct
+  const cause = (error as { cause?: unknown }).cause
+  if (cause && typeof cause === 'object') {
+    const causeCode = (cause as { code?: unknown }).code
+    if (typeof causeCode === 'string') return causeCode
+  }
+  return null
+}
+
+function formatRemoteFetchError(error: unknown, baseUrl: string): Error {
+  const code = getErrorCode(error)
+  const base = (() => {
+    try {
+      return new URL(baseUrl)
+    } catch {
+      return null
+    }
+  })()
+
+  if (base && base.hostname.endsWith('.trycloudflare.com')) {
+    if (code === 'ENOTFOUND') {
+      return new Error(
+        `Cloudflare Quick Tunnel 地址无法解析：${base.hostname}。通常表示这个 trycloudflare 地址已经失效或 DNS 当前不可达，请在被控端重新开启 Quick Tunnel，并更新远程实例的 Base URL。`
+      )
+    }
+    if (code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ETIMEDOUT') {
+      return new Error(
+        `Cloudflare Quick Tunnel 当前不可达（${code}）。请确认被控端 cloudflared 和 EasySession 本机远程服务都在运行，然后重新测试实例。`
+      )
+    }
+  }
+
+  if (code) {
+    return new Error(`远程服务当前不可达（${code}）。请检查远程服务、网络连接或反向隧道状态。`)
+  }
+
+  return error instanceof Error ? new Error(error.message) : new Error(String(error ?? 'Unknown remote error'))
+}
+
 function buildQuery(filter?: SessionFilter): string {
   if (!filter) return ''
   const params = new URLSearchParams()
@@ -208,13 +250,18 @@ class RemoteGatewayClient {
   }
 
   private async requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.instance.baseUrl}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        ...(init?.headers || {})
-      }
-    })
+    let response: Response
+    try {
+      response = await fetch(`${this.instance.baseUrl}${path}`, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          ...(init?.headers || {})
+        }
+      })
+    } catch (error) {
+      throw formatRemoteFetchError(error, this.instance.baseUrl)
+    }
 
     const raw = await response.text()
     let body: unknown = null

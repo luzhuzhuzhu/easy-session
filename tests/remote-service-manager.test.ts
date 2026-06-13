@@ -79,6 +79,38 @@ describe('RemoteServiceManager', () => {
     expect(startCalls[1].token).toBe('z'.repeat(64))
     expect(state.baseUrl).toBe('http://0.0.0.0:18801')
     expect(state.running).toBe(true)
+    expect(state.lastError).toBeNull()
     expect(state.tokenSource).toBe('custom')
+  })
+
+  it('keeps the app usable and reports a structured error when the configured port is busy', async () => {
+    const busyPortError = Object.assign(new Error('listen EADDRINUSE: address already in use 0.0.0.0:18765'), {
+      code: 'EADDRINUSE'
+    })
+    const fakeGateway = {
+      start: vi.fn(async () => {
+        throw busyPortError
+      }),
+      stop: vi.fn(async () => {}),
+      isRunning: vi.fn(() => false)
+    } as unknown as RemoteGatewayServer
+
+    const settingsManager = new RemoteServiceSettingsManager(tempDir)
+    const manager = new RemoteServiceManager(
+      {
+        sessionManager: {} as any,
+        projectManager: {} as any,
+        outputManager: {} as any
+      },
+      tempDir,
+      fakeGateway,
+      settingsManager
+    )
+
+    const state = await manager.init()
+
+    expect(fakeGateway.start).toHaveBeenCalledOnce()
+    expect(state.running).toBe(false)
+    expect(state.lastError).toContain('端口 18765 已被占用')
   })
 })

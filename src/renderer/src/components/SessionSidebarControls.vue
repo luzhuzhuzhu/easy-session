@@ -51,14 +51,12 @@
       :title="isAutoCollapsed ? $t('session.autoCollapsedList') : $t('session.expandList')"
       :label="isAutoCollapsed ? $t('session.autoCollapsedList') : $t('session.expandList')"
       :disabled="isAutoCollapsed"
-      block
       @click="emit('toggle-list-collapsed')"
     >
       <UiIcon name="chevron-right" />
     </IconButton>
     <IconButton
       tone="primary"
-      block
       :label="$t('session.create')"
       @click="emit('create')"
     >
@@ -69,21 +67,12 @@
       :title="remoteRefreshSummary || $t('session.refreshRemote')"
       :label="$t('session.refreshRemote')"
       :disabled="refreshingRemoteData"
-      block
       @click="emit('refresh-remote')"
     >
       <UiIcon name="refresh" />
     </IconButton>
-    <select :value="filterType" class="collapsed-filter" :title="$t('session.filter')" @change="onFilterChange">
-      <option value="">*</option>
-      <option value="claude">C</option>
-      <option value="codex">X</option>
-      <option value="opencode">O</option>
-      <option value="terminal">T</option>
-    </select>
     <IconButton
       :label="$t('session.listPosition')"
-      block
       @click="emit('toggle-list-position')"
     >
       <UiIcon :name="isTopLayout ? 'list-left' : 'list-top'" />

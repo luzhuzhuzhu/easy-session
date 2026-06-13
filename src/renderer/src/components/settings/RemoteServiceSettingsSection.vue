@@ -29,6 +29,9 @@
       <div v-if="hasEnvOverrides" class="remote-disabled-state remote-service-env-note">
         {{ $t('settings.remoteServiceEnvOverrideHint', { fields: envOverrideFields }) }}
       </div>
+      <div v-if="state?.lastError" class="remote-disabled-state remote-service-error-note">
+        {{ state.lastError }}
+      </div>
 
       <div class="remote-form-panel">
         <div class="remote-form-grid">
@@ -335,6 +338,12 @@ defineExpose({
 
 .remote-service-env-note {
   margin-bottom: var(--spacing-md);
+}
+
+.remote-service-error-note {
+  margin-bottom: var(--spacing-md);
+  border-color: color-mix(in srgb, var(--accent-danger) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-danger) 8%, transparent);
 }
 
 .remote-card-grid {

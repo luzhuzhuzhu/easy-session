@@ -45,6 +45,19 @@ function loadEnvironmentFiles(): void {
 
 loadEnvironmentFiles()
 
+const hasSingleInstanceLock = process.env.NODE_ENV === 'test' || app.requestSingleInstanceLock()
+if (!hasSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    const existing = BrowserWindow.getAllWindows()[0]
+    if (!existing || existing.isDestroyed()) return
+    if (existing.isMinimized()) existing.restore()
+    existing.show()
+    existing.focus()
+  })
+}
+
 const cliManager = new CliManager()
 const claudeAdapter = new ClaudeAdapter(cliManager)
 const codexAdapter = new CodexAdapter(cliManager)
@@ -240,6 +253,40 @@ ipcMain.handle('session:sendTo', (_event, targetId: string, text: string) => {
 // Agent 协作面板：拉取在线会话、任务板与消息流快照。
 ipcMain.handle('bus:snapshot', () => agentBus.snapshot())
 
+ipcMain.handle('bus:sendMessage', (_event, targetId: string, text: string) => {
+  if (typeof targetId !== 'string' || !targetId) throw new Error('参数 targetId 必须为非空字符串')
+  if (typeof text !== 'string' || !text.trim()) throw new Error('参数 text 必须为非空字符串')
+  return agentBus.sendFromUI(targetId, text)
+})
+
+ipcMain.handle('bus:createTask', (_event, targetId: string, title: string) => {
+  if (typeof targetId !== 'string' || !targetId) throw new Error('参数 targetId 必须为非空字符串')
+  if (typeof title !== 'string' || !title.trim()) throw new Error('参数 title 必须为非空字符串')
+  return agentBus.createTaskFromUI(targetId, title)
+})
+
+ipcMain.handle('bus:taskTransition', (_event, taskId: string, action: string, text?: string) => {
+  if (typeof taskId !== 'string' || !taskId) throw new Error('参数 taskId 必须为非空字符串')
+  if (action !== 'confirm' && action !== 'cancel' && action !== 'unblock') {
+    throw new Error('参数 action 无效')
+  }
+  if (text !== undefined && typeof text !== 'string') throw new Error('参数 text 必须为字符串')
+  return agentBus.transitionTaskFromUI(taskId, action, text)
+})
+
+ipcMain.handle('bus:setSessionCollabMode', (_event, sessionId: string, mode: string) => {
+  if (typeof sessionId !== 'string' || !sessionId) throw new Error('参数 sessionId 必须为非空字符串')
+  if (
+    mode !== 'known-agent' &&
+    mode !== 'terminal-readonly' &&
+    mode !== 'terminal-nudge' &&
+    mode !== 'terminal-inject'
+  ) {
+    throw new Error('参数 mode 无效')
+  }
+  return agentBus.setSessionCollabMode(sessionId, mode)
+})
+
 ipcMain.handle('window:minimize', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.minimize()
 })
@@ -326,6 +373,7 @@ if (process.env.NODE_ENV === 'test') {
   ;(global as any).__projectManager__ = projectManager
 }
 
+if (hasSingleInstanceLock) {
 app.whenReady().then(async () => {
   try {
     const userData = app.getPath('userData')
@@ -418,14 +466,17 @@ app.whenReady().then(async () => {
     app.quit()
   }
 })
+}
 
 app.on('before-quit', (event) => {
+  if (!hasSingleInstanceLock) return
   if (isShuttingDown) return
   event.preventDefault()
   void shutdownApp()
 })
 
 app.on('window-all-closed', () => {
+  if (!hasSingleInstanceLock) return
   if (process.platform === 'darwin') {
     return
   }

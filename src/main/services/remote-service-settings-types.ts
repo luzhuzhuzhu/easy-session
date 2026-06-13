@@ -40,6 +40,7 @@ export interface RemoteServiceState {
   tokenFilePath: string
   baseUrl: string
   running: boolean
+  lastError: string | null
   customTokenConfigured: boolean
   envOverrides: RemoteServiceEnvOverrides
 }

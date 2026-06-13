@@ -104,7 +104,7 @@
         <div v-else class="session-items compact">
         <template v-for="group in projectSessionTree" :key="group.key">
           <div v-if="group.sessions.length > 0" class="compact-group-label" :title="formatCompactGroupTitle(group)">
-            <span aria-hidden="true">▣</span>
+            <span class="compact-project-code">{{ formatCompactProjectCode(group) }}</span>
             <span class="compact-group-count">{{ group.sessions.length }}</span>
           </div>
           <button
@@ -788,6 +788,25 @@ function formatCompactGroupTitle(group: ProjectSessionGroup): string {
   }
   lines.push(t('session.instanceCounts', { projects: 1, sessions: group.sessions.length }))
   return lines.filter(Boolean).join('\n')
+}
+
+function formatCompactProjectCode(group: ProjectSessionGroup): string {
+  const name = group.projectName.trim()
+  if (!name) return '#'
+
+  const cjkChars = Array.from(name.matchAll(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu))
+    .map((match) => match[0])
+  if (cjkChars.length > 0) return cjkChars.slice(0, 2).join('')
+
+  const wordInitials = name
+    .split(/[\s._-]+/u)
+    .filter(Boolean)
+    .map((word) => Array.from(word)[0])
+  const code = (wordInitials.length >= 2 ? wordInitials.slice(0, 2) : Array.from(name).slice(0, 2))
+    .join('')
+    .toUpperCase()
+
+  return code || '#'
 }
 
 function formatCompactSessionTitle(session: SessionTreeSessionItem, group: ProjectSessionGroup): string {

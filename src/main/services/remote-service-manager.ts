@@ -16,6 +16,7 @@ export class RemoteServiceManager {
   private readonly settingsManager: RemoteServiceSettingsManager
   private readonly gateway: RemoteGatewayServer
   private runtimeConfig: RemoteRuntimeConfig | null = null
+  private lastError: string | null = null
   private started = false
 
   constructor(
@@ -49,6 +50,7 @@ export class RemoteServiceManager {
       tokenFilePath: config.tokenFilePath,
       baseUrl: config.baseUrl,
       running: this.gateway.isRunning(),
+      lastError: this.lastError,
       customTokenConfigured: snapshot.tokenMode === 'custom' && !!snapshot.customToken,
       envOverrides: { ...config.envOverrides }
     }
@@ -57,7 +59,13 @@ export class RemoteServiceManager {
   private async applyRuntime(): Promise<RemoteServiceState> {
     const config = await this.resolveRuntimeConfig()
     await this.gateway.stop()
-    await this.gateway.start(config)
+    this.lastError = null
+    try {
+      await this.gateway.start(config)
+    } catch (err) {
+      this.lastError = formatRemoteServiceStartError(err, config)
+      console.warn('[remote] local service start failed:', this.lastError)
+    }
     return this.toState(config)
   }
 
@@ -106,4 +114,15 @@ export class RemoteServiceManager {
   async flush(): Promise<void> {
     await this.settingsManager.flush()
   }
+}
+
+function formatRemoteServiceStartError(error: unknown, config: RemoteRuntimeConfig): string {
+  const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: unknown }).code) : ''
+  if (code === 'EADDRINUSE') {
+    return `端口 ${config.port} 已被占用，本机远程服务未启动。请关闭占用该端口的旧 EasySession/服务进程，或在设置中改用其他端口。`
+  }
+  if (code === 'EACCES') {
+    return `没有权限监听 ${config.host}:${config.port}，本机远程服务未启动。请换用普通端口或检查系统权限。`
+  }
+  return error instanceof Error ? error.message : String(error)
 }

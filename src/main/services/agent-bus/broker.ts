@@ -4,6 +4,7 @@
 
 import { randomUUID, timingSafeEqual } from 'crypto'
 import type {
+  AgentCollabMode,
   AgentBusMessage,
   AgentBusMessageKind,
   AgentBusRequest,
@@ -43,6 +44,7 @@ export class AgentBroker {
   private mailboxes = new Map<string, AgentBusMessage[]>()
   private messageLog: AgentBusMessage[] = []
   private waiters = new Set<Waiter>()
+  private bodyInjectedIds = new Set<string>()
   readonly taskStore: TaskStore
 
   constructor(
@@ -68,7 +70,14 @@ export class AgentBroker {
     messages: AgentBusMessage[]
   } {
     return {
-      agents: this.bridge.listAgents(),
+      agents: this.bridge.listAgents().map((agent) => ({
+        ...agent,
+        unread: (this.mailboxes.get(agent.sessionId) || []).filter((m) => !m.readAt).length,
+        activeTaskCount: this.taskStore
+          .list(agent.sessionId)
+          .filter((t) => ['created', 'delivered', 'accepted', 'in_progress', 'blocked', 'review'].includes(t.status))
+          .length
+      })),
       tasks: this.taskStore.all(),
       messages: this.messageLog.slice(-200)
     }
@@ -135,6 +144,32 @@ export class AgentBroker {
     return { ok: true }
   }
 
+  createTaskFromUI(targetId: string, title: string): { ok: boolean; taskId?: string; error?: string } {
+    const body = title.trim()
+    if (!body) return { ok: false, error: '任务描述不能为空' }
+    if (!this.bridge.isRunning(targetId)) return { ok: false, error: '目标会话未运行' }
+    const task = this.taskStore.create('user', targetId, body, { fromName: '用户' })
+    return { ok: true, taskId: task.id }
+  }
+
+  transitionTaskFromUI(
+    taskId: string,
+    action: 'confirm' | 'cancel' | 'unblock',
+    text?: string
+  ): { ok: boolean; error?: string } {
+    let result: { error?: string }
+    if (action === 'confirm') {
+      result = this.taskStore.confirm(taskId, 'user')
+    } else if (action === 'cancel') {
+      result = this.taskStore.cancel(taskId, 'user', text)
+    } else {
+      const body = (text || '').trim()
+      if (!body) return { ok: false, error: '答复内容不能为空' }
+      result = this.taskStore.unblock(taskId, 'user', body)
+    }
+    return result.error ? { ok: false, error: result.error } : { ok: true }
+  }
+
   // bus server 入口：处理一条 es 请求。
   async handle(req: AgentBusRequest, abort?: AbortToken): Promise<AgentBusResponse> {
     if (!req || typeof req.token !== 'string' || !safeEqual(req.token, this.token)) {
@@ -168,6 +203,8 @@ export class AgentBroker {
           return this.cmdPeek(me, rest)
         case 'task':
           return this.cmdTask(me, rest)
+        case 'mode':
+          return this.cmdMode(me)
         default:
           return fail(`未知命令：${cmd}\n运行 es help 查看用法`, 1)
       }
@@ -202,17 +239,51 @@ export class AgentBroker {
   private nudgeAfterDeliver(to: string, msg: AgentBusMessage): void {
     if (msg.readAt) return
     if (this.hasWaiter(to)) return
+    if (this.shouldInjectBody(to)) {
+      this.injectMessageBody(to, msg)
+      return
+    }
     this.nudge(to)
   }
 
   // 纯提醒：只告知有未读，不带正文（正文只走 recv，杜绝重复）。
   private nudge(sessionId: string): void {
-    if (!this.bridge.isInjectable(sessionId)) return // terminal 会话不注入，靠主动 es recv
+    if (!this.bridge.isInjectable(sessionId)) return
     if (!this.bridge.isRunning(sessionId)) return
     const unread = (this.mailboxes.get(sessionId) || []).filter((m) => !m.readAt).length
     if (unread === 0) return
     // coalesceKey 'nudge'：多条提醒在门控队列里合并成一条，避免刷屏。
     this.gate.enqueue(sessionId, `[easysession] 📬 你有 ${unread} 条新消息/事件 — 运行 es recv 查看`, 'nudge')
+  }
+
+  private injectUnread(sessionId: string): void {
+    if (this.shouldInjectBody(sessionId)) {
+      const box = this.mailboxes.get(sessionId) || []
+      for (const msg of box) {
+        if (!msg.readAt) this.injectMessageBody(sessionId, msg)
+      }
+      return
+    }
+    this.nudge(sessionId)
+  }
+
+  // terminal-inject 是用户显式信任后的兼容模式：把正文作为一条 agent prompt 注入。
+  // 不标记 readAt，保证对方仍可通过 es recv 获取权威收件箱内容；用 bodyInjectedIds 避免同进程重复注入。
+  private injectMessageBody(sessionId: string, msg: AgentBusMessage): void {
+    if (!this.bridge.isInjectable(sessionId)) return
+    if (!this.bridge.isRunning(sessionId)) return
+    if (this.bodyInjectedIds.has(msg.id)) return
+    this.bodyInjectedIds.add(msg.id)
+    if (this.bodyInjectedIds.size > MESSAGE_LOG_CAP * 2) {
+      const oldest = this.bodyInjectedIds.values().next().value
+      if (oldest) this.bodyInjectedIds.delete(oldest)
+    }
+    this.gate.enqueue(sessionId, formatInjectedPrompt(msg), `body:${msg.id}`)
+  }
+
+  private shouldInjectBody(sessionId: string): boolean {
+    const agent = this.bridge.listAgents().find((item) => item.sessionId === sessionId)
+    return agent?.collabMode === 'terminal-inject'
   }
 
   private hasWaiter(sessionId: string): boolean {
@@ -254,7 +325,7 @@ export class AgentBroker {
   private removeWaiter(waiter: Waiter): void {
     this.waiters.delete(waiter)
     clearTimeout(waiter.timer)
-    if (!this.hasWaiter(waiter.sessionId)) this.nudge(waiter.sessionId)
+    if (!this.hasWaiter(waiter.sessionId)) this.injectUnread(waiter.sessionId)
   }
 
   private flushWaiters(sessionId: string): void {
@@ -466,6 +537,18 @@ export class AgentBroker {
         const r = this.taskStore.unblock(id, me.sessionId, text)
         return r.error ? fail(r.error, 1) : ok(`已解除阻塞（${id}）`)
       }
+      case 'confirm': {
+        const id = args.find((t) => !t.startsWith('--'))
+        if (!id) return fail('用法：es task confirm <id>', 1)
+        const r = this.taskStore.confirm(id, me.sessionId)
+        return r.error ? fail(r.error, 1) : ok(`任务 ${id} 已确认完成`)
+      }
+      case 'cancel': {
+        const id = args.find((t) => !t.startsWith('--'))
+        if (!id) return fail('用法：es task cancel <id> [原因]', 1)
+        const r = this.taskStore.cancel(id, me.sessionId, textExcludingId(args, id) || undefined)
+        return r.error ? fail(r.error, 1) : ok(`任务 ${id} 已取消`)
+      }
       case 'list':
       case 'ls':
         return this.taskList(me, args)
@@ -525,6 +608,17 @@ export class AgentBroker {
       return `  ${time}  ${h.status}  ${byName}${h.text ? '  ' + truncate(h.text, 50) : ''}`
     })
     return ok([...head, '历史：', ...history].join('\n'))
+  }
+
+  private cmdMode(me: AgentIdentity): AgentBusResponse {
+    const lines = [
+      `协作模式：${collabModeLabel(me.collabMode)}`,
+      `可注入提醒：${me.injectable ? '是' : '否'}`,
+      me.type === 'terminal'
+        ? 'terminal 默认只读；如其中运行 Gemini/Qwen/未知 agent，可在 EasySession 协作面板中开启提醒或完整注入。'
+        : '已知 agent 会自动获得 es 命令与协作提示。'
+    ]
+    return ok(lines.join('\n'))
   }
 
   // ---- 目标解析 ----
@@ -612,4 +706,29 @@ function formatMessages(msgs: AgentBusMessage[]): string {
       return `[${time}] 来自「${m.fromName}」(${m.id})：\n${m.body}`
     })
     .join('\n\n')
+}
+
+function formatInjectedPrompt(msg: AgentBusMessage): string {
+  const kind = msg.kind === 'event' ? '任务事件' : '消息'
+  return [
+    `[easysession] 收到来自「${msg.fromName}」的${kind}（${msg.id}）：`,
+    msg.body,
+    '',
+    '请直接处理；如需查看收件箱原文或更新任务状态，可运行 es recv / es task show。'
+  ].join('\n')
+}
+
+function collabModeLabel(mode: AgentCollabMode): string {
+  switch (mode) {
+    case 'known-agent':
+      return '已知 agent'
+    case 'terminal-readonly':
+      return 'Terminal 只读'
+    case 'terminal-nudge':
+      return 'Terminal 仅提醒'
+    case 'terminal-inject':
+      return 'Terminal 完整注入'
+    default:
+      return mode
+  }
 }
