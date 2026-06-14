@@ -4,7 +4,7 @@ import { homedir } from 'os'
 import { delimiter as pathDelimiter } from 'path'
 import { TextDecoder } from 'util'
 import iconv from 'iconv-lite'
-import { findExecutableInPath, findGitBashPath } from './shell-detector'
+import { findExecutableInPath, findGitBashPath, getExtraExecutablePathDirs } from './shell-detector'
 import type { CliType, ProcessInfo, ProcessOutput } from './types'
 import type { RemoteNetworkSettingsManager } from './remote-network-settings-manager'
 
@@ -161,6 +161,24 @@ export class CliManager {
     env[key] = current ? `${shimDir}${pathDelimiter}${current}` : shimDir
   }
 
+  private appendMissingPathDirs(env: Record<string, string>, dirs: string[]): void {
+    if (dirs.length === 0) return
+    const key = Object.keys(env).find((k) => k.toLowerCase() === 'path') ?? 'PATH'
+    const current = env[key] || ''
+    const existing = new Set(
+      current
+        .split(pathDelimiter)
+        .filter(Boolean)
+        .map((item) => (process.platform === 'win32' ? item.toLowerCase() : item))
+    )
+    const missing = dirs.filter((dir) => {
+      const normalized = process.platform === 'win32' ? dir.toLowerCase() : dir
+      return !existing.has(normalized)
+    })
+    if (missing.length === 0) return
+    env[key] = current ? `${current}${pathDelimiter}${missing.join(pathDelimiter)}` : missing.join(pathDelimiter)
+  }
+
   private buildSpawnEnv(command: string, processId: string): Record<string, string> {
     const baseEnv = Object.fromEntries(
       Object.entries(process.env).filter(([, value]) => typeof value === 'string')
@@ -175,6 +193,7 @@ export class CliManager {
     env.TERM = env.TERM || 'xterm-256color'
 
     if (process.platform === 'win32') {
+      this.appendMissingPathDirs(env, getExtraExecutablePathDirs())
       env.PYTHONIOENCODING = env.PYTHONIOENCODING || 'utf-8'
       env.FORCE_COLOR = env.FORCE_COLOR || '1'
 
@@ -334,7 +353,14 @@ export class CliManager {
 
   resize(id: string, cols: number, rows: number): void {
     const child = this.processes.get(id)
-    if (child) child.resize(cols, rows)
+    if (!child) return
+    try {
+      child.resize(cols, rows)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('already exited')) return
+      throw err
+    }
   }
 
   getProcess(id: string): ProcessInfo | undefined {

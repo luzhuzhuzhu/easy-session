@@ -464,7 +464,9 @@ function syncPtySize(force = false): void {
   void (async () => {
     const context = await resolveGatewayContext()
     if (!context) return
-    await context.gateway.resize(context.sessionRef.instanceId, context.sessionRef.sessionId, term.cols, term.rows)
+    await context.gateway.resize(context.sessionRef.instanceId, context.sessionRef.sessionId, term.cols, term.rows).catch(() => {
+      // Resize races are expected while a PTY is exiting or being restarted.
+    })
   })()
 }
 

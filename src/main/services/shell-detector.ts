@@ -1,4 +1,5 @@
 import { existsSync } from 'fs'
+import { homedir } from 'os'
 import { join } from 'path'
 
 export interface DetectedShell {
@@ -15,6 +16,34 @@ const GIT_BASH_CANDIDATES = [
 
 const WINDOWS_EXECUTABLE_EXTENSIONS = ['.exe', '.cmd', '.bat', '.com', '']
 
+function windowsUserExecutableDirs(): string[] {
+  if (process.platform !== 'win32') return []
+  const home = homedir()
+  const localAppData = process.env.LOCALAPPDATA || join(home, 'AppData', 'Local')
+  const appData = process.env.APPDATA || join(home, 'AppData', 'Roaming')
+  return [
+    join(home, '.local', 'bin'),
+    join(localAppData, 'Microsoft', 'WinGet', 'Links'),
+    join(appData, 'npm')
+  ]
+}
+
+function uniqueExistingDirs(dirs: string[]): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const dir of dirs) {
+    const key = process.platform === 'win32' ? dir.toLowerCase() : dir
+    if (seen.has(key) || !existsSync(dir)) continue
+    seen.add(key)
+    result.push(dir)
+  }
+  return result
+}
+
+export function getExtraExecutablePathDirs(): string[] {
+  return uniqueExistingDirs(windowsUserExecutableDirs())
+}
+
 export function findGitBashPath(): string | undefined {
   return GIT_BASH_CANDIDATES.find((p) => existsSync(p))
 }
@@ -28,7 +57,11 @@ export function findExecutableInPath(
   const separator = process.platform === 'win32' ? ';' : ':'
   const candidates = exts.length > 0 ? exts : ['']
 
-  for (const dir of pathEnv.split(separator).filter(Boolean)) {
+  const searchDirs = process.platform === 'win32'
+    ? [...pathEnv.split(separator).filter(Boolean), ...getExtraExecutablePathDirs()]
+    : pathEnv.split(separator).filter(Boolean)
+
+  for (const dir of searchDirs) {
     for (const ext of candidates) {
       const candidate = join(dir, `${command}${ext}`)
       if (existsSync(candidate)) return candidate
