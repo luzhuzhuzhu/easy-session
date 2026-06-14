@@ -70,10 +70,19 @@ export interface BusSnapshot {
   // bus 是否就绪；未就绪时 error 给出原因（用于 UI 提示）。旧主进程可能不返回，故可选。
   ready?: boolean
   error?: string | null
+  skillInstall?: {
+    ok: boolean
+    installed: Array<{ dir: string; ok: boolean; skipped: boolean; error?: string }>
+    failed: Array<{ dir: string; ok: boolean; skipped: boolean; error?: string }>
+  } | null
 }
 
 export function getBusSnapshot(): Promise<BusSnapshot> {
   return ipc.invoke<BusSnapshot>('bus:snapshot')
+}
+
+export function getCollabSkillMarkdown(): Promise<string> {
+  return ipc.invoke<string>('bus:getCollabSkill')
 }
 
 export interface BusActionResult {
@@ -96,6 +105,14 @@ export function transitionBusTask(
   text?: string
 ): Promise<BusActionResult> {
   return ipc.invoke<BusActionResult>('bus:taskTransition', taskId, action, text)
+}
+
+export function setBusTaskStatus(
+  taskId: string,
+  status: AgentTaskStatus,
+  text?: string
+): Promise<BusActionResult> {
+  return ipc.invoke<BusActionResult>('bus:setTaskStatus', taskId, status, text)
 }
 
 export function setSessionCollabMode(

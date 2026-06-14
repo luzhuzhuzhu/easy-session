@@ -170,6 +170,16 @@ export class AgentBroker {
     return result.error ? { ok: false, error: result.error } : { ok: true }
   }
 
+  setTaskStatusFromUI(
+    taskId: string,
+    status: AgentTask['status'],
+    text?: string
+  ): { ok: boolean; error?: string } {
+    if (!isTaskStatus(status)) return { ok: false, error: '任务状态无效' }
+    const result = this.taskStore.forceStatus(taskId, 'user', status, text)
+    return result.error ? { ok: false, error: result.error } : { ok: true }
+  }
+
   // bus server 入口：处理一条 es 请求。
   async handle(req: AgentBusRequest, abort?: AbortToken): Promise<AgentBusResponse> {
     if (!req || typeof req.token !== 'string' || !safeEqual(req.token, this.token)) {
@@ -731,4 +741,20 @@ function collabModeLabel(mode: AgentCollabMode): string {
     default:
       return mode
   }
+}
+
+function isTaskStatus(value: unknown): value is AgentTask['status'] {
+  return (
+    value === 'created' ||
+    value === 'delivered' ||
+    value === 'accepted' ||
+    value === 'in_progress' ||
+    value === 'blocked' ||
+    value === 'review' ||
+    value === 'done' ||
+    value === 'failed' ||
+    value === 'rejected' ||
+    value === 'cancelled' ||
+    value === 'expired'
+  )
 }

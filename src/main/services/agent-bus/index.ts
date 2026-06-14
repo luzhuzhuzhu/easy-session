@@ -11,7 +11,7 @@ import type { AgentCollabMode, AgentIdentity, AgentTask, AgentBusMessage, Sessio
 import { DispatchGate } from './dispatch-gate'
 import { AgentBroker } from './broker'
 import { AgentBusServer } from './bus-server'
-import { installEsSkill } from './skill'
+import { installEsSkill, type EsSkillInstallSummary } from './skill'
 
 const IDLE_MS = 8000
 const PERSIST_DEBOUNCE_MS = 600
@@ -40,6 +40,7 @@ export class AgentBus {
   private lastPushAt = 0
   private pushTimer: ReturnType<typeof setTimeout> | null = null
   private startError: string | null = null
+  private skillInstall: EsSkillInstallSummary | null = null
   private collabModes = new Map<string, AgentCollabMode>()
 
   constructor(
@@ -96,7 +97,10 @@ export class AgentBus {
     this.disposers.push(offExit)
 
     this.ready = true
-    void installEsSkill()
+    void installEsSkill().then((summary) => {
+      this.skillInstall = summary
+      this.pushChanged()
+    })
   }
 
   // 提供给 CliManager 注入到每个 PTY 的环境变量（含 PATH 用 shimDir）。
@@ -128,6 +132,15 @@ export class AgentBus {
     return this.broker.transitionTaskFromUI(taskId, action, text)
   }
 
+  setTaskStatusFromUI(
+    taskId: string,
+    status: AgentTask['status'],
+    text?: string
+  ): { ok: boolean; error?: string } {
+    if (!this.broker) return { ok: false, error: 'bus 未就绪' }
+    return this.broker.setTaskStatusFromUI(taskId, status, text)
+  }
+
   setSessionCollabMode(sessionId: string, mode: AgentCollabMode): { ok: boolean; error?: string } {
     const session = this.sessionManager.getSession(sessionId)
     if (!session) return { ok: false, error: '会话不存在' }
@@ -153,11 +166,19 @@ export class AgentBus {
     messages: AgentBusMessage[]
     ready: boolean
     error: string | null
+    skillInstall: EsSkillInstallSummary | null
   } {
     if (!this.broker || !this.ready) {
-      return { agents: [], tasks: [], messages: [], ready: this.ready, error: this.startError }
+      return {
+        agents: [],
+        tasks: [],
+        messages: [],
+        ready: this.ready,
+        error: this.startError,
+        skillInstall: this.skillInstall
+      }
     }
-    return { ...this.broker.snapshot(), ready: true, error: null }
+    return { ...this.broker.snapshot(), ready: true, error: null, skillInstall: this.skillInstall }
   }
 
   // 数据变化：去抖持久化 + 节流推送给渲染层。

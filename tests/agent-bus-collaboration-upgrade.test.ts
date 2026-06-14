@@ -150,4 +150,42 @@ describe('Agent collaboration upgrade', () => {
     expect(task.status).toBe('cancelled')
     expect(task.result).toBe('需求变更')
   })
+
+  it('lets the user manually correct a stale task status from the collaboration page', async () => {
+    const { broker, notes } = makeBroker([known])
+
+    const created = broker.createTaskFromUI('B', '实现导出功能')
+    const id = created.taskId!
+    await broker.handle({ token: TOKEN, agent: 'pidB', argv: ['task', 'accept', id] })
+    await broker.handle({ token: TOKEN, agent: 'pidB', argv: ['task', 'start', id] })
+
+    const updated = broker.setTaskStatusFromUI(id, 'done', '用户确认 agent 已经完成，只是忘记更新状态')
+
+    expect(updated.ok).toBe(true)
+    const task = broker.snapshot().tasks[0]
+    expect(task.status).toBe('done')
+    expect(task.result).toContain('忘记更新状态')
+    expect(task.history.at(-1)?.by).toBe('user')
+    expect(notes.some((item) => item.sid === 'B')).toBe(true)
+    const inbox = await broker.handle({ token: TOKEN, agent: 'pidB', argv: ['recv'] })
+    expect(inbox.stdout).toContain('done')
+    expect(inbox.stdout).toContain('忘记更新状态')
+  })
+
+  it('clears stale result when the user manually reopens a task', async () => {
+    const { broker } = makeBroker([known])
+
+    const created = broker.createTaskFromUI('B', '实现导出功能')
+    const id = created.taskId!
+    expect(broker.setTaskStatusFromUI(id, 'done', '已经交付')).toEqual({ ok: true })
+    expect(broker.snapshot().tasks[0].result).toBe('已经交付')
+
+    const reopened = broker.setTaskStatusFromUI(id, 'in_progress', '发现还需要补充校验')
+
+    expect(reopened.ok).toBe(true)
+    const task = broker.snapshot().tasks[0]
+    expect(task.status).toBe('in_progress')
+    expect(task.result).toBeUndefined()
+    expect(task.history.at(-1)?.text).toContain('补充校验')
+  })
 })

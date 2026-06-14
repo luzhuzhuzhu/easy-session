@@ -2,6 +2,8 @@ import * as pty from 'node-pty'
 import { BrowserWindow } from 'electron'
 import { homedir } from 'os'
 import { delimiter as pathDelimiter } from 'path'
+import { TextDecoder } from 'util'
+import iconv from 'iconv-lite'
 import { findExecutableInPath, findGitBashPath } from './shell-detector'
 import type { CliType, ProcessInfo, ProcessOutput } from './types'
 import type { RemoteNetworkSettingsManager } from './remote-network-settings-manager'
@@ -17,6 +19,11 @@ export type AgentBusEnvProvider = (
 interface OutputBufferState {
   chunks: string[]
   bytes: number
+}
+
+interface OutputDecoderState {
+  mode: 'utf8' | 'gb18030'
+  utf8Decoder: TextDecoder
 }
 
 function redactProxyUrl(rawValue: string | null): string | null {
@@ -39,6 +46,7 @@ export class CliManager {
   private processes = new Map<string, pty.IPty>()
   private processInfo = new Map<string, ProcessInfo>()
   private outputBuffers = new Map<string, OutputBufferState>()
+  private outputDecoders = new Map<string, OutputDecoderState>()
   private outputListeners = new Set<OutputListener>()
   private exitListeners = new Set<ExitListener>()
   private remoteNetworkSettingsManager: RemoteNetworkSettingsManager | null = null
@@ -90,6 +98,46 @@ export class CliManager {
       const removed = state.chunks.shift()
       if (!removed) continue
       state.bytes -= Buffer.byteLength(removed, 'utf-8')
+    }
+  }
+
+  private ensureOutputDecoder(id: string): OutputDecoderState {
+    let state = this.outputDecoders.get(id)
+    if (!state) {
+      state = {
+        mode: 'utf8',
+        utf8Decoder: new TextDecoder('utf-8', { fatal: true })
+      }
+      this.outputDecoders.set(id, state)
+    }
+    return state
+  }
+
+  private decodePtyOutput(id: string, data: string | Buffer): string {
+    if (typeof data === 'string') return data
+
+    const state = this.ensureOutputDecoder(id)
+    if (state.mode === 'gb18030') {
+      return iconv.decode(data, 'gb18030')
+    }
+
+    try {
+      return state.utf8Decoder.decode(data, { stream: true })
+    } catch {
+      state.mode = 'gb18030'
+      state.utf8Decoder = new TextDecoder('utf-8', { fatal: true })
+      return iconv.decode(data, 'gb18030')
+    }
+  }
+
+  private flushOutputDecoder(id: string): string {
+    const state = this.outputDecoders.get(id)
+    if (!state || state.mode !== 'utf8') return ''
+
+    try {
+      return state.utf8Decoder.decode()
+    } catch {
+      return ''
     }
   }
 
@@ -178,7 +226,8 @@ export class CliManager {
       cols: 120,
       rows: 30,
       cwd: options?.cwd || process.env.HOME || process.env.USERPROFILE || homedir(),
-      env: this.buildSpawnEnv(command, id)
+      env: this.buildSpawnEnv(command, id),
+      encoding: null
     })
 
     const lowerCommand = command.toLowerCase()
@@ -205,7 +254,13 @@ export class CliManager {
     this.processInfo.set(id, info)
     this.outputBuffers.set(id, { chunks: [], bytes: 0 })
 
-    child.onData((data: string) => {
+    const rawChild = child as pty.IPty & {
+      onData: (listener: (data: string | Buffer) => void) => { dispose(): void }
+    }
+
+    rawChild.onData((rawData: string | Buffer) => {
+      const data = this.decodePtyOutput(id, rawData)
+      if (!data) return
       this.appendToBuffer(id, data)
       const output: ProcessOutput = { id, stream: 'stdout', data, timestamp: Date.now() }
       this.sendToRenderer('cli:output', output)
@@ -226,12 +281,22 @@ export class CliManager {
     })
 
     child.onExit(({ exitCode }) => {
+      const trailingOutput = this.flushOutputDecoder(id)
+      if (trailingOutput) {
+        this.appendToBuffer(id, trailingOutput)
+        const output: ProcessOutput = { id, stream: 'stdout', data: trailingOutput, timestamp: Date.now() }
+        this.sendToRenderer('cli:output', output)
+        this.outputListeners.forEach((fn) => {
+          fn(id, trailingOutput, 'stdout')
+        })
+      }
       info.status = 'exited'
       info.exitCode = exitCode
       info.endTime = Date.now()
       this.processes.delete(id)
       this.processInfo.delete(id)
       this.outputBuffers.delete(id)
+      this.outputDecoders.delete(id)
       this.sendToRenderer('cli:exit', { id, code: exitCode })
       this.exitListeners.forEach((fn) => {
         fn(id, exitCode)
@@ -249,6 +314,7 @@ export class CliManager {
     this.processes.delete(id)
     this.processInfo.delete(id)
     this.outputBuffers.delete(id)
+    this.outputDecoders.delete(id)
     return true
   }
 

@@ -33,13 +33,28 @@
           {{ draftMode === 'task' ? $t('collab.createTask') : $t('collab.send') }}
         </button>
       </div>
-      <button class="icon-button" type="button" :title="$t('collab.refresh')" @click="refresh">
-        <span class="live-dot" :class="{ on: connected }"></span>
-      </button>
+      <div class="topbar-actions">
+        <button
+          class="secondary-button copy-skill-button"
+          type="button"
+          :disabled="copyingSkill"
+          :title="$t('collab.copySkillHint')"
+          @click="copyCollabSkill"
+        >
+          {{ $t('collab.copySkill') }}
+        </button>
+        <button class="icon-button" type="button" :title="$t('collab.refresh')" @click="refresh">
+          <span class="live-dot" :class="{ on: connected }"></span>
+        </button>
+      </div>
     </header>
 
     <div v-if="snapshot.ready === false" class="warning-band">
       {{ $t('collab.unavailable') }}<span v-if="snapshot.error"> - {{ snapshot.error }}</span>
+    </div>
+    <div v-else-if="skillInstallFailed" class="warning-band">
+      {{ $t('collab.skillInstallFailed') }}
+      <button class="tiny-button" type="button" @click="copyCollabSkill">{{ $t('collab.copySkill') }}</button>
     </div>
 
     <main class="collab-main">
@@ -57,10 +72,16 @@
             @click="draftTarget = agent.sessionId"
           >
             <div class="agent-main">
-              <span class="agent-dot" :class="`type-${agent.type}`"></span>
+              <span class="agent-avatar" :class="`type-${agent.type}`">
+                <span v-if="agentIcon(agent)" class="session-emoji">{{ agentIcon(agent) }}</span>
+                <span v-else class="type-letter">{{ cliTypeBadgeLetter(agent.type) }}</span>
+              </span>
               <div class="agent-name">
                 <strong>{{ agent.name }}</strong>
-                <small>{{ agent.type }}</small>
+                <small>
+                  <span>{{ agent.type }}</span>
+                  <span v-if="agentSession(agent.sessionId)"> · {{ statusLabelForSession(agent.sessionId) }}</span>
+                </small>
               </div>
               <span class="mode-chip" :class="{ muted: !agent.injectable }">{{ shortModeLabel(agent.collabMode) }}</span>
             </div>
@@ -120,7 +141,7 @@
           <span class="section-label">{{ $t('collab.detail') }}</span>
           <div class="detail-tools">
             <button
-              v-if="draftTarget"
+              v-if="targetSessionRef"
               class="tiny-button"
               type="button"
               @click="openTargetSession"
@@ -144,6 +165,11 @@
           </div>
           <h3>{{ selectedTask.title }}</h3>
           <p class="detail-flow">{{ selectedTask.fromName }} -> {{ selectedTask.toName }}</p>
+
+          <div v-if="latestTaskText(selectedTask)" class="task-note">
+            <span>{{ $t('collab.history') }}</span>
+            <p>{{ latestTaskText(selectedTask) }}</p>
+          </div>
 
           <div v-if="selectedTask.result" class="result-box">
             <span>{{ $t('collab.result') }}</span>
@@ -177,6 +203,26 @@
             </button>
           </div>
 
+          <div class="manual-status">
+            <div class="manual-status-row">
+              <label>{{ $t('collab.manualStatus') }}</label>
+              <select v-model="manualStatus" @change="manualStatusTouched = true">
+                <option v-for="status in manualStatusOptions" :key="status" :value="status">
+                  {{ statusLabel(status) }}
+                </option>
+              </select>
+              <button
+                class="secondary-button small"
+                type="button"
+                :disabled="manualStatusBusy || !selectedTask || (manualStatus === selectedTask.status && !manualStatusNote)"
+                @click="applyManualStatus"
+              >
+                {{ $t('collab.applyStatus') }}
+              </button>
+            </div>
+            <textarea v-model.trim="manualStatusNote" :placeholder="$t('collab.manualStatusPlaceholder')"></textarea>
+          </div>
+
           <div v-if="showUnblock" class="inline-form">
             <textarea v-model.trim="unblockText" :placeholder="$t('collab.unblockPlaceholder')"></textarea>
             <button class="primary-button small" type="button" @click="transitionTask('unblock', unblockText)">
@@ -207,9 +253,16 @@
         <div class="session-preview">
           <div class="detail-head">
             <span class="section-label">{{ $t('collab.sessionPreview') }}</span>
-            <span class="count">{{ selectedAgentName || '-' }}</span>
+            <span class="count">{{ activeTerminalName || '-' }}</span>
           </div>
-          <pre v-if="targetOutputText" class="output-box">{{ targetOutputText }}</pre>
+          <TerminalOutput
+            v-if="targetSessionRef"
+            class="collab-terminal"
+            :session-ref="targetSessionRef"
+            :process-key="targetProcessKey"
+            pane-id="collaboration"
+            @clear="clearTargetSessionOutput"
+          />
           <p v-else class="empty compact">{{ $t('collab.noOutputPreview') }}</p>
         </div>
 
@@ -234,14 +287,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import TerminalOutput from '@/components/TerminalOutput.vue'
 import {
   createBusTask,
+  getCollabSkillMarkdown,
   getBusSnapshot,
   onBusChanged,
   sendBusMessage,
+  setBusTaskStatus,
   setSessionCollabMode,
   transitionBusTask,
   type AgentCollabMode,
@@ -249,16 +305,23 @@ import {
   type AgentTaskStatus,
   type BusSnapshot
 } from '@/api/agent-bus'
-import { getOutputHistory, onSessionOutput, type OutputLine } from '@/api/local-session'
 import { useToast } from '@/composables/useToast'
+import { useSessionsStore } from '@/stores/sessions'
+import {
+  buildGlobalSessionKey,
+  LOCAL_INSTANCE_ID,
+  type SessionRef,
+  type UnifiedSession
+} from '@/models/unified-resource'
+import { cliTypeBadgeLetter } from '@shared/cli-types'
 
 const { t } = useI18n()
 const router = useRouter()
 const toast = useToast()
+const sessionsStore = useSessionsStore()
 
 const snapshot = ref<BusSnapshot>({ agents: [], tasks: [], messages: [], ready: true, error: null })
 const connected = ref(false)
-const targetOutputLines = ref<OutputLine[]>([])
 const draftTarget = ref('')
 const draftMode = ref<'message' | 'task'>('task')
 const draftText = ref('')
@@ -268,13 +331,29 @@ const showUnblock = ref(false)
 const showCancel = ref(false)
 const unblockText = ref('')
 const cancelText = ref('')
+const manualStatus = ref<AgentTaskStatus>('created')
+const manualStatusNote = ref('')
+const manualStatusBusy = ref(false)
+const manualStatusTouched = ref(false)
+const copyingSkill = ref(false)
 let unsubscribe: (() => void) | null = null
-let unsubscribeOutput: (() => void) | null = null
 let refetchTimer: ReturnType<typeof setTimeout> | null = null
 let reqSeq = 0
-let outputReqSeq = 0
 
 const OPEN_STATUSES: AgentTaskStatus[] = ['created', 'delivered', 'accepted', 'in_progress', 'blocked', 'review']
+const manualStatusOptions: AgentTaskStatus[] = [
+  'created',
+  'delivered',
+  'accepted',
+  'in_progress',
+  'blocked',
+  'review',
+  'done',
+  'failed',
+  'rejected',
+  'cancelled',
+  'expired'
+]
 
 const canSubmit = computed(() => !!draftTarget.value && !!draftText.value.trim())
 const selectedTask = computed(() => snapshot.value.tasks.find((task) => task.id === selectedTaskId.value) || null)
@@ -282,8 +361,35 @@ const chatMessages = computed(() => snapshot.value.messages.filter((m) => m.kind
 const reversedMessages = computed(() => chatMessages.value.slice().reverse())
 const openTaskCount = computed(() => snapshot.value.tasks.filter((task) => OPEN_STATUSES.includes(task.status)).length)
 const unreadTotal = computed(() => snapshot.value.agents.reduce((sum, agent) => sum + (agent.unread || 0), 0))
+const skillInstallFailed = computed(() => {
+  const install = snapshot.value.skillInstall
+  return !!install && !install.ok && install.failed.length > 0
+})
 const selectedAgentName = computed(() => snapshot.value.agents.find((agent) => agent.sessionId === draftTarget.value)?.name || '')
-const targetOutputText = computed(() => targetOutputLines.value.map((line) => line.text).join('\n').trim())
+const sessionById = computed(() => {
+  const index = new Map<string, UnifiedSession>()
+  for (const session of sessionsStore.unifiedSessions) {
+    index.set(session.sessionId, session)
+  }
+  return index
+})
+const activeTerminalSessionId = computed(() => {
+  const task = selectedTask.value
+  if (task) return task.to === 'user' ? task.from : task.to
+  return draftTarget.value
+})
+const activeTerminalSession = computed(() => agentSession(activeTerminalSessionId.value))
+const activeTerminalName = computed(() => activeTerminalSession.value?.name || nameOf(activeTerminalSessionId.value))
+const targetSessionRef = computed<SessionRef | null>(() => {
+  const sessionId = activeTerminalSessionId.value
+  if (!sessionId || sessionId === 'user') return null
+  return {
+    instanceId: LOCAL_INSTANCE_ID,
+    sessionId,
+    globalSessionKey: buildGlobalSessionKey(LOCAL_INSTANCE_ID, sessionId)
+  }
+})
+const targetProcessKey = computed(() => activeTerminalSession.value?.processId ?? null)
 
 const taskColumns = computed(() => {
   const tasks = snapshot.value.tasks
@@ -312,16 +418,22 @@ watch(
   { immediate: true }
 )
 
-watch(draftTarget, () => {
-  void refreshTargetOutput()
-})
-
 watch(selectedTaskId, () => {
   showUnblock.value = false
   showCancel.value = false
   unblockText.value = ''
   cancelText.value = ''
+  manualStatusNote.value = ''
+  manualStatusTouched.value = false
+  manualStatus.value = selectedTask.value?.status ?? 'created'
 })
+
+watch(
+  () => selectedTask.value?.status,
+  (status) => {
+    if (status && !manualStatusTouched.value && !manualStatusBusy.value) manualStatus.value = status
+  }
+)
 
 function modeLabel(mode: AgentCollabMode): string {
   return t(`collab.collabModeLabel.${mode}`)
@@ -349,6 +461,27 @@ function statusLabel(status: string): string {
 function nameOf(sessionId: string): string {
   const hit = snapshot.value.agents.find((a) => a.sessionId === sessionId)
   return hit ? hit.name : sessionId === 'user' ? t('collab.you') : sessionId.slice(0, 8)
+}
+
+function agentSession(sessionId: string): UnifiedSession | undefined {
+  return sessionById.value.get(sessionId)
+}
+
+function agentIcon(agent: { sessionId: string }): string | null {
+  return agentSession(agent.sessionId)?.icon ?? null
+}
+
+function statusLabelForSession(sessionId: string): string {
+  const status = agentSession(sessionId)?.status
+  return status ? t(`session.status.${status}`) : ''
+}
+
+function latestTaskText(task: AgentTask): string {
+  const hit = task.history
+    .slice()
+    .reverse()
+    .find((item) => !!item.text && item.text !== task.title)
+  return hit?.text || ''
 }
 
 function clock(at: number): string {
@@ -387,7 +520,6 @@ async function submitDraft(): Promise<void> {
     }
     draftText.value = ''
     await refresh()
-    await refreshTargetOutput()
   } finally {
     submitting.value = false
   }
@@ -395,34 +527,68 @@ async function submitDraft(): Promise<void> {
 
 async function transitionTask(action: 'confirm' | 'cancel' | 'unblock', text?: string): Promise<void> {
   if (!selectedTask.value) return
-  const result = await transitionBusTask(selectedTask.value.id, action, text)
+  const taskId = selectedTask.value.id
+  const result = await transitionBusTask(taskId, action, text)
   if (!result.ok) {
     toast.error(t('collab.actionFailed', { error: result.error || '-' }))
     return
   }
+  showUnblock.value = false
+  showCancel.value = false
+  unblockText.value = ''
+  cancelText.value = ''
   await refresh()
+  selectedTaskId.value = taskId
 }
 
-async function refreshTargetOutput(): Promise<void> {
-  const target = draftTarget.value
-  const seq = ++outputReqSeq
-  if (!target) {
-    targetOutputLines.value = []
-    return
-  }
+async function applyManualStatus(): Promise<void> {
+  if (!selectedTask.value || manualStatusBusy.value) return
+  const taskId = selectedTask.value.id
+  manualStatusBusy.value = true
   try {
-    const lines = await getOutputHistory(target, 80)
-    if (seq !== outputReqSeq || target !== draftTarget.value) return
-    targetOutputLines.value = lines.slice(-80)
-    await nextTick()
+    const result = await setBusTaskStatus(taskId, manualStatus.value, manualStatusNote.value)
+    if (!result.ok) {
+      toast.error(t('collab.actionFailed', { error: result.error || '-' }))
+      return
+    }
+    toast.success(t('collab.statusUpdated'))
+    showUnblock.value = false
+    showCancel.value = false
+    unblockText.value = ''
+    cancelText.value = ''
+    manualStatusNote.value = ''
+    manualStatusTouched.value = false
+    await refresh()
+    selectedTaskId.value = taskId
+  } finally {
+    manualStatusBusy.value = false
+  }
+}
+
+async function copyCollabSkill(): Promise<void> {
+  if (copyingSkill.value) return
+  copyingSkill.value = true
+  try {
+    const markdown = await getCollabSkillMarkdown()
+    await navigator.clipboard.writeText(markdown)
+    toast.success(t('collab.skillCopied'))
   } catch {
-    if (seq === outputReqSeq) targetOutputLines.value = []
+    toast.error(t('collab.copyFailed'))
+  } finally {
+    copyingSkill.value = false
   }
 }
 
 function openTargetSession(): void {
-  if (!draftTarget.value) return
-  void router.push({ path: '/sessions', query: { sessionId: draftTarget.value } })
+  const sessionRef = targetSessionRef.value
+  if (!sessionRef) return
+  void router.push({ path: '/sessions', query: { globalSessionKey: sessionRef.globalSessionKey } })
+}
+
+async function clearTargetSessionOutput(): Promise<void> {
+  const sessionRef = targetSessionRef.value
+  if (!sessionRef) return
+  await sessionsStore.clearSessionOutputRef(sessionRef)
 }
 
 async function changeMode(sessionId: string, rawMode: string): Promise<void> {
@@ -465,26 +631,19 @@ function scheduleRefetch(): void {
   if (refetchTimer) return
   refetchTimer = setTimeout(() => {
     refetchTimer = null
+    void sessionsStore.fetchSessions()
     void refresh()
   }, 180)
 }
 
 onMounted(() => {
+  void sessionsStore.fetchSessions()
   void refresh()
-  void refreshTargetOutput()
   unsubscribe = onBusChanged(scheduleRefetch)
-  unsubscribeOutput = onSessionOutput((event) => {
-    if (event.sessionId !== draftTarget.value) return
-    targetOutputLines.value = [
-      ...targetOutputLines.value,
-      { text: event.data.replace(/\r/g, ''), stream: event.stream, timestamp: event.timestamp, seq: event.seq }
-    ].slice(-80)
-  })
 })
 
 onUnmounted(() => {
   if (unsubscribe) unsubscribe()
-  if (unsubscribeOutput) unsubscribeOutput()
   if (refetchTimer) clearTimeout(refetchTimer)
 })
 </script>
@@ -504,7 +663,7 @@ onUnmounted(() => {
 .collab-topbar {
   min-height: 44px;
   display: grid;
-  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
 }
@@ -536,6 +695,16 @@ onUnmounted(() => {
   grid-template-columns: minmax(130px, 180px) 112px minmax(180px, 1fr) auto;
   align-items: center;
   gap: 6px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.copy-skill-button {
+  white-space: nowrap;
 }
 
 select,
@@ -654,6 +823,10 @@ textarea {
 }
 
 .warning-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 7px 10px;
   border: 1px solid color-mix(in srgb, var(--accent-danger, #e5484d) 45%, var(--border-color));
   border-radius: 6px;
@@ -666,7 +839,7 @@ textarea {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 220px minmax(640px, 1fr) 300px;
+  grid-template-columns: 220px minmax(560px, 1fr) minmax(420px, 34vw);
   gap: 8px;
 }
 
@@ -730,6 +903,11 @@ textarea {
   overflow-y: auto;
 }
 
+.detail-pane {
+  overflow: hidden;
+  gap: 8px;
+}
+
 .agent-list {
   display: flex;
   flex-direction: column;
@@ -761,9 +939,9 @@ textarea {
 .agent-main {
   min-width: 0;
   display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 .agent-name {
@@ -784,29 +962,49 @@ textarea {
   }
 
   small {
+    display: flex;
+    align-items: center;
+    gap: 3px;
     color: var(--text-muted);
     font-size: 10px;
   }
 }
 
-.agent-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent-primary);
+.agent-avatar {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent-primary) 14%, var(--bg-tertiary));
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
 
   &.type-claude {
-    background: #c96d4d;
+    background: color-mix(in srgb, #c96d4d 18%, var(--bg-tertiary));
   }
   &.type-codex {
-    background: #168f75;
+    background: color-mix(in srgb, #168f75 18%, var(--bg-tertiary));
   }
   &.type-opencode {
-    background: #6272e8;
+    background: color-mix(in srgb, #6272e8 18%, var(--bg-tertiary));
   }
   &.type-terminal {
-    background: #c48913;
+    background: color-mix(in srgb, #c48913 18%, var(--bg-tertiary));
   }
+}
+
+.session-emoji {
+  font-size: 16px;
+}
+
+.type-letter {
+  font-size: 11px;
+  letter-spacing: 0;
 }
 
 .mode-chip,
@@ -842,9 +1040,10 @@ textarea {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(6, minmax(106px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(6, minmax(146px, 1fr));
+  gap: 8px;
   overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 .board-col {
@@ -858,11 +1057,11 @@ textarea {
 }
 
 .col-head {
-  height: 30px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px;
+  padding: 0 10px;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-secondary);
   font-size: 11px;
@@ -874,13 +1073,17 @@ textarea {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 8px;
   overflow-y: auto;
-  padding: 6px;
+  padding: 8px;
 }
 
 .task-card {
-  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 96px;
+  padding: 9px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
@@ -900,11 +1103,11 @@ textarea {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
-    margin: 5px 0;
+    margin: 0;
     overflow: hidden;
     color: var(--text-primary);
-    font-size: 11px;
-    line-height: 1.35;
+    font-size: 12px;
+    line-height: 1.45;
     word-break: break-word;
   }
 }
@@ -916,6 +1119,31 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+}
+
+.task-card .task-top,
+.task-card .task-meta {
+  min-width: 0;
+}
+
+.task-card .task-id {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-card .task-status {
+  max-width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-card .task-meta {
+  margin-top: auto;
+  padding-top: 2px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 62%, transparent);
 }
 
 .task-id {
@@ -936,7 +1164,7 @@ textarea {
 .task-meta,
 .detail-flow {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 10.5px;
 }
 
 .task-meta span:first-child {
@@ -947,8 +1175,10 @@ textarea {
 }
 
 .detail-content {
+  flex: 1 1 320px;
+  min-height: 220px;
   margin-top: 6px;
-  padding-bottom: 8px;
+  padding: 0 2px 8px 0;
   border-bottom: 1px solid var(--border-color);
 
   h3 {
@@ -960,6 +1190,7 @@ textarea {
   }
 }
 
+.task-note,
 .result-box {
   margin-top: 8px;
   padding: 8px;
@@ -974,7 +1205,7 @@ textarea {
   }
 
   p {
-    max-height: 140px;
+    max-height: 180px;
     margin: 5px 0 0;
     overflow-y: auto;
     color: var(--text-secondary);
@@ -991,6 +1222,40 @@ textarea {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+.manual-status {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+}
+
+.manual-status-row {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+
+  label {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  select {
+    height: 28px;
+    font-size: 12px;
+  }
+}
+
+.manual-status textarea {
+  height: 44px;
+  min-height: 44px;
+  margin-top: 6px;
+  resize: vertical;
 }
 
 .inline-form textarea {
@@ -1012,16 +1277,16 @@ textarea {
 
   li {
     display: grid;
-    grid-template-columns: 38px 58px minmax(0, 1fr);
+    grid-template-columns: 38px 64px minmax(0, 1fr);
     gap: 6px;
     color: var(--text-secondary);
     font-size: 10px;
     line-height: 1.35;
 
     span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      min-width: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   }
 
@@ -1032,28 +1297,29 @@ textarea {
 
 .session-preview,
 .recent-messages {
-  flex: 1;
   margin-top: 8px;
 }
 
 .session-preview {
-  min-height: 130px;
+  flex: 1.4 1 280px;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  overflow: hidden;
 }
 
-.output-box {
-  height: 132px;
+.recent-messages {
+  flex: 0 0 132px;
+  overflow-y: auto;
+}
+
+.collab-terminal {
+  flex: 1 1 auto;
+  min-height: 0;
   margin: 6px 0 0;
-  padding: 7px;
-  overflow: auto;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   background: var(--bg-primary);
-  color: var(--text-secondary);
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .msg-row {
@@ -1130,7 +1396,7 @@ textarea {
 
 @media (max-width: 1240px) {
   .collab-topbar {
-    grid-template-columns: 1fr 32px;
+    grid-template-columns: 1fr auto;
   }
 
   .composer {
@@ -1144,7 +1410,7 @@ textarea {
 
   .detail-pane {
     grid-column: 1 / -1;
-    max-height: 280px;
+    min-height: 460px;
   }
 }
 

@@ -129,6 +129,45 @@ export class TaskStore {
     return { task }
   }
 
+  forceStatus(
+    id: string,
+    by: string,
+    next: AgentTaskStatus,
+    text?: string
+  ): { task?: AgentTask; error?: string } {
+    const task = this.tasks.get(id)
+    if (!task) return { error: `任务 ${id} 不存在` }
+
+    const now = Date.now()
+    const note = (text || '').trim()
+    task.status = next
+    task.statusSince = now
+    task.updatedAt = now
+    if (['done', 'failed', 'rejected', 'cancelled', 'expired', 'review'].includes(next) && note) {
+      task.result = note
+    } else if (!['done', 'failed', 'rejected', 'cancelled', 'expired', 'review'].includes(next)) {
+      delete task.result
+    }
+    task.history.push({
+      at: now,
+      status: next,
+      by,
+      text: note || `用户手动将任务状态改为 ${next}`
+    })
+    this.clearGuards(id)
+
+    const targets = new Set([task.from, task.to].filter((item) => item && item !== by && item !== 'user'))
+    for (const target of targets) {
+      this.deps.notify(
+        target,
+        `🛠️ 任务 ${task.id}「${truncate(task.title)}」已由用户手动改为 ${next}${note ? `：${truncate(note)}` : ''} — es task show ${task.id}`,
+        { from: by, fromName: '用户' }
+      )
+    }
+    this.deps.onChange()
+    return { task }
+  }
+
   confirm(id: string, by: string): { task?: AgentTask; error?: string } {
     const task = this.tasks.get(id)
     if (!task) return { error: `任务 ${id} 不存在` }

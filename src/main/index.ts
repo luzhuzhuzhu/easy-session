@@ -33,7 +33,7 @@ import { RemoteGatewayManager } from './services/remote-gateway-manager'
 
 import { SessionOutputManager } from './services/session-output'
 import { AgentBus } from './services/agent-bus'
-import { ES_SYSTEM_PROMPT_HINT } from './services/agent-bus/skill'
+import { ES_SYSTEM_PROMPT_HINT, getEsSkillMarkdown } from './services/agent-bus/skill'
 
 function loadEnvironmentFiles(): void {
   const candidates = [join(process.cwd(), '.env.local'), join(process.cwd(), '.env')]
@@ -274,6 +274,15 @@ ipcMain.handle('bus:taskTransition', (_event, taskId: string, action: string, te
   return agentBus.transitionTaskFromUI(taskId, action, text)
 })
 
+ipcMain.handle('bus:getCollabSkill', () => getEsSkillMarkdown())
+
+ipcMain.handle('bus:setTaskStatus', (_event, taskId: string, status: string, text?: string) => {
+  if (typeof taskId !== 'string' || !taskId) throw new Error('参数 taskId 必须为非空字符串')
+  if (!isAgentTaskStatus(status)) throw new Error('参数 status 无效')
+  if (text !== undefined && typeof text !== 'string') throw new Error('参数 text 必须为字符串')
+  return agentBus.setTaskStatusFromUI(taskId, status, text)
+})
+
 ipcMain.handle('bus:setSessionCollabMode', (_event, sessionId: string, mode: string) => {
   if (typeof sessionId !== 'string' || !sessionId) throw new Error('参数 sessionId 必须为非空字符串')
   if (
@@ -286,6 +295,22 @@ ipcMain.handle('bus:setSessionCollabMode', (_event, sessionId: string, mode: str
   }
   return agentBus.setSessionCollabMode(sessionId, mode)
 })
+
+function isAgentTaskStatus(value: string): value is Parameters<typeof agentBus.setTaskStatusFromUI>[1] {
+  return (
+    value === 'created' ||
+    value === 'delivered' ||
+    value === 'accepted' ||
+    value === 'in_progress' ||
+    value === 'blocked' ||
+    value === 'review' ||
+    value === 'done' ||
+    value === 'failed' ||
+    value === 'rejected' ||
+    value === 'cancelled' ||
+    value === 'expired'
+  )
+}
 
 ipcMain.handle('window:minimize', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.minimize()
