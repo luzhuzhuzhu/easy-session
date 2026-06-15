@@ -4,7 +4,9 @@
 import { homedir } from 'os'
 import { join } from 'path'
 import { promises as fs } from 'fs'
+import { createLogger } from '../logger'
 
+const log = createLogger('agent-bus')
 const SKILL_VERSION = '6'
 const SKILL_DIR_NAME = 'es-session-collab'
 
@@ -147,9 +149,9 @@ export async function installEsSkill(): Promise<EsSkillInstallSummary> {
   const installed = results.filter((item) => item.ok)
 
   if (failed.length === results.length) {
-    console.warn('[agent-bus] failed to install es collaboration skill in every target', failed)
+    log.warn({ failed }, '[agent-bus] failed to install es collaboration skill in every target')
   } else if (failed.length) {
-    console.warn('[agent-bus] es collaboration skill partially installed; failed targets:', failed)
+    log.warn({ failed }, '[agent-bus] es collaboration skill partially installed; failed targets')
   }
 
   return { ok: failed.length === 0, installed, failed }
@@ -177,10 +179,10 @@ async function installSkillDir(dir: string): Promise<EsSkillInstallResult> {
     await fs.mkdir(dir, { recursive: true })
     await fs.writeFile(file, SKILL_MD, 'utf-8')
     await fs.writeFile(marker, SKILL_VERSION, 'utf-8')
-    console.info(`[agent-bus] es collaboration skill installed: ${dir}`)
+    log.info(`[agent-bus] es collaboration skill installed: ${dir}`)
     return { dir, ok: true, skipped: false }
   } catch (err) {
-    console.warn(`[agent-bus] failed to install es collaboration skill: ${dir}`, err)
+    log.warn({ err }, `[agent-bus] failed to install es collaboration skill: ${dir}`)
     return { dir, ok: false, skipped: false, error: err instanceof Error ? err.message : String(err) }
   }
 }

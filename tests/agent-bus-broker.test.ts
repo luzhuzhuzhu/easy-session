@@ -5,15 +5,15 @@ import type { DispatchGate } from '../src/main/services/agent-bus/dispatch-gate'
 
 // 两个虚拟会话：architect(pidA) 与 builder(pidB)，都可注入、都在运行。
 const AGENTS: Record<string, AgentIdentity> = {
-  pidA: { sessionId: 'A', name: 'architect', type: 'claude' },
-  pidB: { sessionId: 'B', name: 'builder', type: 'claude' }
+  pidA: { sessionId: 'A', name: 'architect', type: 'claude', collabMode: 'known-agent', injectable: true },
+  pidB: { sessionId: 'B', name: 'builder', type: 'claude', collabMode: 'known-agent', injectable: true }
 }
 const BY_SESSION: Record<string, AgentIdentity> = { A: AGENTS.pidA, B: AGENTS.pidB }
 
 function makeBridge(): SessionBridge {
   const all = Object.values(BY_SESSION)
   return {
-    resolveByProcessId: (pid) => AGENTS[pid] ?? null,
+    resolveCaller: (pid) => AGENTS[pid] ?? null,
     resolveByQuery: (query) => {
       const q = query.trim().toLowerCase()
       const byId = BY_SESSION[query]
@@ -97,6 +97,50 @@ describe('AgentBroker', () => {
     const res = await broker.handle({ token: 'tok', agent: 'pidA', argv: ['peek', 'builder', '--lines', '10'] })
     expect(res.ok).toBe(true)
     expect(res.stdout).toContain('last output line')
+  })
+
+  it('peek 授权：known-agent/terminal-inject 可读，terminal-nudge/readonly 不可读，可读自己', async () => {
+    const peekAgents: Record<string, AgentIdentity> = {
+      pidCaller: { sessionId: 'caller', name: 'caller', type: 'claude', collabMode: 'known-agent', injectable: true },
+      pidKnown: { sessionId: 'known', name: 'known-x', type: 'claude', collabMode: 'known-agent', injectable: true },
+      pidInject: { sessionId: 'inject', name: 'term-inject', type: 'terminal', collabMode: 'terminal-inject', injectable: true },
+      pidNudge: { sessionId: 'nudge', name: 'term-nudge', type: 'terminal', collabMode: 'terminal-nudge', injectable: true },
+      pidReadonly: { sessionId: 'ro', name: 'term-ro', type: 'terminal', collabMode: 'terminal-readonly', injectable: false }
+    }
+    const bySession: Record<string, AgentIdentity> = {}
+    for (const a of Object.values(peekAgents)) bySession[a.sessionId] = a
+    const bridge: SessionBridge = {
+      resolveCaller: (pid) => peekAgents[pid] ?? null,
+      resolveByQuery: (query) => {
+        const match = bySession[query] ?? Object.values(peekAgents).find((a) => a.name === query)
+        return match ? { match, candidates: [] } : { candidates: [] }
+      },
+      listAgents: () => Object.values(peekAgents),
+      getName: (sid) => bySession[sid]?.name ?? null,
+      isInjectable: (sid) => bySession[sid]?.injectable ?? false,
+      isRunning: () => true,
+      readHistory: () => 'secret output line',
+      writeRaw: () => true
+    }
+    const b = new AgentBroker(bridge, makeStubGate([]), 'tok', () => true)
+
+    const known = await b.handle({ token: 'tok', agent: 'pidCaller', argv: ['peek', 'known'] })
+    expect(known.ok).toBe(true)
+    expect(known.stdout).toContain('secret output line')
+
+    const inject = await b.handle({ token: 'tok', agent: 'pidCaller', argv: ['peek', 'inject'] })
+    expect(inject.ok).toBe(true)
+
+    const nudge = await b.handle({ token: 'tok', agent: 'pidCaller', argv: ['peek', 'nudge'] })
+    expect(nudge.ok).toBe(false)
+    expect(nudge.stdout ?? '').not.toContain('secret output line')
+
+    const readonly = await b.handle({ token: 'tok', agent: 'pidCaller', argv: ['peek', 'ro'] })
+    expect(readonly.ok).toBe(false)
+
+    // 即便自己是 terminal-nudge，也始终能 peek 自己。
+    const self = await b.handle({ token: 'tok', agent: 'pidNudge', argv: ['peek', 'nudge'] })
+    expect(self.ok).toBe(true)
   })
 
   it('任务全流程：create → accept → start → done，并唤醒对端', async () => {

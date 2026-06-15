@@ -6,10 +6,13 @@ import { CLOUDFLARE_TUNNEL_CONFIG_FILE } from '../remote/defaults'
 import type { CloudflareTunnelConfigRecord, CloudflareTunnelState } from './cloudflare-tunnel-types'
 import { RemoteServiceManager } from './remote-service-manager'
 import { RemoteNetworkSettingsManager } from './remote-network-settings-manager'
+import { createLogger } from './logger'
 import type {
   CloudflareFailureCategory,
   CloudflareLaunchStrategy
 } from './remote-network-settings-types'
+
+const log = createLogger('cloudflare-tunnel')
 
 const DEFAULT_CONFIG: CloudflareTunnelConfigRecord = {
   binaryPath: null
@@ -262,7 +265,7 @@ export class CloudflareTunnelManager {
     this.effectiveFallbackUsed = attemptIndex > 0
     this.effectiveAttemptIndex = attemptIndex + 1
 
-    console.info(
+    log.info(
       `[cloudflare-tunnel] 启动尝试 #${attemptIndex + 1}: protocol=${strategy.transport}, proxyMode=${strategy.proxyMode}, proxyUrl=${redactProxyUrl(strategy.proxyUrl) ?? '-'}`
     )
 
@@ -307,7 +310,7 @@ export class CloudflareTunnelManager {
         if (publicUrl) {
           this.publicUrl = publicUrl
           cleanupTimer()
-          console.info(
+          log.info(
             `[cloudflare-tunnel] 启动成功: protocol=${strategy.transport}, proxyMode=${strategy.proxyMode}, publicUrl=${publicUrl}`
           )
           succeed()
@@ -406,7 +409,7 @@ export class CloudflareTunnelManager {
       } catch (error) {
         lastFailure = error instanceof Error ? error : new Error(String(error))
         const category = classifyCloudflareFailure(lastFailure.message)
-        console.warn(
+        log.warn(
           `[cloudflare-tunnel] 启动失败 #${attemptIndex + 1}: category=${category}, protocol=${strategy.transport}, proxyMode=${strategy.proxyMode}, proxyUrl=${redactProxyUrl(strategy.proxyUrl) ?? '-'}, reason=${lastFailure.message}`
         )
         await this.remoteNetworkSettingsManager.recordCloudflareFailure(lastFailure.message, category)

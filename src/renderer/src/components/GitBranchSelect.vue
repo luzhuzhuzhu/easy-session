@@ -337,7 +337,7 @@ onBeforeUnmount(() => {
 .item-sync {
   display: flex;
   gap: 4px;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-family: var(--font-mono);
   color: var(--text-muted);
 }
@@ -349,7 +349,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-xs);
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   line-height: 1.3;
 }
 
@@ -376,7 +376,7 @@ onBeforeUnmount(() => {
 .dropdown-divider {
   padding: 6px 12px;
   border-top: 1px solid var(--border-color);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;

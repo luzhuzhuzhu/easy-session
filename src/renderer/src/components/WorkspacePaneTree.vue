@@ -95,6 +95,46 @@
     </div>
 
     <div class="pane-content">
+      <div
+        v-if="showPaneTabs"
+        class="pane-tabs"
+        role="tablist"
+        :aria-label="$t('session.paneTabs')"
+      >
+        <div
+          v-for="tab in paneTabs"
+          :key="tab.tabId"
+          class="pane-tab"
+          :class="{ active: tab.active, offline: tab.offline }"
+          role="tab"
+          :aria-selected="tab.active"
+          :tabindex="tab.active ? 0 : -1"
+          :title="tab.name"
+          draggable="true"
+          @click="handleSelectTab(tab.tabId)"
+          @keydown.enter.prevent="handleSelectTab(tab.tabId)"
+          @keydown.space.prevent="handleSelectTab(tab.tabId)"
+          @auxclick.middle.prevent="handleCloseTab(tab.tabId)"
+          @dragstart="handleTabDragStart(tab.tabId, $event)"
+          @dragend="handleTabDragEnd"
+        >
+          <span v-if="tab.icon" class="pane-tab-icon">{{ tab.icon }}</span>
+          <span v-else-if="tab.type" class="type-badge" :class="tab.type">{{ cliTypeBadgeLetter(tab.type) }}</span>
+          <span class="pane-tab-name">{{ tab.name }}</span>
+          <span v-if="tab.pinned" class="pane-tab-pin" aria-hidden="true">📌</span>
+          <button
+            class="pane-tab-close"
+            type="button"
+            :aria-label="$t('session.closeTabAction')"
+            :title="$t('session.closeTabAction')"
+            @click.stop="handleCloseTab(tab.tabId)"
+            @keydown.enter.stop
+            @mousedown.stop
+          >
+            <UiIcon name="x" />
+          </button>
+        </div>
+      </div>
       <template v-if="activeSession">
         <div
           class="pane-header"
@@ -370,6 +410,60 @@ const activeResolvedTab = computed<WorkspaceResolvedTabState | null>(() => {
   if (!tabId) return null
   return props.resolvedTabsIndex[tabId] ?? null
 })
+
+interface PaneTabView {
+  tabId: string
+  name: string
+  icon: string | null
+  type: UnifiedSession['type'] | null
+  pinned: boolean
+  active: boolean
+  offline: boolean
+}
+
+const paneTabs = computed<PaneTabView[]>(() => {
+  if (props.node.type !== 'leaf') return []
+  const leaf = props.node
+  return leaf.tabs.map((tabId) => {
+    const tab = props.tabsIndex[tabId]
+    const resolved = props.resolvedTabsIndex[tabId]
+    const session = tab ? props.sessionsByGlobalKey[tab.globalSessionKey] : undefined
+    return {
+      tabId,
+      name: session?.name ?? t('session.missingPaneSession'),
+      icon: session?.icon ?? null,
+      type: session?.type ?? null,
+      pinned: !!tab?.pinned,
+      active: leaf.activeTabId === tabId,
+      offline: resolved?.availability === 'offline'
+    }
+  })
+})
+// Only surface the tab strip when a pane actually carries more than one session,
+// so Ctrl+W "close active tab" stays visible/predictable instead of silently
+// swapping to an invisible neighbour tab.
+const showPaneTabs = computed(() => paneTabs.value.length > 1)
+
+function handleSelectTab(tabId: string): void {
+  if (props.node.type !== 'leaf') return
+  emit('set-active-tab', { paneId: props.node.paneId, tabId })
+}
+
+function handleCloseTab(tabId: string): void {
+  if (props.node.type !== 'leaf') return
+  emit('close-tab', { paneId: props.node.paneId, tabId })
+}
+
+function handleTabDragStart(tabId: string, e: DragEvent): void {
+  if (props.node.type !== 'leaf') return
+  if (!e.dataTransfer) return
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData(TAB_MIME, JSON.stringify({ paneId: props.node.paneId, tabId }))
+}
+
+function handleTabDragEnd(): void {
+  resetPaneDropState()
+}
 const activeSessionRef = computed<SessionRef | null>(() => {
   const session = activeSession.value
   if (!session) return null
@@ -919,8 +1013,10 @@ watch(
   gap: 2px;
   padding: 4px;
   border-bottom: 1px solid var(--border-color);
-  background: rgba(45, 53, 72, 0.35);
+  background: color-mix(in srgb, var(--bg-tertiary) 55%, transparent);
   min-height: 34px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .pane-tab {
@@ -929,18 +1025,46 @@ watch(
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
-  padding: 2px 8px;
+  padding: 3px 6px 3px 8px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
   min-width: 0;
+  font-size: var(--font-size-xs);
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
 
   &.active {
     color: var(--text-primary);
     border-color: var(--accent-primary);
     background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
   }
+
+  &.offline {
+    color: var(--text-muted);
+    border-style: dashed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 1px;
+  }
+}
+
+.pane-tab-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.pane-tab :deep(.type-badge) {
+  flex-shrink: 0;
+  border-radius: var(--radius-xs);
 }
 
 .pane-tab-name {
@@ -950,13 +1074,37 @@ watch(
 }
 
 .pane-tab-pin {
-  font-size: 10px;
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
 }
 
 .pane-tab-close {
-  font-size: 11px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
   color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 1px;
+    color: var(--text-primary);
+  }
 }
 
 .pane-tab-empty {

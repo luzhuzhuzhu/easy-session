@@ -66,10 +66,8 @@ withDefaults(defineProps<{
     opacity: 1;
   }
 
-  &:focus-visible {
-    outline: 1px solid var(--accent-primary);
-    outline-offset: 2px;
-  }
+  // Focus ring comes from the global :focus-visible rule (global.scss) so all
+  // interactive controls share one consistent focus treatment.
 
   &:disabled {
     cursor: default;
@@ -92,7 +90,7 @@ withDefaults(defineProps<{
 .icon-button-xs {
   width: 22px;
   height: 22px;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
 }
 
 .icon-button-md {

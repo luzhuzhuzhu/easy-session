@@ -1,6 +1,24 @@
 import { randomUUID } from 'crypto'
 import { BrowserWindow } from 'electron'
+import { createLogger } from './logger'
 import { CLI_TYPE_DISPLAY_NAMES, CLI_TYPE_NAME_PATTERN } from '../../shared/cli-types'
+
+const log = createLogger('session-manager')
+
+// 渲染层广播抽象：把 SessionManager 与 BrowserWindow 解耦，便于脱离 Electron 单测（注入桩）。
+export interface SessionBroadcaster {
+  broadcast(channel: string, payload?: unknown): void
+}
+
+// 默认实现：广播到所有 BrowserWindow（生产用）。未注入时回退到它。
+class BrowserWindowBroadcaster implements SessionBroadcaster {
+  broadcast(channel: string, payload?: unknown): void {
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (payload === undefined) win.webContents.send(channel)
+      else win.webContents.send(channel, payload)
+    })
+  }
+}
 import { CliManager } from './cli-manager'
 import { SessionOutputManager } from './session-output'
 import { DataStore } from './data-store'
@@ -34,15 +52,20 @@ export class SessionManager {
   private lifecycles: Record<CliType, ISessionLifecycle>
   private statusListeners = new Set<(event: SessionStatusChangeEvent) => void>()
 
+  private broadcaster: SessionBroadcaster
+
   constructor(
     private cliManager: CliManager,
     claudeLifecycle: ClaudeSessionLifecycle,
     private codexLifecycle: CodexSessionLifecycle,
     outputManager: SessionOutputManager,
     private opencodeLifecycle?: OpenCodeSessionLifecycle,
-    private terminalLifecycle?: TerminalSessionLifecycle
+    private terminalLifecycle?: TerminalSessionLifecycle,
+    // 可注入广播器（默认走 BrowserWindow）：测试可传桩，无需依赖 Electron。
+    broadcaster?: SessionBroadcaster
   ) {
     this.outputManager = outputManager
+    this.broadcaster = broadcaster ?? new BrowserWindowBroadcaster()
 
     const createNoopLifecycle = (label: string): ISessionLifecycle => ({
       create: (_id, _name, _params) => {
@@ -95,15 +118,15 @@ export class SessionManager {
     const result = await this.store.load()
     if (!result.data) {
       if (result.error === 'corrupted') {
-        console.error('[SessionManager] session data is corrupted, starting from empty state')
+        log.error('[SessionManager] session data is corrupted, starting from empty state')
       } else if (result.error === 'read_error') {
-        console.error('[SessionManager] failed to read session data, starting from empty state')
+        log.error('[SessionManager] failed to read session data, starting from empty state')
       }
       return
     }
 
     let migrated = !!result.restoredFromBackup
-    if (migrated) console.warn('[SessionManager] session data restored from backup')
+    if (migrated) log.warn('[SessionManager] session data restored from backup')
     const now = Date.now()
 
     for (const session of result.data) {
@@ -148,7 +171,7 @@ export class SessionManager {
 
       const lifecycle = this.lifecycles[session.type as CliType]
       if (!lifecycle) {
-        console.warn(
+        log.warn(
           `[SessionManager] skip unknown session type: ${session.id} (type=${session.type})`
         )
         migrated = true
@@ -408,9 +431,7 @@ export class SessionManager {
     }
 
     if (ids.length > 0) {
-      BrowserWindow.getAllWindows().forEach((win) => {
-        win.webContents.send('sessions:cleared')
-      })
+      this.broadcaster.broadcast('sessions:cleared')
       this.persist()
     }
   }
@@ -539,10 +560,10 @@ export class SessionManager {
 
     this.persistTail = this.persistTail
       .catch((err) => {
-        if (err) console.warn('[SessionManager] previous persist chain error:', err)
+        if (err) log.warn({ err }, '[SessionManager] previous persist chain error')
       })
       .then(() => this.store?.save(snapshot))
-      .catch((err) => console.error('[SessionManager] persist failed:', err))
+      .catch((err) => log.error({ err }, '[SessionManager] persist failed'))
   }
 
   async flush(): Promise<void> {
@@ -573,9 +594,7 @@ export class SessionManager {
       listener(payload)
     }
 
-    BrowserWindow.getAllWindows().forEach((win) => {
-      win.webContents.send('session:status', payload)
-    })
+    this.broadcaster.broadcast('session:status', payload)
   }
 
   subscribeStatus(listener: (event: SessionStatusChangeEvent) => void): () => void {

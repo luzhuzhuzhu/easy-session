@@ -7,6 +7,7 @@ import type { ProjectSessionGroup, SessionTreeSessionItem } from '@/features/ses
 type ToastLike = {
   success(message: string): void
   error(message: string): void
+  info(message: string): void
 }
 
 type SessionStoreLike = {
@@ -203,6 +204,7 @@ export function useSessionInteractionState(options: UseSessionInteractionStateOp
 
     const current = options.sessionsStore.getUnifiedSession(id)
     if (current && current.name === name) {
+      options.toast.info(options.t('toast.renameUnchanged'))
       closeRenameDialog()
       return
     }

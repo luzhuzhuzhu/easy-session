@@ -1,12 +1,16 @@
 export const tokens = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
-
+  /*
+   * Fonts use the same system stack as the desktop app (variables.scss
+   * --font-family / --font-mono). The remote Google Fonts @import was removed:
+   * it leaked the visit to a third party, broke offline/air-gapped access, and
+   * blocked first paint on a CDN round-trip.
+   */
   :root {
     color-scheme: light;
 
-    --font-body: 'DM Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
-    --font-display: 'DM Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+    --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+    --font-mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
 
     --page-background: #f5f5f7;
 

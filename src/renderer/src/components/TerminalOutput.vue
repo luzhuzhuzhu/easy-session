@@ -1080,7 +1080,13 @@ async function handleClear(): Promise<void> {
   resetLocalBuffer()
   clearLiveOutputQueue()
   clearWarmHistorySnapshot(props.sessionRef?.globalSessionKey)
-  hasMoreHistory.value = false
+  // Clearing wipes the current view but must not permanently disable history
+  // loading. Reset to the initial loadable state so the user can re-pull
+  // history; loadMoreHistory() will settle hasMoreHistory=false on its own if
+  // nothing remains to load.
+  currentHistoryLoadLines.value = HISTORY_LOAD_LINES
+  hasMoreHistory.value = true
+  loadingMoreHistory.value = false
 }
 
 watch(

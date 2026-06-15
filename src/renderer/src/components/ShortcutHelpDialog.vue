@@ -77,9 +77,10 @@ const groups = computed<ShortcutGroup[]>(() => [
     items: [
       { keys: ['Ctrl', '1'], label: t('shortcuts.items.dashboard') },
       { keys: ['Ctrl', '2'], label: t('shortcuts.items.sessions') },
-      { keys: ['Ctrl', '3'], label: t('shortcuts.items.projects') },
-      { keys: ['Ctrl', '4'], label: t('shortcuts.items.skills') },
-      { keys: ['Ctrl', '5'], label: t('shortcuts.items.settings') },
+      { keys: ['Ctrl', '3'], label: t('shortcuts.items.collaboration') },
+      { keys: ['Ctrl', '4'], label: t('shortcuts.items.projects') },
+      { keys: ['Ctrl', '5'], label: t('shortcuts.items.skills') },
+      { keys: ['Ctrl', '6'], label: t('shortcuts.items.settings') },
       { keys: ['Ctrl', ','], label: t('shortcuts.items.settings') }
     ]
   },

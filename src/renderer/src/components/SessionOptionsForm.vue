@@ -1015,7 +1015,7 @@ defineExpose({ buildOptions, hasOpencodeConflict })
   border: 1px solid var(--border-color);
   border-radius: 50%;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   line-height: 1;
   cursor: help;

@@ -252,7 +252,7 @@ onMounted(async () => {
   gap: 6px;
   padding: 4px 8px;
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   user-select: none;
   transition: background var(--transition-fast);
   &:hover { background: var(--bg-hover); }
@@ -292,7 +292,7 @@ onMounted(async () => {
 .tree-caret {
   width: 14px;
   text-align: center;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
   flex-shrink: 0;
   transition: color var(--transition-fast);
@@ -308,7 +308,7 @@ onMounted(async () => {
 }
 
 .tree-count {
-  font-size: 9px;
+  font-size: var(--font-size-xs);
   color: var(--text-muted);
   font-weight: 500;
   background: var(--bg-tertiary);
@@ -321,7 +321,7 @@ onMounted(async () => {
 }
 
 .skill-tag {
-  font-size: 9px;
+  font-size: var(--font-size-xs);
   padding: 1px 5px;
   border-radius: var(--radius-xs);
   flex-shrink: 0;

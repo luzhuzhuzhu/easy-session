@@ -3,7 +3,6 @@ import { CliManager } from '../services/cli-manager'
 import { ClaudeAdapter } from '../services/claude-adapter'
 import { CodexAdapter } from '../services/codex-adapter'
 import { OpenCodeAdapter } from '../services/opencode-adapter'
-import type { CliType } from '../services/types'
 
 export function registerCliHandlers(
   cliManager: CliManager,
@@ -11,25 +10,9 @@ export function registerCliHandlers(
   codexAdapter: CodexAdapter,
   openCodeAdapter: OpenCodeAdapter
 ): void {
-  ipcMain.handle(
-    'cli:spawn',
-    (_event, type: CliType, projectPath: string, options?: object) => {
-      if (type !== 'claude' && type !== 'codex' && type !== 'opencode') {
-        throw new Error('参数 type 必须为 claude、codex 或 opencode')
-      }
-      if (typeof projectPath !== 'string') {
-        throw new Error('参数 projectPath 必须为字符串')
-      }
-      if (type === 'claude') {
-        return claudeAdapter.startSession(projectPath, options)
-      }
-      if (type === 'codex') {
-        return codexAdapter.startSession(projectPath, options)
-      }
-      return openCodeAdapter.startSession(projectPath, options)
-    }
-  )
-
+  // 注：旧的 'cli:spawn' 裸进程启动 API 已下线——它游离于 SessionManager 之外、
+  // 无会话生命周期归属，且 preload 白名单已不再放行该通道（渲染层无调用方）。
+  // 会话启动统一走 session:create / 各 *-session-lifecycle 的 adapter.startSession。
   ipcMain.handle('cli:kill', (_event, id: string) => {
     if (typeof id !== 'string' || !id) throw new Error('参数 id 必须为非空字符串')
     return cliManager.kill(id)

@@ -51,12 +51,17 @@
         class="tree-group sidebar-tree-row sidebar-project-shell"
         :class="{ 'drop-target': dragOverProjectKey === node.project.key }"
         draggable="true"
+        tabindex="0"
+        :aria-label="node.project.projectName"
+        :aria-keyshortcuts="'Alt+ArrowUp Alt+ArrowDown'"
         @dragstart="onProjectDragStart($event, node.project)"
         @dragenter.prevent="dragOverProjectKey = node.project.key"
         @dragover.prevent="onProjectDragOver($event)"
         @dragleave="handleDropTargetLeave($event, 'project', node.project.key)"
         @drop="handleProjectDrop($event, node.project.key)"
         @dragend="handleProjectDragEnd()"
+        @keydown.alt.up.prevent="onProjectReorder(orderedProjectKeys(), node.project.key, -1)"
+        @keydown.alt.down.prevent="onProjectReorder(orderedProjectKeys(), node.project.key, 1)"
       >
         <div class="project-node" @click="onToggleProject(node.project.key)">
           <span class="tree-caret" :class="{ expanded: isProjectExpanded(node.project.key) }" aria-hidden="true">
@@ -104,9 +109,12 @@
           role="button"
           tabindex="0"
           draggable="true"
+          :aria-keyshortcuts="'Alt+ArrowUp Alt+ArrowDown'"
           @click="onSessionClick(node.session)"
           @keydown.enter.prevent="onSessionClick(node.session)"
           @keydown.space.prevent="onSessionClick(node.session)"
+          @keydown.alt.up.prevent="onSessionReorder(node.projectKey, siblingSessionIds(node.projectKey), node.session.id, -1)"
+          @keydown.alt.down.prevent="onSessionReorder(node.projectKey, siblingSessionIds(node.projectKey), node.session.id, 1)"
           @dragstart="onSessionDragStart($event, node.session)"
           @dragenter.prevent="dragOverSessionId = node.session.id"
           @dragover.prevent="onSessionDragOver($event, node.projectKey)"
@@ -180,9 +188,26 @@ const props = defineProps<{
   onSessionDrop: (event: DragEvent, projectKey: string, targetSessionId: string) => void
   onSessionDragEnd: () => void
   onSessionContextMenu: (event: MouseEvent, session: SessionTreeSessionItem) => void
+  onSessionReorder: (projectKey: string, orderedSessionIds: string[], sessionId: string, direction: -1 | 1) => void
+  onProjectReorder: (orderedProjectKeys: string[], projectKey: string, direction: -1 | 1) => void
 }>()
 
 const { t } = useI18n()
+
+type SessionNode = Extract<SessionSidebarTreeNode, { type: 'session' }>
+type ProjectNode = Extract<SessionSidebarTreeNode, { type: 'project' }>
+
+function siblingSessionIds(projectKey: string): string[] {
+  return props.nodes
+    .filter((n): n is SessionNode => n.type === 'session' && n.projectKey === projectKey)
+    .map((n) => n.session.id)
+}
+
+function orderedProjectKeys(): string[] {
+  return props.nodes
+    .filter((n): n is ProjectNode => n.type === 'project')
+    .map((n) => n.project.key)
+}
 const dragOverProjectKey = ref('')
 const dragOverSessionId = ref('')
 

@@ -65,11 +65,17 @@ export async function commitProjectGitChanges(projectPath: string, message: stri
 }
 
 export async function checkoutProjectGitBranch(projectPath: string, branchName: string): Promise<void> {
+  const name = branchName.trim()
+  // 防 flag 注入：分支名不得以 '-' 开头，否则会被 git 当作选项解析（如 --orphan、-f）。
+  // 注意：checkout 的分支位不能用 '--' 前置分隔（那会变成 pathspec 语义），故用输入校验兜底。
+  if (!name || name.startsWith('-')) {
+    throw new Error(`非法分支名：${branchName}`)
+  }
   await execFileText('git', [
     '-C',
     projectPath,
     'checkout',
-    branchName
+    name
   ])
 }
 

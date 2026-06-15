@@ -21,23 +21,38 @@ export interface ConfirmDialogRequest extends Required<Omit<ConfirmDialogOptions
 let nextId = 0
 
 export const useConfirmDialogStore = defineStore('confirmDialog', () => {
+  interface QueuedConfirm {
+    request: ConfirmDialogRequest
+    resolve: (confirmed: boolean) => void
+  }
+
   const current = ref<ConfirmDialogRequest | null>(null)
+  const queue: QueuedConfirm[] = []
   let resolveCurrent: ((confirmed: boolean) => void) | null = null
+
+  function showNext(): void {
+    const next = queue.shift()
+    if (!next) {
+      current.value = null
+      resolveCurrent = null
+      return
+    }
+    current.value = next.request
+    resolveCurrent = next.resolve
+  }
 
   function close(confirmed: boolean): void {
     if (!resolveCurrent) return
     const resolve = resolveCurrent
     resolveCurrent = null
-    current.value = null
     resolve(confirmed)
+    // Advance to the next queued confirmation (if any) instead of silently
+    // dropping it; a rapid second confirm() no longer cancels the first.
+    showNext()
   }
 
   function confirm(options: ConfirmDialogOptions): Promise<boolean> {
-    if (resolveCurrent) {
-      close(false)
-    }
-
-    current.value = {
+    const request: ConfirmDialogRequest = {
       id: ++nextId,
       title: options.title,
       message: options.message ?? '',
@@ -47,8 +62,11 @@ export const useConfirmDialogStore = defineStore('confirmDialog', () => {
       tone: options.tone ?? 'default'
     }
 
-    return new Promise((resolve) => {
-      resolveCurrent = resolve
+    return new Promise<boolean>((resolve) => {
+      queue.push({ request, resolve })
+      if (!current.value) {
+        showNext()
+      }
     })
   }
 

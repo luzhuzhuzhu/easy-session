@@ -7,7 +7,9 @@ import { join } from 'path'
 import { promises as fs } from 'fs'
 import type { AgentBroker } from './broker'
 import { ES_CLIENT_SOURCE, buildWindowsShim, buildPosixShim } from './es-client-source'
+import { createLogger } from '../logger'
 
+const log = createLogger('agent-bus')
 const MAX_REQUEST_BYTES = 256 * 1024
 
 export interface AgentBusEnv {
@@ -95,12 +97,12 @@ export class AgentBusServer {
     return new Promise((resolve, reject) => {
       const server = net.createServer((socket) => this.handleConnection(socket))
       server.on('error', (err) => {
-        console.error('[agent-bus] 服务监听失败:', err)
+        log.error({ err }, '[agent-bus] 服务监听失败')
         reject(err)
       })
       server.listen(this.pipePath, () => {
         this.server = server
-        console.info(`[agent-bus] 已监听 ${this.pipePath}`)
+        log.info(`[agent-bus] 已监听 ${this.pipePath}`)
         resolve()
       })
     })

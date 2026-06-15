@@ -1,6 +1,9 @@
 import { randomUUID } from 'crypto'
 import { open, readFile, mkdir, rename, rm, copyFile } from 'fs/promises'
 import { dirname, normalize, resolve } from 'path'
+import { createLogger } from './logger'
+
+const log = createLogger('data-store')
 
 export interface LoadResult<T> {
   data: T | null
@@ -188,7 +191,7 @@ export class DataStore<T> {
     } catch (err: unknown) {
       const code = (err as NodeJS.ErrnoException).code
       if (code === 'ENOENT') return { data: null, error: 'not_found' }
-      console.error(`[DataStore] read failed ${path}:`, err)
+      log.error({ err }, `[DataStore] read failed ${path}`)
       return { data: null, error: 'read_error' }
     }
 
@@ -198,7 +201,7 @@ export class DataStore<T> {
       return { data: JSON.parse(content) as T }
     } catch (err) {
       const parseError = DataStore.buildJsonParseError(content, err)
-      console.error(`[DataStore] JSON parse failed ${path}:`, parseError)
+      log.error({ parseError }, `[DataStore] JSON parse failed ${path}`)
       return { data: null, error: 'corrupted', parseError }
     }
   }
@@ -211,7 +214,7 @@ export class DataStore<T> {
     if (result.error === 'corrupted' || result.error === 'read_error') {
       const backup = await this.loadFile(this.backupPath)
       if (backup.data) {
-        console.warn(`[DataStore] 从备份恢复: ${this.backupPath}`)
+        log.warn(`[DataStore] 从备份恢复: ${this.backupPath}`)
         return { data: backup.data, restoredFromBackup: true }
       }
     }
@@ -225,8 +228,21 @@ export class DataStore<T> {
     await this.enqueueSave(async () => {
       await mkdir(dirname(this.filePath), { recursive: true })
 
-      // 保存前将当前文件备份为 .bak
-      await copyFile(this.filePath, this.backupPath).catch(() => undefined)
+      // 保存前将当前文件备份为 .bak：先写临时副本再原子改名。
+      // copyFile 直写 .bak 若中途失败会留下「半个文件」覆盖掉原本完好的备份；
+      // 改为写临时文件、成功后才 rename 到 .bak，任何失败都不破坏既有好备份。
+      const backupTemp = `${this.backupPath}.tmp-${process.pid}-${randomUUID()}`
+      try {
+        await copyFile(this.filePath, backupTemp)
+        await rename(backupTemp, this.backupPath)
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code
+        // 源文件不存在 = 首次保存，无需备份；其余错误仅告警并保留既有 .bak，绝不用半成品覆盖。
+        if (code !== 'ENOENT') {
+          log.warn({ err }, `[DataStore] 备份失败，保留既有备份 ${this.backupPath}`)
+        }
+        await rm(backupTemp, { force: true }).catch(() => undefined)
+      }
 
       const tempPath = `${this.filePath}.tmp-${process.pid}-${randomUUID()}`
       await DataStore.writeDurable(tempPath, payload)

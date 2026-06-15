@@ -1,7 +1,71 @@
 import { ipcMain } from 'electron'
+import { z } from 'zod'
 import { SessionManager } from '../services/session-manager'
 import { detectShells } from '../services/shell-detector'
 import type { CreateSessionParams, SessionFilter, Session } from '../services/session-types'
+
+// session:create 的形状校验：用 zod 取代「不校验直接强转持久化」。
+// options 用 passthrough（校验已知字段类型，放过未知字段保兼容），校验作为准入门，
+// 通过后仍传原始 params，避免误删字段。
+const customCliArgSchema = z.object({ name: z.string(), value: z.string().optional() }).passthrough()
+
+const claudeOptionsSchema = z
+  .object({
+    model: z.string().optional(),
+    allowedTools: z.array(z.string()).optional(),
+    customArgs: z.array(customCliArgSchema).optional()
+  })
+  .passthrough()
+
+const codexOptionsSchema = z
+  .object({
+    model: z.string().optional(),
+    permissionsMode: z.enum(['read-only', 'default', 'full-access']).optional(),
+    sandboxMode: z.enum(['read-only', 'workspace-write', 'danger-full-access']).optional(),
+    approvalMode: z
+      .enum(['untrusted', 'on-request', 'never', 'suggest', 'auto-edit', 'full-auto'])
+      .optional(),
+    inlineMode: z.boolean().optional(),
+    customArgs: z.array(customCliArgSchema).optional()
+  })
+  .passthrough()
+
+const opencodeOptionsSchema = z
+  .object({
+    cliPath: z.string().optional(),
+    model: z.string().optional(),
+    agent: z.string().optional(),
+    prompt: z.string().optional(),
+    sessionId: z.string().optional(),
+    continueLast: z.boolean().optional(),
+    fork: z.boolean().optional(),
+    attachUrl: z.string().optional(),
+    serverMode: z.enum(['off', 'attach']).optional()
+  })
+  .passthrough()
+
+const terminalOptionsSchema = z
+  .object({
+    shell: z.string().optional(),
+    shellArgs: z.array(customCliArgSchema).optional(),
+    startupCommands: z.array(z.string()).optional()
+  })
+  .passthrough()
+
+const baseSessionFields = {
+  name: z.string().optional(),
+  icon: z.string().optional(),
+  projectPath: z.string().min(1, 'projectPath 不能为空'),
+  parentId: z.string().optional(),
+  startPaused: z.boolean().optional()
+}
+
+const createSessionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('claude'), options: claudeOptionsSchema.optional(), ...baseSessionFields }),
+  z.object({ type: z.literal('codex'), options: codexOptionsSchema.optional(), ...baseSessionFields }),
+  z.object({ type: z.literal('opencode'), options: opencodeOptionsSchema.optional(), ...baseSessionFields }),
+  z.object({ type: z.literal('terminal'), options: terminalOptionsSchema.optional(), ...baseSessionFields })
+])
 
 function assertString(value: unknown, name: string): asserts value is string {
   if (typeof value !== 'string' || !value) {
@@ -19,9 +83,14 @@ export function registerSessionHandlers(
   sessionManager: SessionManager
 ): void {
   ipcMain.handle('session:create', (_event, params: CreateSessionParams) => {
-    if (!params || typeof params !== 'object') {
-      throw new Error('参数 params 必须为对象')
+    const result = createSessionSchema.safeParse(params)
+    if (!result.success) {
+      const detail = result.error.issues
+        .map((issue) => `${issue.path.join('.') || 'params'}: ${issue.message}`)
+        .join('; ')
+      throw new Error(`参数 params 校验失败：${detail}`)
     }
+    // 校验通过后传原始 params（zod 仅作准入门，不改写形状）。
     return sessionManager.createSession(params)
   })
 

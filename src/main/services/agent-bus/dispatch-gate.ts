@@ -2,6 +2,9 @@
 // 借鉴 golutra chat_dispatch_batcher 的「单 inflight + 就绪放行」，外加输出静默判空闲。
 
 import type { SessionBridge } from './types'
+import { createLogger } from '../logger'
+
+const log = createLogger('agent-bus')
 
 interface PendingInject {
   text: string
@@ -17,6 +20,14 @@ interface SessionGateState {
   // 主动 ack：上一次注入的时间戳，以及注入后是否已观察到 agent 产生输出（确认它消费了上一条）。
   lastInjectAt: number
   reactionSeen: boolean
+  // 注入文本的待消费回显（去 ANSI/空白后）：PTY 会把注入内容 echo 回来，
+  // 这部分输出不能当作 agent 的反应，否则 ack 反馈环会被自己的回显误触发。
+  pendingEcho: string
+}
+
+// 去除 ANSI 转义与空白，用于判断某段输出是否为注入文本的回显。
+function stripForEcho(text: string): string {
+  return text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/[\x00-\x1f\x7f]/g, '').replace(/\s+/g, '')
 }
 
 // 连续无输出多久判定 agent 空闲（可注入）。
@@ -50,14 +61,35 @@ export class DispatchGate {
   }
 
   // 由 AgentBus 在收到 PTY 输出时调用，刷新空闲判定基准。
-  noteOutput(sessionId: string): void {
+  // 传入 data 时会先扣除注入文本自身的回显，避免把回显当作 agent 的反应（误触发 ack）。
+  noteOutput(sessionId: string, data?: string): void {
     const state = this.ensure(sessionId)
     const now = Date.now()
-    // 注入之后首次看到输出 = agent 已对上一条注入产生反应（主动 ack）。
-    if (state.lastInjectAt > 0 && now > state.lastInjectAt + 50) {
-      state.reactionSeen = true
+    // 注入之后首次看到「非回显」输出 = agent 已对上一条注入产生反应（主动 ack）。
+    if (state.lastInjectAt > 0 && !state.reactionSeen) {
+      if (this.consumeEcho(state, data)) {
+        // 仍在消费注入回显，不计为反应。
+        state.lastOutputAt = now
+        return
+      }
+      if (now > state.lastInjectAt + 50) {
+        state.reactionSeen = true
+        state.pendingEcho = ''
+      }
     }
     state.lastOutputAt = now
+  }
+
+  // 若本段输出是注入文本回显的一部分，从待消费回显中扣除并返回 true。
+  // 无 data 或无待消费回显时退回时间启发式（返回 false，保持向后兼容）。
+  private consumeEcho(state: SessionGateState, data?: string): boolean {
+    if (!data || !state.pendingEcho) return false
+    const norm = stripForEcho(data)
+    if (!norm) return true // 纯控制字符/空白，视作回显噪声
+    const idx = state.pendingEcho.indexOf(norm)
+    if (idx === -1) return false
+    state.pendingEcho = state.pendingEcho.slice(idx + norm.length)
+    return true
   }
 
   // 最近一次输出时间戳（守护判空闲用）。无记录返回 0。
@@ -87,7 +119,7 @@ export class DispatchGate {
   private ensure(sessionId: string): SessionGateState {
     let state = this.states.get(sessionId)
     if (!state) {
-      state = { queue: [], inflight: false, lastOutputAt: 0, lastInjectAt: 0, reactionSeen: true }
+      state = { queue: [], inflight: false, lastOutputAt: 0, lastInjectAt: 0, reactionSeen: true, pendingEcho: '' }
       this.states.set(sessionId, state)
     }
     return state
@@ -134,9 +166,11 @@ export class DispatchGate {
       state.lastOutputAt = now
       state.lastInjectAt = now
       state.reactionSeen = false
+      // 记录待消费回显：注入文本会被 PTY echo 回来，先扣除再判定真正的 agent 反应。
+      state.pendingEcho = stripForEcho(text)
     } catch (err) {
       // writeRaw 抛错（会话在注入瞬间死亡等）：吞掉，避免 void flush 变成未处理 rejection。
-      console.warn('[agent-bus] 注入失败:', err)
+      log.warn({ err }, '[agent-bus] 注入失败')
     } finally {
       state.inflight = false
     }

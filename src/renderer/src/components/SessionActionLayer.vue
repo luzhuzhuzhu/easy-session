@@ -361,7 +361,7 @@ function handleWakeReminderChange(event: Event): void {
 .send-error {
   margin: var(--spacing-xs) 0 0;
   font-size: var(--font-size-sm);
-  color: var(--accent-danger, #e5484d);
+  color: var(--status-error);
 }
 
 .icon-grid {

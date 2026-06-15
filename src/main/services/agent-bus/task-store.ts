@@ -138,6 +138,16 @@ export class TaskStore {
     const task = this.tasks.get(id)
     if (!task) return { error: `任务 ${id} 不存在` }
 
+    // 用户手动校正可在活动态/终结态之间往返（含重开已完成任务），但禁止跳到
+    // 系统专属的初始态 created/delivered（由派发/投递时机管理，手动置入会破坏
+    // 投递与计时不变量）；同状态空跳转也拒绝，避免无意义事件与刷新。
+    if (next === 'created' || next === 'delivered') {
+      return { error: `不能手动将任务置为「${next}」：该状态由系统在派发/投递时管理` }
+    }
+    if (task.status === next) {
+      return { error: `任务已处于 ${next}` }
+    }
+
     const now = Date.now()
     const note = (text || '').trim()
     task.status = next
@@ -368,7 +378,8 @@ export class TaskStore {
             task.statusSince = now
             task.updatedAt = now
             task.result = '接单方长时间无响应'
-            task.history.push({ at: now, status: 'expired', by: task.to, text: task.result })
+            // 过期是守护行为，归属记为系统而非接单方（接单方并未操作）。
+            task.history.push({ at: now, status: 'expired', by: 'system', text: task.result })
             this.deps.notify(task.from, `⏰ 任务 ${task.id} 派给「${task.toName}」长时间无响应，已过期 — 可重新派发`, peer)
             this.deps.onChange()
           } else {

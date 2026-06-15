@@ -63,31 +63,31 @@
           <button
             class="cli-status-btn"
             type="button"
-            :title="getCliStatusTitle(appStore.claudeAvailable ? 'topbar.claudeOnline' : 'topbar.claudeOffline')"
-            :aria-label="getCliStatusTitle(appStore.claudeAvailable ? 'topbar.claudeOnline' : 'topbar.claudeOffline')"
+            :title="cliStatusTitle(appStore.claudeAvailable, 'topbar.claudeOnline', 'topbar.claudeOffline')"
+            :aria-label="cliStatusTitle(appStore.claudeAvailable, 'topbar.claudeOnline', 'topbar.claudeOffline')"
             @click="openCliSettings"
           >
-            <span class="status-dot" :class="appStore.claudeAvailable ? 'online' : 'offline'"></span>
+            <span class="status-dot" :class="cliDotClass(appStore.claudeAvailable)"></span>
             <span class="status-label">Claude</span>
           </button>
           <button
             class="cli-status-btn"
             type="button"
-            :title="getCliStatusTitle(appStore.codexAvailable ? 'topbar.codexOnline' : 'topbar.codexOffline')"
-            :aria-label="getCliStatusTitle(appStore.codexAvailable ? 'topbar.codexOnline' : 'topbar.codexOffline')"
+            :title="cliStatusTitle(appStore.codexAvailable, 'topbar.codexOnline', 'topbar.codexOffline')"
+            :aria-label="cliStatusTitle(appStore.codexAvailable, 'topbar.codexOnline', 'topbar.codexOffline')"
             @click="openCliSettings"
           >
-            <span class="status-dot" :class="appStore.codexAvailable ? 'online' : 'offline'"></span>
+            <span class="status-dot" :class="cliDotClass(appStore.codexAvailable)"></span>
             <span class="status-label">Codex</span>
           </button>
           <button
             class="cli-status-btn"
             type="button"
-            :title="getCliStatusTitle(appStore.opencodeAvailable ? 'topbar.opencodeOnline' : 'topbar.opencodeOffline')"
-            :aria-label="getCliStatusTitle(appStore.opencodeAvailable ? 'topbar.opencodeOnline' : 'topbar.opencodeOffline')"
+            :title="cliStatusTitle(appStore.opencodeAvailable, 'topbar.opencodeOnline', 'topbar.opencodeOffline')"
+            :aria-label="cliStatusTitle(appStore.opencodeAvailable, 'topbar.opencodeOnline', 'topbar.opencodeOffline')"
             @click="openCliSettings"
           >
-            <span class="status-dot" :class="appStore.opencodeAvailable ? 'online' : 'offline'"></span>
+            <span class="status-dot" :class="cliDotClass(appStore.opencodeAvailable)"></span>
             <span class="status-label">OpenCode</span>
           </button>
           <span class="session-count" v-if="activeSessionCount > 0">{{ activeSessionCount }} {{ $t('topbar.activeSessions') }}</span>
@@ -224,6 +224,16 @@ function getCliStatusTitle(statusKey: string): string {
   return `${t(statusKey)} · ${t('topbar.openCliSettings')}`
 }
 
+function cliDotClass(available: boolean): 'checking' | 'online' | 'offline' {
+  if (appStore.cliChecking) return 'checking'
+  return available ? 'online' : 'offline'
+}
+
+function cliStatusTitle(available: boolean, onlineKey: string, offlineKey: string): string {
+  if (appStore.cliChecking) return getCliStatusTitle('topbar.cliChecking')
+  return getCliStatusTitle(available ? onlineKey : offlineKey)
+}
+
 function formatProjectInstanceCrumb(instanceId: string): string {
   if (instanceId === LOCAL_INSTANCE_ID) {
     return t('session.instanceLocal')
@@ -238,6 +248,11 @@ function formatProjectInstanceCrumb(instanceId: string): string {
 onMounted(() => {
   if (!projectsStore.unifiedProjects.length) {
     void instancesStore.fetchInstances().then(() => projectsStore.fetchAllProjects())
+  }
+  // Ensure the top-bar CLI indicators get probed even when the first route
+  // mounted is not the dashboard (which has its own check).
+  if (!appStore.cliChecked) {
+    void appStore.checkCliStatus()
   }
 })
 </script>
@@ -451,6 +466,27 @@ onMounted(() => {
 
   &.offline {
     background: var(--text-muted);
+  }
+
+  &.checking {
+    background: var(--status-warning);
+    animation: cli-status-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes cli-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot.checking {
+    animation: none;
   }
 }
 

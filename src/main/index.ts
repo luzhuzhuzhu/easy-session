@@ -34,6 +34,9 @@ import { RemoteGatewayManager } from './services/remote-gateway-manager'
 import { SessionOutputManager } from './services/session-output'
 import { AgentBus } from './services/agent-bus'
 import { ES_SYSTEM_PROMPT_HINT, getEsSkillMarkdown } from './services/agent-bus/skill'
+import { createLogger } from './services/logger'
+
+const log = createLogger('main')
 
 function loadEnvironmentFiles(): void {
   const candidates = [join(process.cwd(), '.env.local'), join(process.cwd(), '.env')]
@@ -107,7 +110,7 @@ async function flushAllStoresOnShutdown(): Promise<void> {
   let warned = false
   const warnTimer = setTimeout(() => {
     warned = true
-    console.warn(
+    log.warn(
       `[shutdown] flush still running after ${SHUTDOWN_FLUSH_WARN_MS}ms, waiting for completion to protect data`
     )
   }, SHUTDOWN_FLUSH_WARN_MS)
@@ -126,12 +129,12 @@ async function flushAllStoresOnShutdown(): Promise<void> {
   })
 
   if (warned) {
-    console.warn('[shutdown] flush completed after extended wait')
+    log.warn('[shutdown] flush completed after extended wait')
   }
 
   for (const item of values) {
     if (item.status === 'rejected') {
-      console.error('[shutdown] flush failed:', item.reason)
+      log.error({ err: item.reason }, '[shutdown] flush failed')
     }
   }
 }
@@ -159,7 +162,7 @@ async function shutdownApp(): Promise<void> {
     try {
       await cloudflareTunnelManager.stop()
     } catch (err) {
-      console.warn('[cloudflare-tunnel] stop failed:', err)
+      log.warn({ err }, '[cloudflare-tunnel] stop failed')
     } finally {
       cloudflareTunnelManager = null
     }
@@ -169,7 +172,7 @@ async function shutdownApp(): Promise<void> {
     try {
       await remoteServiceManager.stop()
     } catch (err) {
-      console.warn('[remote] stop failed:', err)
+      log.warn({ err }, '[remote] stop failed')
     } finally {
       remoteServiceManager = null
     }
@@ -179,13 +182,13 @@ async function shutdownApp(): Promise<void> {
     try {
       remoteGatewayManager.dispose()
     } catch (err) {
-      console.warn('[remote-gateway] dispose failed:', err)
+      log.warn({ err }, '[remote-gateway] dispose failed')
     } finally {
       remoteGatewayManager = null
     }
   }
 
-  await agentBus.stop().catch((err) => console.warn('[agent-bus] stop failed:', err))
+  await agentBus.stop().catch((err) => log.warn({ err }, '[agent-bus] stop failed'))
 
   sessionManager.shutdownAll()
   cliManager.killAll()
@@ -432,25 +435,25 @@ app.whenReady().then(async () => {
     ])
 
     if (projectResult.status === 'rejected') {
-      console.error('[init] project init failed:', projectResult.reason)
+      log.error({ err: projectResult.reason }, '[init] project init failed')
     }
     if (sessionResult.status === 'rejected') {
-      console.error('[init] session load failed:', sessionResult.reason)
+      log.error({ err: sessionResult.reason }, '[init] session load failed')
     }
     if (workspaceResult.status === 'rejected') {
-      console.error('[init] workspace layout init failed:', workspaceResult.reason)
+      log.error({ err: workspaceResult.reason }, '[init] workspace layout init failed')
     }
     if (remoteInstanceResult.status === 'rejected') {
-      console.error('[init] remote instance init failed:', remoteInstanceResult.reason)
+      log.error({ err: remoteInstanceResult.reason }, '[init] remote instance init failed')
     }
     if (remoteNetworkSettingsResult.status === 'rejected') {
-      console.error('[init] remote network settings init failed:', remoteNetworkSettingsResult.reason)
+      log.error({ err: remoteNetworkSettingsResult.reason }, '[init] remote network settings init failed')
     }
     if (remoteServiceResult.status === 'rejected') {
-      console.error('[init] remote service init failed:', remoteServiceResult.reason)
+      log.error({ err: remoteServiceResult.reason }, '[init] remote service init failed')
     }
     if (cloudflareTunnelResult.status === 'rejected') {
-      console.error('[init] cloudflare tunnel init failed:', cloudflareTunnelResult.reason)
+      log.error({ err: cloudflareTunnelResult.reason }, '[init] cloudflare tunnel init failed')
     }
 
     registerRemoteInstanceHandlers(remoteInstanceManager)
@@ -468,10 +471,10 @@ app.whenReady().then(async () => {
         claudeAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
       } else {
         // 未就绪时不挂 es 系统提示（避免 claude 误以为有 es 可用）；协作面板会显示不可用横幅。
-        console.error('[init] agent bus 未就绪，终端间协作不可用:', agentBus.getStartError())
+        log.error({ err: agentBus.getStartError() }, '[init] agent bus 未就绪，终端间协作不可用')
       }
     } catch (err) {
-      console.error('[init] agent bus 启动失败:', err)
+      log.error({ err }, '[init] agent bus 启动失败')
     }
 
     electronApp.setAppUserModelId('com.easysession')
@@ -487,7 +490,7 @@ app.whenReady().then(async () => {
       }
     })
   } catch (err) {
-    console.error('[App] init failed:', err)
+    log.error({ err }, '[App] init failed')
     app.quit()
   }
 })

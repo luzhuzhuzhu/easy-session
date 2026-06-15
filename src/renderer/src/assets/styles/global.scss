@@ -99,6 +99,18 @@ input, textarea, select {
   box-shadow: var(--focus-ring);
 }
 
+// 尊重系统"减少动态效果"偏好（桌面端全局兜底）
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 // 代码字体
 code, pre {
   font-family: var(--font-mono);
@@ -330,7 +342,7 @@ textarea.form-input { resize: vertical; font-family: inherit; }
   flex-shrink: 0;
 
   &.claude { background: color-mix(in srgb, var(--accent-primary) 15%, transparent); color: var(--accent-primary); }
-  &.codex { background: color-mix(in srgb, var(--accent-secondary) 15%, transparent); color: var(--accent-secondary); }
+  &.codex { background: color-mix(in srgb, var(--badge-codex) 22%, transparent); color: var(--badge-codex); }
   &.opencode { background: color-mix(in srgb, var(--status-info) 16%, transparent); color: var(--status-info); }
   &.terminal { background: color-mix(in srgb, var(--status-success) 15%, transparent); color: var(--status-success); }
   &.lg { width: 32px; height: 32px; font-size: var(--font-size-md); }

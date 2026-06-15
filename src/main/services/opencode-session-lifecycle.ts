@@ -3,7 +3,9 @@ import type { SessionOutputManager } from './session-output'
 import type { ISessionLifecycle } from './session-lifecycle'
 import type { Session, OpenCodeSession, CreateSessionParams } from './session-types'
 import type { OpenCodeSessionOptions } from './types'
+import { createLogger } from './logger'
 
+const log = createLogger('opencode')
 const OPENCODE_SESSION_DISCOVERY_RETRY_INTERVAL_MS = 800
 const OPENCODE_SESSION_DISCOVERY_MAX_ATTEMPTS = 25
 
@@ -249,7 +251,7 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
   }
 
   private logStartupStrategy(strategy: string, details: Record<string, unknown>): void {
-    console.log(`[OpenCode] Startup strategy: ${strategy}`, details)
+    log.info({ details }, `[OpenCode] Startup strategy: ${strategy}`)
   }
 
   private shouldUseListDiscovery(session: OpenCodeSession): boolean {

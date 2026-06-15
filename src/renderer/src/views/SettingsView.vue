@@ -1072,7 +1072,7 @@ onMounted(async () => {
   border-radius: var(--radius-xs);
   background: var(--bg-primary);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 800;
   line-height: 1;
 }
@@ -1100,7 +1100,7 @@ onMounted(async () => {
 
 .settings-nav-count {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
 }
 
 .settings-content {

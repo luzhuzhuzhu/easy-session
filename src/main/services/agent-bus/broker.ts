@@ -90,6 +90,9 @@ export class AgentBroker {
       this.messageLog = data.messages.slice(-MESSAGE_LOG_CAP)
       for (const msg of this.messageLog) {
         if (msg.readAt) continue // 已读消息只进日志，不回灌 mailbox（保持 mailbox 仅含未读）
+        // 仅回灌仍存在的会话的未读；旧/已删会话（重启后已不在 sessions 中）不恢复收件箱，
+        // 否则这些未读永远无人取走，成为内存残留。messageLog 仍全量保留供 UI/历史。
+        if (!this.bridge.getName(msg.to)) continue
         const box = this.mailboxes.get(msg.to) || []
         box.push(msg)
         this.mailboxes.set(msg.to, box)
@@ -193,7 +196,7 @@ export class AgentBroker {
       return ok(ES_HELP_TEXT)
     }
 
-    const me = this.bridge.resolveByProcessId(req.agent)
+    const me = this.bridge.resolveCaller(req.agent)
     if (!me) {
       return fail('无法识别当前会话（bus 身份缺失，可能会话尚未就绪）', 1)
     }
@@ -320,8 +323,10 @@ export class AgentBroker {
     }
     const box = this.mailboxes.get(input.to) || []
     box.push(message)
-    if (box.length > MAILBOX_CAP) box.splice(0, box.length - MAILBOX_CAP) // 软上限：丢最旧未读
+    let dropped: AgentBusMessage[] = []
+    if (box.length > MAILBOX_CAP) dropped = box.splice(0, box.length - MAILBOX_CAP) // 软上限：丢最旧未读
     this.mailboxes.set(input.to, box)
+    if (dropped.length) this.notifyDroppedSenders(input.to, dropped)
     this.messageLog.push(message)
     if (this.messageLog.length > MESSAGE_LOG_CAP) {
       this.messageLog.splice(0, this.messageLog.length - MESSAGE_LOG_CAP)
@@ -329,6 +334,23 @@ export class AgentBroker {
     this.flushWaiters(input.to)
     this.onChange()
     return message
+  }
+
+  // 收件箱溢出丢弃最旧未读时，回告各原始发送方其投递已被丢弃，避免任务事件静默丢失。
+  // 仅回告真实会话发送方（system/user 略过）；丢弃通知本身 from=system，不会递归放大。
+  private notifyDroppedSenders(recipient: string, dropped: AgentBusMessage[]): void {
+    const recipientName = this.bridge.getName(recipient) || recipient
+    const senders = new Set<string>()
+    for (const msg of dropped) {
+      if (!msg.from || msg.from === 'system' || msg.from === 'user' || msg.from === recipient) continue
+      senders.add(msg.from)
+    }
+    for (const sender of senders) {
+      this.notify(
+        sender,
+        `⚠️ 你发往「${recipientName}」的部分消息因其收件箱已满（未读超过 ${MAILBOX_CAP} 条）被丢弃，请确认对方是否在处理。`
+      )
+    }
   }
 
   // 移除一个 waiter；若该会话再无 waiter（前台 es 已退出）且仍有未读，补一个纯提醒。
@@ -496,6 +518,14 @@ export class AgentBroker {
     const resolved = this.resolveTarget(target, me, { allowSelf: true })
     if (resolved.error) return fail(resolved.error, 1)
     const to = resolved.match!
+    // 授权：peek 会读到对端最近的终端输出（可能含密钥/路径/源码）。
+    // 「可被读屏」不等于「可被注入提醒」——仅允许查看自己，或深度协作的会话：
+    // known-agent（真 agent）与 terminal-inject（用户已开启双向注入）。
+    // terminal-nudge 只是单向接收提醒，用户并不期望自己终端被任意会话读屏，故不可被 peek；
+    // 默认 terminal-readonly 同样不可被 peek。
+    if (to.sessionId !== me.sessionId && !isPeekable(to.collabMode)) {
+      return fail(`无权查看「${to.name}」的输出：该会话未开启深度协作（known-agent 或 terminal-inject 才可被 peek）`, 1)
+    }
     const parsedLines = parseInt(linesRaw ?? '', 10)
     const lines = Number.isFinite(parsedLines) ? Math.min(Math.max(parsedLines, 1), 400) : 40
     const history = this.bridge.readHistory(to.sessionId, lines)
@@ -741,6 +771,13 @@ function collabModeLabel(mode: AgentCollabMode): string {
     default:
       return mode
   }
+}
+
+// peek 授权集合：只有深度协作的会话可被他人读屏。
+// known-agent = 真 agent；terminal-inject = 用户已开启双向注入。
+// terminal-nudge（仅单向收提醒）与 terminal-readonly（默认）一律不可被 peek。
+function isPeekable(mode: AgentCollabMode): boolean {
+  return mode === 'known-agent' || mode === 'terminal-inject'
 }
 
 function isTaskStatus(value: unknown): value is AgentTask['status'] {

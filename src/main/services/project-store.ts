@@ -3,6 +3,9 @@ import { basename, join } from 'path'
 import { app } from 'electron'
 import type { Project } from './project-types'
 import { DataStore } from './data-store'
+import { createLogger } from './logger'
+
+const log = createLogger('project-store')
 
 export interface ProjectLoadResult {
   projects: Project[]
@@ -85,7 +88,7 @@ export class ProjectStore {
     }
 
     if (result.restoredFromBackup) {
-      console.warn('[ProjectStore] 项目数据从备份恢复')
+      log.warn('[ProjectStore] 项目数据从备份恢复')
     }
 
     return { projects, restoredFromBackup: !!result.restoredFromBackup, normalized }

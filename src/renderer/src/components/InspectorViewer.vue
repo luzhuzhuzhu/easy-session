@@ -189,7 +189,7 @@ useI18n()
   border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--bg-secondary) 84%, var(--bg-primary) 16%);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   letter-spacing: 0.02em;
 }

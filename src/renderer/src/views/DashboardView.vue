@@ -121,6 +121,7 @@ import { useSessionsStore } from '@/stores/sessions'
 import { useInstancesStore } from '@/stores/instances'
 import { useConfigStore } from '@/stores/config'
 import { selectFolder } from '@/api/local-project'
+import { useToast } from '@/composables/useToast'
 import ConfigEditorPanel from '@/components/ConfigEditorPanel.vue'
 import Button from '@/components/ui/Button.vue'
 import UiIcon from '@/components/ui/UiIcon.vue'
@@ -134,6 +135,7 @@ const projectsStore = useProjectsStore()
 const sessionsStore = useSessionsStore()
 const instancesStore = useInstancesStore()
 const configStore = useConfigStore()
+const toast = useToast()
 const checking = ref(true)
 const activeCli = ref<'claude' | 'codex' | 'opencode' | null>(null)
 
@@ -200,7 +202,8 @@ async function handleNewProject() {
       }))
     }
   } catch (e: unknown) {
-    // Will be caught by global error handler
+    const message = e instanceof Error ? e.message : String(e)
+    toast.error(t('dashboard.newProjectFailed', { error: message }))
   }
 }
 

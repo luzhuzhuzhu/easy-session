@@ -15,10 +15,6 @@ export interface ProcessInfo {
   endTime?: number
 }
 
-export function spawnCli(type: CliType, projectPath: string, options?: object): Promise<string> {
-  return ipc.invoke<string>('cli:spawn', type, projectPath, options)
-}
-
 export function killCli(id: string): Promise<void> {
   return ipc.invoke<void>('cli:kill', id)
 }

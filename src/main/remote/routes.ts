@@ -20,8 +20,10 @@ import type {
 import { buildRemoteCapabilityMap } from './capabilities'
 import { renderLoginPage, renderSessionsPage } from './web'
 import { isCliType, type CliType } from '../../shared/cli-types'
+import { createLogger } from '../services/logger'
 
 const moduleRequire = createRequire(import.meta.url)
+const log = createLogger('remote')
 
 class HttpError extends Error {
   constructor(
@@ -240,8 +242,9 @@ function withHandler(
         sendError(res, requestId, err.status, err.code, err.message)
         return
       }
-      const message = err instanceof Error ? err.message : String(err)
-      sendError(res, requestId, 500, 'INTERNAL_ERROR', message)
+      // 内部异常详情（可能含本机路径）只落服务端日志，回客户端只给通用文案 + requestId。
+      log.error({ err, requestId }, '[remote] route handler error')
+      sendError(res, requestId, 500, 'INTERNAL_ERROR', 'Internal server error')
     }
   }
 }

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Typecheck · Lint · Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  # 说明：单元测试（npm test）未纳入 CI。
+  # 原因：部分用例会操作真实应用数据目录（config-paths / data-store 等），
+  # 且含 Windows 平台路径断言（shell-detector 等），在云端 Linux runner 上既不稳定也不贴近真实运行环境。
+  # 测试应在本机按需运行单个文件（npx vitest run tests/<file>.test.ts），避免全量 npm test 影响本机 EasySession 数据。
+  # 若后续补齐跨平台/隔离化测试夹具，可在此新增 windows-latest 矩阵 job 跑 npm test。

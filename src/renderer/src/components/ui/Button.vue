@@ -69,10 +69,8 @@ defineExpose({ focus })
     color: var(--text-primary);
   }
 
-  &:focus-visible {
-    outline: 1px solid var(--accent-primary);
-    outline-offset: 2px;
-  }
+  // Focus ring comes from the global :focus-visible rule (global.scss) so all
+  // interactive controls share one consistent focus treatment.
 
   &:disabled {
     cursor: not-allowed;

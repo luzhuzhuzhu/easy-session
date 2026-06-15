@@ -125,7 +125,7 @@ $tree-depth-indent: 14px;
 
 @mixin tree-status-code {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 700;
   min-width: 16px;
   height: 16px;

@@ -258,7 +258,7 @@ function syncActionTitle(action: string): string {
   border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
   background: color-mix(in srgb, var(--bg-card) 82%, transparent);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   line-height: 20px;
   white-space: nowrap;
 

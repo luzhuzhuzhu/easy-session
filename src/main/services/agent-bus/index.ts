@@ -7,6 +7,7 @@ import { BrowserWindow } from 'electron'
 import type { SessionManager } from '../session-manager'
 import type { CliManager } from '../cli-manager'
 import { DataStore } from '../data-store'
+import { createLogger } from '../logger'
 import type { AgentCollabMode, AgentIdentity, AgentTask, AgentBusMessage, SessionBridge } from './types'
 import { DispatchGate } from './dispatch-gate'
 import { AgentBroker } from './broker'
@@ -16,6 +17,8 @@ import { installEsSkill, type EsSkillInstallSummary } from './skill'
 const IDLE_MS = 8000
 const PERSIST_DEBOUNCE_MS = 600
 const PUSH_THROTTLE_MS = 250
+
+const log = createLogger('agent-bus')
 
 interface BusPersistShape {
   tasks: AgentTask[]
@@ -42,6 +45,10 @@ export class AgentBus {
   private startError: string | null = null
   private skillInstall: EsSkillInstallSummary | null = null
   private collabModes = new Map<string, AgentCollabMode>()
+  // 服务端绑定身份（P0#2）：每个 PTY 进程注入一枚不可猜测的会话凭据，
+  // 服务端据此把 es 请求绑定到真实 sessionId，杜绝客户端自报 processId 冒充他人。
+  // credential -> processId。凭据从不经由任何 es 命令输出泄露，仅存在于各自 PTY 的 env。
+  private agentCredentials = new Map<string, string>()
 
   constructor(
     private sessionManager: SessionManager,
@@ -63,7 +70,7 @@ export class AgentBus {
     } catch (err) {
       // 监听/落盘失败：终端间通信不可用。记录原因供 UI 提示，但不抛出，避免拖垮整个 app 初始化。
       this.startError = err instanceof Error ? err.message : String(err)
-      console.error('[agent-bus] 启动失败，终端间通信本次不可用:', err)
+      log.error({ err }, '[agent-bus] 启动失败，终端间通信本次不可用')
       return
     }
 
@@ -76,21 +83,22 @@ export class AgentBus {
         this.broker.hydrate(loaded.data)
       }
     } catch (err) {
-      console.warn('[agent-bus] 状态恢复失败:', err)
+      log.warn({ err }, '[agent-bus] 状态恢复失败')
     }
 
     this.gate.start()
     this.broker.start()
 
-    // 订阅 PTY 输出：刷新空闲基准（门控与守护共用）。
-    const offOutput = this.cliManager.onOutput((processId) => {
+    // 订阅 PTY 输出：刷新空闲基准（门控与守护共用），并传入输出以扣除注入回显。
+    const offOutput = this.cliManager.onOutput((processId, data) => {
       const sessionId = this.sessionManager.getSessionIdByProcessId(processId)
-      if (sessionId) this.gate.noteOutput(sessionId)
+      if (sessionId) this.gate.noteOutput(sessionId, data)
     })
     this.disposers.push(offOutput)
 
-    // 订阅退出：任务兜底失败 + 清空门控队列。
+    // 订阅退出：撤销该进程的会话凭据（防泄漏/复用）+ 任务兜底失败 + 清空门控队列。
     const offExit = this.cliManager.onExit((processId) => {
+      this.revokeCredentialsFor(processId)
       const sessionId = this.sessionManager.getSessionIdByProcessId(processId)
       if (sessionId && this.broker) this.broker.handleSessionExit(sessionId)
     })
@@ -104,11 +112,22 @@ export class AgentBus {
   }
 
   // 提供给 CliManager 注入到每个 PTY 的环境变量（含 PATH 用 shimDir）。
+  // EASYSESSION_BUS_AGENT 注入的是服务端签发的「会话凭据」而非可猜测的 processId：
+  // 服务端持有 credential->processId 映射，据此绑定真实身份（P0#2），客户端无法冒充他人。
   getEnvBundle(processId: string): AgentBusEnvBundle | null {
     if (!this.ready || !this.server || !this.server.isReady()) return null
+    const credential = randomUUID()
+    this.agentCredentials.set(credential, processId)
     return {
-      vars: { ...this.server.getEnv(), EASYSESSION_BUS_AGENT: processId },
+      vars: { ...this.server.getEnv(), EASYSESSION_BUS_AGENT: credential },
       shimDir: this.server.getShimDir()
+    }
+  }
+
+  // 进程退出时撤销其会话凭据，避免内存残留与凭据复用。
+  private revokeCredentialsFor(processId: string): void {
+    for (const [credential, pid] of this.agentCredentials) {
+      if (pid === processId) this.agentCredentials.delete(credential)
     }
   }
 
@@ -210,13 +229,23 @@ export class AgentBus {
 
   private async persist(): Promise<void> {
     if (!this.store || !this.broker) return
+    // 销毁的会话不再保留协作模式，防止 collabModes 随会话增删无限累积并被持久化。
+    this.pruneCollabModes()
     try {
       await this.store.save({
         ...this.broker.persistState(),
         collabModes: Object.fromEntries(this.collabModes)
       })
     } catch (err) {
-      console.warn('[agent-bus] 持久化失败:', err)
+      log.warn({ err }, '[agent-bus] 持久化失败')
+    }
+  }
+
+  // 丢弃已不存在会话的协作模式条目（会话销毁后兜底清理）。
+  private pruneCollabModes(): void {
+    const valid = this.sessionManager.getValidSessionIds()
+    for (const sessionId of this.collabModes.keys()) {
+      if (!valid.has(sessionId)) this.collabModes.delete(sessionId)
     }
   }
 
@@ -248,7 +277,11 @@ export class AgentBus {
       }
     }
     return {
-      resolveByProcessId: (processId) => {
+      // 服务端绑定身份：入参是注入到 PTY 的会话凭据，经服务端持有的
+      // credential->processId 映射解析出真实进程，再定位会话（P0#2）。
+      resolveCaller: (credential) => {
+        const processId = this.agentCredentials.get(credential)
+        if (!processId) return null
         const sessionId = sm.getSessionIdByProcessId(processId)
         return sessionId ? toIdentity(sessionId) : null
       },

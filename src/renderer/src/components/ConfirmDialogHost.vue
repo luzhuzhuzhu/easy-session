@@ -84,21 +84,31 @@ function handleKeydown(event: KeyboardEvent): void {
   }
 }
 
+// Open/close edge: only capture & restore focus when the dialog host actually
+// appears/disappears, not when the queue swaps one confirmation for the next.
 watch(
-  () => confirmStore.current,
-  async (current) => {
-    if (current) {
+  () => !!confirmStore.current,
+  (isOpen) => {
+    if (isOpen) {
       previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
       document.addEventListener('keydown', handleKeydown)
-      await nextTick()
-      const target = current.tone === 'danger' ? cancelButtonRef.value : confirmButtonRef.value
-      target?.focus()
       return
     }
-
     document.removeEventListener('keydown', handleKeydown)
     previousFocus?.focus()
     previousFocus = null
+  }
+)
+
+// Per-dialog focus: re-focus the default button whenever a (possibly queued)
+// confirmation becomes current.
+watch(
+  () => confirmStore.current?.id,
+  async (id) => {
+    if (id == null) return
+    await nextTick()
+    const target = confirmStore.current?.tone === 'danger' ? cancelButtonRef.value : confirmButtonRef.value
+    target?.focus()
   }
 )
 

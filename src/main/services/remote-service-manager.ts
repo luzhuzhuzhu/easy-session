@@ -7,10 +7,13 @@ import {
 import { RemoteGatewayServer } from '../remote'
 import type { RemoteDependencies, RemoteRuntimeConfig } from '../remote/types'
 import { RemoteServiceSettingsManager } from './remote-service-settings-manager'
+import { createLogger } from './logger'
 import type {
   RemoteServiceSettingsUpdate,
   RemoteServiceState
 } from './remote-service-settings-types'
+
+const log = createLogger('remote')
 
 export class RemoteServiceManager {
   private readonly settingsManager: RemoteServiceSettingsManager
@@ -64,7 +67,7 @@ export class RemoteServiceManager {
       await this.gateway.start(config)
     } catch (err) {
       this.lastError = formatRemoteServiceStartError(err, config)
-      console.warn('[remote] local service start failed:', this.lastError)
+      log.warn({ err: this.lastError }, '[remote] local service start failed')
     }
     return this.toState(config)
   }

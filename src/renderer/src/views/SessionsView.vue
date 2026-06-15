@@ -98,6 +98,8 @@
               :on-session-drop="handleSessionDrop"
               :on-session-drag-end="handleSessionDragEnd"
               :on-session-context-menu="openContextMenu"
+              :on-session-reorder="moveSessionWithinProject"
+              :on-project-reorder="moveProjectByKeyboard"
             />
           </div>
         </template>
@@ -606,6 +608,8 @@ const {
   handleSessionDragOver,
   handleSessionDrop,
   handleSessionDragEnd,
+  moveSessionWithinProject,
+  moveProjectByKeyboard,
   handleProjectDragStart,
   handleProjectDragOver,
   handleProjectDrop,

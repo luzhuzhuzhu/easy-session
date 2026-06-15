@@ -5,6 +5,11 @@ import type { ProjectSessionGroup, SessionTreeSessionItem } from '@/features/ses
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { buildSessionDestroyConfirmCopy } from '@/utils/session-confirm'
 import { formatRemoteOperationError, formatSessionOperationTarget } from '@/utils/remote-operation-error'
+import { reorderVisibleWithinFull } from '@/features/sessions/keyboard-reorder'
+
+// Approximate context-menu footprint, used to keep it inside the viewport.
+const CONTEXT_MENU_WIDTH = 200
+const CONTEXT_MENU_MAX_HEIGHT = 320
 
 type SettingsStoreLike = {
   settings: AppSettings
@@ -30,6 +35,7 @@ type WorkspaceStoreLike = {
 type ToastLike = {
   success(message: string): void
   error(message: string): void
+  info(message: string): void
 }
 
 type UseSessionTreeInteractionsOptions = {
@@ -56,6 +62,9 @@ export function useSessionTreeInteractions(options: UseSessionTreeInteractionsOp
   const sessionDragState = ref<{ sessionId: string; projectKey: string } | null>(null)
   const projectDragState = ref<{ group: ProjectSessionGroup } | null>(null)
   const topProjectDragState = ref<{ group: ProjectSessionGroup } | null>(null)
+  // Show the "same project only" hint at most once per drag gesture so the
+  // dropEffect='none' rejection no longer looks like an unexplained dead zone.
+  let crossProjectHintShown = false
 
   const contextSessionCapabilities = computed<InstanceCapabilities | null>(() => {
     const session = contextMenu.value.session
@@ -97,6 +106,10 @@ export function useSessionTreeInteractions(options: UseSessionTreeInteractionsOp
       const sessionPath = options.buildProjectGroupKey(session.instanceId, session.projectPath || '')
       if (sessionPath !== projectKey) {
         event.dataTransfer.dropEffect = 'none'
+        if (!crossProjectHintShown) {
+          crossProjectHintShown = true
+          options.toast.info(options.t('toast.sessionReorderSameProjectOnly'))
+        }
         return
       }
 
@@ -145,6 +158,31 @@ export function useSessionTreeInteractions(options: UseSessionTreeInteractionsOp
 
   function handleSessionDragEnd(): void {
     sessionDragState.value = null
+    crossProjectHintShown = false
+  }
+
+  // Keyboard-accessible reordering — alternative to mouse drag for session and
+  // project rows. `orderedIds` is only the *visible* tree order (a subset when a
+  // CLI-type filter is active), so we reorder against the full persisted order
+  // to avoid dropping filtered-out entries. See reorderVisibleWithinFull.
+  function moveSessionWithinProject(
+    projectKey: string,
+    orderedSessionIds: string[],
+    sessionId: string,
+    direction: -1 | 1
+  ): void {
+    const persisted = options.settingsStore.settings.manualSessionOrder[projectKey] ?? []
+    const next = reorderVisibleWithinFull(persisted, orderedSessionIds, sessionId, direction)
+    if (!next) return
+    const newOrder = { ...options.settingsStore.settings.manualSessionOrder, [projectKey]: next }
+    void options.settingsStore.update({ manualSessionOrder: newOrder })
+  }
+
+  function moveProjectByKeyboard(orderedProjectKeys: string[], projectKey: string, direction: -1 | 1): void {
+    const persisted = options.settingsStore.settings.manualProjectOrder ?? []
+    const next = reorderVisibleWithinFull(persisted, orderedProjectKeys, projectKey, direction)
+    if (!next) return
+    void options.settingsStore.update({ manualProjectOrder: next })
   }
 
   function handleProjectDragStart(event: DragEvent, group: ProjectSessionGroup): void {
@@ -244,7 +282,11 @@ export function useSessionTreeInteractions(options: UseSessionTreeInteractionsOp
   }
 
   function openContextMenu(event: MouseEvent, session: SessionTreeSessionItem): void {
-    contextMenu.value = { visible: true, x: event.clientX, y: event.clientY, session }
+    // Clamp to the viewport so the menu never overflows near screen edges
+    // (mirrors CreateSessionDialog's emoji panel positioning).
+    const x = Math.min(event.clientX, Math.max(8, window.innerWidth - CONTEXT_MENU_WIDTH - 8))
+    const y = Math.min(event.clientY, Math.max(8, window.innerHeight - CONTEXT_MENU_MAX_HEIGHT - 8))
+    contextMenu.value = { visible: true, x, y, session }
   }
 
   function handleOpenInPaneContext(): void {
@@ -349,6 +391,8 @@ export function useSessionTreeInteractions(options: UseSessionTreeInteractionsOp
     handleSessionDragOver,
     handleSessionDrop,
     handleSessionDragEnd,
+    moveSessionWithinProject,
+    moveProjectByKeyboard,
     handleProjectDragStart,
     handleProjectDragOver,
     handleProjectDrop,

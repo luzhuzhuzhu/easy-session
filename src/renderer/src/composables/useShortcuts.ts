@@ -1,30 +1,38 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useShortcutHelp } from '@/composables/useShortcutHelp'
 import { useSessionsStore } from '@/stores/sessions'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useToast } from '@/composables/useToast'
 
-const NAV_SHORTCUTS: Record<string, string> = {
-  '1': '/dashboard',
-  '2': '/sessions',
-  '3': '/projects',
-  '4': '/skills',
-  '5': '/settings'
-}
+// Single source of truth for Ctrl+<number> navigation. Order MUST match the
+// visible nav order in MainLayout.vue `navItems`, otherwise the shortcuts drift
+// out of sync with what users see (the collaboration page used to be skipped).
+export const NAV_ROUTES: ReadonlyArray<{ key: string; path: string }> = [
+  { key: '1', path: '/dashboard' },
+  { key: '2', path: '/sessions' },
+  { key: '3', path: '/collaboration' },
+  { key: '4', path: '/projects' },
+  { key: '5', path: '/skills' },
+  { key: '6', path: '/settings' }
+]
 
-export const SHORTCUT_LABELS: Record<string, string> = {
-  '/dashboard': 'Ctrl+1',
-  '/sessions': 'Ctrl+2',
-  '/projects': 'Ctrl+3',
-  '/skills': 'Ctrl+4',
-  '/settings': 'Ctrl+5'
-}
+const NAV_SHORTCUTS: Record<string, string> = Object.fromEntries(
+  NAV_ROUTES.map(({ key, path }) => [key, path])
+)
+
+export const SHORTCUT_LABELS: Record<string, string> = Object.fromEntries(
+  NAV_ROUTES.map(({ key, path }) => [path, `Ctrl+${key}`])
+)
 
 export function useShortcuts() {
   const router = useRouter()
   const sessionsStore = useSessionsStore()
   const workspaceStore = useWorkspaceStore()
   const shortcutHelp = useShortcutHelp()
+  const toast = useToast()
+  const { t } = useI18n()
 
   function handler(e: KeyboardEvent) {
     const tag = (e.target as HTMLElement)?.tagName
@@ -61,10 +69,19 @@ export function useShortcuts() {
         if (router.currentRoute.value.path === '/sessions') {
           const pane = workspaceStore.activePane
           if (pane?.activeTabId) {
+            const closingTab = workspaceStore.layout.tabs[pane.activeTabId]
+            const closedName = closingTab
+              ? sessionsStore.sessionIndexByGlobalKey[closingTab.globalSessionKey]?.name ?? ''
+              : ''
             workspaceStore.closeTab(workspaceStore.layout.activePaneId, pane.activeTabId)
             if (workspaceStore.activeSessionRef) {
               sessionsStore.setActiveSessionRef(workspaceStore.activeSessionRef)
             }
+            toast.info(
+              closedName
+                ? t('shortcuts.tabClosedNamed', { name: closedName })
+                : t('shortcuts.tabClosed')
+            )
           }
         }
         return

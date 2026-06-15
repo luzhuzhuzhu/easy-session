@@ -7,7 +7,8 @@ import {
   DEFAULT_REMOTE_PORT,
   DEFAULT_REMOTE_RATE_LIMIT_MAX,
   DEFAULT_REMOTE_RATE_LIMIT_WINDOW_MS,
-  DEFAULT_REMOTE_TOKEN_FILE
+  DEFAULT_REMOTE_TOKEN_FILE,
+  MAX_REMOTE_IDLE_TIMEOUT_MS
 } from './defaults'
 import type { RemoteRuntimeConfig } from './types'
 import { readRemoteServiceSettingsSnapshot } from '../services/remote-service-settings-manager'
@@ -107,9 +108,10 @@ export async function loadRemoteRuntimeConfig(
   const port = envOverrides.port
     ? parseIntWithDefault(process.env.EASYSESSION_REMOTE_PORT, settings.port)
     : settings.port || DEFAULT_REMOTE_PORT
-  const idleTimeoutMs = parseIntWithDefault(
-    process.env.EASYSESSION_REMOTE_IDLE_TIMEOUT_MS,
-    DEFAULT_REMOTE_IDLE_TIMEOUT_MS
+  // env 可调但封顶，避免被设成极大值削弱空闲断连。
+  const idleTimeoutMs = Math.min(
+    parseIntWithDefault(process.env.EASYSESSION_REMOTE_IDLE_TIMEOUT_MS, DEFAULT_REMOTE_IDLE_TIMEOUT_MS),
+    MAX_REMOTE_IDLE_TIMEOUT_MS
   )
   const rateLimitWindowMs = parseIntWithDefault(
     process.env.EASYSESSION_REMOTE_RATE_LIMIT_WINDOW_MS,

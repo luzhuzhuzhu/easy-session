@@ -342,8 +342,8 @@ defineExpose({
 
 .remote-service-error-note {
   margin-bottom: var(--spacing-md);
-  border-color: color-mix(in srgb, var(--accent-danger) 45%, var(--border-color));
-  background: color-mix(in srgb, var(--accent-danger) 8%, transparent);
+  border-color: color-mix(in srgb, var(--status-error) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--status-error) 8%, transparent);
 }
 
 .remote-card-grid {

@@ -300,23 +300,25 @@ const html = computed(() => {
   }
 
   :deep(.markdown-callout-note) {
-    border-left-color: #60a5fa;
+    border-left-color: var(--status-info);
   }
 
   :deep(.markdown-callout-tip) {
-    border-left-color: #34d399;
+    border-left-color: var(--status-success);
   }
 
   :deep(.markdown-callout-important) {
+    // GitHub's "important" purple has no semantic token; kept as-is so it stays
+    // visually distinct from the blue "note" callout.
     border-left-color: #a78bfa;
   }
 
   :deep(.markdown-callout-warning) {
-    border-left-color: #fbbf24;
+    border-left-color: var(--status-warning);
   }
 
   :deep(.markdown-callout-caution) {
-    border-left-color: #f87171;
+    border-left-color: var(--status-error);
   }
 
   :deep(code) {

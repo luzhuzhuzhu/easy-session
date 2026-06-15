@@ -69,7 +69,9 @@ export interface AgentTask {
 // es CLI 与 bus server 之间的线协议（JSON-lines）。
 export interface AgentBusRequest {
   token: string
-  agent: string // 调用方 processId（由 env 注入）
+  // 调用方会话凭据：服务端签发、注入到该 PTY 的 env，服务端据此绑定真实身份。
+  // 不是可猜测的 processId —— 客户端无法用它冒充其它会话（P0#2）。
+  agent: string
   argv: string[]
 }
 
@@ -93,7 +95,8 @@ export interface AgentIdentity {
 
 // broker 对外依赖的会话能力（由 SessionManager 适配提供）。
 export interface SessionBridge {
-  resolveByProcessId(processId: string): AgentIdentity | null
+  // 由调用方会话凭据解析真实身份（服务端绑定，禁止冒充）。
+  resolveCaller(credential: string): AgentIdentity | null
   resolveByQuery(query: string): { match?: AgentIdentity; candidates: AgentIdentity[] }
   listAgents(): AgentIdentity[]
   getName(sessionId: string): string | null

@@ -27,7 +27,7 @@
         <textarea
           v-model.trim="draftText"
           :placeholder="draftMode === 'task' ? $t('collab.taskPlaceholder') : $t('collab.messagePlaceholder')"
-          @keydown.enter.exact.prevent="submitDraft"
+          @keydown="handleDraftKeydown"
         ></textarea>
         <button class="primary-button" type="button" :disabled="submitting || !canSubmit" @click="submitDraft">
           {{ draftMode === 'task' ? $t('collab.createTask') : $t('collab.send') }}
@@ -306,6 +306,7 @@ import {
   type BusSnapshot
 } from '@/api/agent-bus'
 import { useToast } from '@/composables/useToast'
+import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useSessionsStore } from '@/stores/sessions'
 import {
   buildGlobalSessionKey,
@@ -318,6 +319,7 @@ import { cliTypeBadgeLetter } from '@shared/cli-types'
 const { t } = useI18n()
 const router = useRouter()
 const toast = useToast()
+const confirmDialog = useConfirmDialog()
 const sessionsStore = useSessionsStore()
 
 const snapshot = ref<BusSnapshot>({ agents: [], tasks: [], messages: [], ready: true, error: null })
@@ -500,6 +502,15 @@ function canCancel(task: AgentTask): boolean {
   return task.from === 'user' && OPEN_STATUSES.includes(task.status)
 }
 
+function handleDraftKeydown(e: KeyboardEvent): void {
+  // Send on Ctrl/Cmd+Enter instead of bare Enter, so multi-line drafts are not
+  // fired off accidentally on the first newline.
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault()
+    void submitDraft()
+  }
+}
+
 async function submitDraft(): Promise<void> {
   if (!canSubmit.value || submitting.value) return
   submitting.value = true
@@ -528,6 +539,16 @@ async function submitDraft(): Promise<void> {
 async function transitionTask(action: 'confirm' | 'cancel' | 'unblock', text?: string): Promise<void> {
   if (!selectedTask.value) return
   const taskId = selectedTask.value.id
+  if (action === 'cancel') {
+    const confirmed = await confirmDialog.confirm({
+      title: t('collab.confirmCancelTitle'),
+      message: t('collab.confirmCancelMessage', { id: taskId }),
+      confirmText: t('collab.cancelTask'),
+      cancelText: t('confirm.cancel'),
+      tone: 'danger'
+    })
+    if (!confirmed) return
+  }
   const result = await transitionBusTask(taskId, action, text)
   if (!result.ok) {
     toast.error(t('collab.actionFailed', { error: result.error || '-' }))
@@ -544,6 +565,17 @@ async function transitionTask(action: 'confirm' | 'cancel' | 'unblock', text?: s
 async function applyManualStatus(): Promise<void> {
   if (!selectedTask.value || manualStatusBusy.value) return
   const taskId = selectedTask.value.id
+  const confirmed = await confirmDialog.confirm({
+    title: t('collab.confirmManualStatusTitle'),
+    message: t('collab.confirmManualStatusMessage', {
+      id: taskId,
+      status: statusLabel(manualStatus.value)
+    }),
+    confirmText: t('collab.applyStatus'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
   manualStatusBusy.value = true
   try {
     const result = await setBusTaskStatus(taskId, manualStatus.value, manualStatusNote.value)
@@ -775,7 +807,7 @@ textarea {
 }
 
 .danger-button {
-  color: var(--accent-danger, #e5484d);
+  color: var(--status-error);
 }
 
 .small {
@@ -818,7 +850,7 @@ textarea {
   background: var(--text-muted);
 
   &.on {
-    background: var(--status-success, #3fb950);
+    background: var(--status-success);
   }
 }
 
@@ -828,10 +860,10 @@ textarea {
   justify-content: space-between;
   gap: 8px;
   padding: 7px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent-danger, #e5484d) 45%, var(--border-color));
+  border: 1px solid color-mix(in srgb, var(--status-error) 45%, var(--border-color));
   border-radius: 6px;
   color: var(--text-secondary);
-  background: color-mix(in srgb, var(--accent-danger, #e5484d) 10%, transparent);
+  background: color-mix(in srgb, var(--status-error) 10%, transparent);
   font-size: 12px;
 }
 
@@ -877,7 +909,7 @@ textarea {
 
 .section-label {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-weight: 800;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -966,7 +998,7 @@ textarea {
     align-items: center;
     gap: 3px;
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
   }
 }
 
@@ -984,17 +1016,19 @@ textarea {
   font-weight: 800;
   line-height: 1;
 
+  // Keep avatar tints aligned with the semantic .type-badge palette in
+  // global.scss so they stay theme-aware instead of fixed brand hex.
   &.type-claude {
-    background: color-mix(in srgb, #c96d4d 18%, var(--bg-tertiary));
+    background: color-mix(in srgb, var(--accent-primary) 18%, var(--bg-tertiary));
   }
   &.type-codex {
-    background: color-mix(in srgb, #168f75 18%, var(--bg-tertiary));
+    background: color-mix(in srgb, var(--badge-codex) 18%, var(--bg-tertiary));
   }
   &.type-opencode {
-    background: color-mix(in srgb, #6272e8 18%, var(--bg-tertiary));
+    background: color-mix(in srgb, var(--status-info) 18%, var(--bg-tertiary));
   }
   &.type-terminal {
-    background: color-mix(in srgb, #c48913 18%, var(--bg-tertiary));
+    background: color-mix(in srgb, var(--status-success) 18%, var(--bg-tertiary));
   }
 }
 
@@ -1012,7 +1046,7 @@ textarea {
   border-radius: 999px;
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   line-height: 1;
   padding: 3px 6px;
 
@@ -1149,14 +1183,14 @@ textarea {
 .task-id {
   color: var(--text-muted);
   font-family: var(--font-mono, monospace);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
 }
 
 .task-status {
   flex-shrink: 0;
   border-radius: 999px;
   background: var(--bg-tertiary);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   line-height: 1;
   padding: 3px 6px;
 }
@@ -1200,7 +1234,7 @@ textarea {
 
   span {
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     font-weight: 800;
   }
 
@@ -1240,7 +1274,7 @@ textarea {
 
   label {
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     font-weight: 800;
     white-space: nowrap;
   }
@@ -1280,7 +1314,7 @@ textarea {
     grid-template-columns: 38px 64px minmax(0, 1fr);
     gap: 6px;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
     line-height: 1.35;
 
     span {
@@ -1334,7 +1368,7 @@ textarea {
     align-items: center;
     gap: 5px;
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: var(--font-size-xs);
   }
 
   strong {
@@ -1373,18 +1407,18 @@ textarea {
 
 .st-done,
 .st-review {
-  color: var(--status-success, #3fb950);
+  color: var(--status-success);
 }
 
 .st-failed,
 .st-rejected,
 .st-cancelled,
 .st-expired {
-  color: var(--accent-danger, #e5484d);
+  color: var(--status-error);
 }
 
 .st-blocked {
-  color: #c48913;
+  color: var(--status-warning);
 }
 
 .st-in_progress,

@@ -26,7 +26,7 @@ function makeBridge(agents: AgentIdentity[]): SessionBridge {
   const byId = new Map(agents.map((item) => [item.sessionId, item]))
   const byPid = new Map(agents.map((item) => [`pid${item.sessionId}`, item]))
   return {
-    resolveByProcessId: (pid) => byPid.get(pid) ?? null,
+    resolveCaller: (pid) => byPid.get(pid) ?? null,
     resolveByQuery: (query) => {
       const q = query.trim().toLowerCase()
       const exactId = byId.get(query)

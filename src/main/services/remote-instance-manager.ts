@@ -1,7 +1,10 @@
 import { randomUUID } from 'crypto'
 import { join } from 'path'
 import { DataStore } from './data-store'
+import { createLogger } from './logger'
 import { buildRemoteCapabilityMap } from '../remote/capabilities'
+
+const log = createLogger('remote-instance')
 import type { RemoteCapabilitiesResponse, RemoteServerInfoResponse } from '../remote/types'
 import type {
   RemoteInstanceConnectionResult,
@@ -220,7 +223,7 @@ export class RemoteInstanceManager {
           this.instances.set(record.id, record)
         } catch (error) {
           mutated = true
-          console.warn('[remote-instance] skip invalid instance record:', error)
+          log.warn({ err: error }, '[remote-instance] skip invalid instance record')
         }
       }
     }

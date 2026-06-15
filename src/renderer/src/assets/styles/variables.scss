@@ -14,6 +14,9 @@
   --accent-primary: #e8edf3;
   --accent-secondary: #f0a064;
   --accent-gradient: linear-gradient(135deg, #e8edf3, #f0a064);
+  // Codex badge foreground — kept bright/legible per theme (accent-secondary is
+  // a dark navy in the gemini theme and fails contrast as text).
+  --badge-codex: #f0a064;
 
   --status-success: #72d66f;
   --status-warning: #f2ba54;
@@ -77,6 +80,7 @@
   --accent-primary: #d3e3fd;
   --accent-secondary: #1f3760;
   --accent-gradient: linear-gradient(135deg, #d3e3fd, #1f3760);
+  --badge-codex: #c58af9;
 
   --status-success: #81c995;
   --status-warning: #fdd663;

@@ -80,7 +80,16 @@ function handleUnsubscribe(socket: Socket, payload: SessionSubscribePayload, ack
   ackOk(ack)
 }
 
+// 授权前置：socket 必须先 subscribe（join 房间）才能对该会话做输入/写入/resize，
+// 避免「一旦登录即可向任意运行中会话注入命令」。
+function ensureJoined(socket: Socket, sessionId: string, ack?: (result: SocketAck) => void): boolean {
+  if (socket.rooms.has(sessionRoom(sessionId))) return true
+  ackErr(ack, `Not subscribed to session: ${sessionId}`)
+  return false
+}
+
 function handleInput(
+  socket: Socket,
   deps: RemoteDependencies,
   payload: SessionInputPayload,
   ack?: (result: SocketAck) => void
@@ -91,6 +100,7 @@ function handleInput(
   }
 
   const sessionId = payload.sessionId.trim()
+  if (!ensureJoined(socket, sessionId, ack)) return
   const session = deps.sessionManager.getSession(sessionId)
   if (!session) {
     ackErr(ack, `Session not found: ${sessionId}`)
@@ -114,6 +124,7 @@ function handleInput(
 }
 
 function handleWrite(
+  socket: Socket,
   deps: RemoteDependencies,
   payload: SessionWritePayload,
   ack?: (result: SocketAck) => void
@@ -124,6 +135,7 @@ function handleWrite(
   }
 
   const sessionId = payload.sessionId.trim()
+  if (!ensureJoined(socket, sessionId, ack)) return
   const session = deps.sessionManager.getSession(sessionId)
   if (!session) {
     ackErr(ack, `Session not found: ${sessionId}`)
@@ -143,6 +155,7 @@ function handleWrite(
 }
 
 function handleResize(
+  socket: Socket,
   deps: RemoteDependencies,
   payload: SessionResizePayload,
   ack?: (result: SocketAck) => void
@@ -158,7 +171,18 @@ function handleResize(
     ackErr(ack, 'Invalid payload')
     return
   }
-  deps.sessionManager.resizeTerminal(payload.sessionId.trim(), payload.cols, payload.rows)
+  const sessionId = payload.sessionId.trim()
+  if (!ensureJoined(socket, sessionId, ack)) return
+  const session = deps.sessionManager.getSession(sessionId)
+  if (!session) {
+    ackErr(ack, `Session not found: ${sessionId}`)
+    return
+  }
+  if (session.status !== 'running' || !session.processId) {
+    ackErr(ack, `Session is not running: ${sessionId}`)
+    return
+  }
+  deps.sessionManager.resizeTerminal(sessionId, payload.cols, payload.rows)
   ackOk(ack)
 }
 
@@ -192,15 +216,15 @@ export function setupRemoteSocketBridge(options: SetupSocketBridgeOptions): () =
     })
 
     socket.on('session:input', (payload: SessionInputPayload, ack?: (result: SocketAck) => void) => {
-      handleInput(deps, payload, ack)
+      handleInput(socket, deps, payload, ack)
     })
 
     socket.on('session:write', (payload: SessionWritePayload, ack?: (result: SocketAck) => void) => {
-      handleWrite(deps, payload, ack)
+      handleWrite(socket, deps, payload, ack)
     })
 
     socket.on('session:resize', (payload: SessionResizePayload, ack?: (result: SocketAck) => void) => {
-      handleResize(deps, payload, ack)
+      handleResize(socket, deps, payload, ack)
     })
 
     socket.on('disconnect', () => {

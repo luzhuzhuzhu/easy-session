@@ -159,6 +159,10 @@ const NODE_INNER_RADIUS = 2.25
 const LINE_STROKE_WIDTH = 2
 const GRAPH_MIN_WIDTH = 84
 
+// Functional graph-lane palette: a fixed set of mutually-distinct hues used to
+// tell concurrent branch lanes apart in the SVG. These are intentionally not
+// semantic tokens — lane identity needs stable, high-contrast separation rather
+// than theme-following accent colors.
 const paletteColors = ['#df6d6d', '#5a91df', '#71a86a', '#c78c54', '#8e75c7']
 
 interface LineElement {
@@ -677,7 +681,7 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 1px 6px;
   border-radius: var(--radius-xs);
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   font-family: var(--font-mono);
   font-weight: 600;
   flex-shrink: 0;

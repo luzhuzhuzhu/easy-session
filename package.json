@@ -11,10 +11,12 @@
     "build:win": "electron-vite build && electron-builder --win",
     "build:dir": "electron-vite build && electron-builder --win --dir",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npx playwright test --config=playwright.config.ts",
-    "release:verify": "npm run typecheck && npm run test && npm run build",
+    "release:verify": "npm run typecheck && npm run lint && npm run test && npm run build",
     "release:win": "npm run release:verify && electron-builder --win"
   },
   "keywords": [],
@@ -67,6 +69,7 @@
     }
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.4",
@@ -76,10 +79,15 @@
     "electron-builder": "^26.7.0",
     "electron-playwright-helpers": "^2.1.0",
     "electron-vite": "^2.3.0",
+    "eslint": "^10.5.0",
+    "eslint-plugin-vue": "^10.9.2",
+    "globals": "^17.6.0",
     "sass": "^1.97.3",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.61.0",
     "vite": "^5.4.21",
     "vitest": "^4.0.18",
+    "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^2.2.12"
   }
 }

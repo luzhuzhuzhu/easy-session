@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir } from 'fs/promises'
-import { dirname } from 'path'
+import { basename, dirname } from 'path'
 import { watch, FSWatcher } from 'fs'
 import {
   CLAUDE_GLOBAL_CONFIG,
@@ -70,8 +70,14 @@ export class ConfigService {
 
   private tryWatch(filePath: string, callback: (path: string) => void, attempt: number): void {
     if (this.watchers.has(filePath)) return
+    // 监听父目录而非单文件：Windows 下编辑器/写入常用「写临时文件 + 原子 rename 替换」，
+    // 单文件 watcher 会在 rename 后静默失效；监听目录并按文件名过滤可持续捕获变更。
+    const dir = dirname(filePath)
+    const base = basename(filePath)
     try {
-      const watcher = watch(filePath, (eventType) => {
+      const watcher = watch(dir, (eventType, filename) => {
+        // filename 为 null（部分平台不提供）时保守触发；否则只响应目标文件。
+        if (filename !== null && basename(filename.toString()) !== base) return
         if (eventType === 'change' || eventType === 'rename') {
           const prev = this.watchTimers.get(filePath)
           if (prev) {
@@ -88,7 +94,7 @@ export class ConfigService {
       })
       this.watchers.set(filePath, watcher)
     } catch {
-      // 文件不存在时定时重试，直到文件创建或达到最大重试次数
+      // 目录不存在时定时重试，直到目录创建或达到最大重试次数
       if (attempt < ConfigService.MAX_RETRIES) {
         const retryTimer = setTimeout(() => {
           this.retryTimers.delete(filePath)

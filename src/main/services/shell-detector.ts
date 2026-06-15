@@ -1,6 +1,6 @@
 import { existsSync } from 'fs'
 import { homedir } from 'os'
-import { join } from 'path'
+import { dirname, join } from 'path'
 
 export interface DetectedShell {
   id: string
@@ -8,11 +8,34 @@ export interface DetectedShell {
   path: string
 }
 
-const GIT_BASH_CANDIDATES = [
-  'C:\\Program Files\\Git\\bin\\bash.exe',
-  'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
-  'C:\\Program Files (x86)\\Git\\bin\\bash.exe'
-]
+// Git Bash 候选：不再只硬编码 C:\Program Files\Git。
+// ① 遍历各 Program 目录（含 x86/W6432 与用户级安装 LOCALAPPDATA\Programs）；
+// ② 从 PATH 里的 git.exe 反推安装根目录，覆盖 D 盘 / 自定义路径安装。
+function gitBashCandidates(): string[] {
+  const candidates: string[] = []
+  const localAppData = process.env.LOCALAPPDATA
+  const programDirs = [
+    process.env.ProgramFiles,
+    process.env['ProgramFiles(x86)'],
+    process.env.ProgramW6432,
+    localAppData ? join(localAppData, 'Programs') : undefined
+  ].filter((dir): dir is string => !!dir)
+
+  for (const dir of programDirs) {
+    candidates.push(join(dir, 'Git', 'bin', 'bash.exe'))
+    candidates.push(join(dir, 'Git', 'usr', 'bin', 'bash.exe'))
+  }
+
+  // 从 PATH 中的 git 反推安装根目录（git 通常在 <root>\cmd 或 <root>\bin 下）。
+  const gitPath = findExecutableInPath('git', ['.exe'])
+  if (gitPath) {
+    const root = dirname(dirname(gitPath))
+    candidates.push(join(root, 'bin', 'bash.exe'))
+    candidates.push(join(root, 'usr', 'bin', 'bash.exe'))
+  }
+
+  return candidates
+}
 
 const WINDOWS_EXECUTABLE_EXTENSIONS = ['.exe', '.cmd', '.bat', '.com', '']
 
@@ -45,7 +68,7 @@ export function getExtraExecutablePathDirs(): string[] {
 }
 
 export function findGitBashPath(): string | undefined {
-  return GIT_BASH_CANDIDATES.find((p) => existsSync(p))
+  return gitBashCandidates().find((p) => existsSync(p))
 }
 
 // 在 PATH 中查找可执行文件；exts 为空数组时按 command 原名精确匹配
