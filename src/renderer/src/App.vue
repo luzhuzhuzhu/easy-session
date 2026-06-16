@@ -16,6 +16,7 @@
 import type { IpcRendererEvent } from 'electron'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import ConfirmDialogHost from '@/components/ConfirmDialogHost.vue'
 import ShortcutHelpDialog from '@/components/ShortcutHelpDialog.vue'
@@ -23,10 +24,16 @@ import ToastContainer from '@/components/ToastContainer.vue'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useCollabStore } from '@/stores/collab'
+import { onCollabFocus } from '@/api/agent-bus'
 
-const { locale } = useI18n()
+const { t, locale } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
+const collabStore = useCollabStore()
+let unsubscribeCollabFocus: (() => void) | null = null
 
 const SHUTDOWN_START_CHANNEL = 'app:shutdown-start'
 const isShuttingDown = ref(false)
@@ -53,10 +60,23 @@ onMounted(async () => {
   locale.value = settingsStore.settings.language
   document.documentElement.dataset.theme = resolveDocumentTheme(settingsStore.settings.theme)
   window.electronAPI.on(SHUTDOWN_START_CHANNEL, shutdownListener)
+
+  // 全程订阅协作 bus，使离开协作页也能收到 badge/toast/系统通知。
+  collabStore.start({
+    t,
+    isOnCollabPage: () => route.path === '/collaboration'
+  })
+  // 点击系统通知/角标后主进程请求聚焦协作页并选中对应任务。
+  unsubscribeCollabFocus = onCollabFocus((taskId) => {
+    collabStore.setFocusTask(taskId)
+    if (route.path !== '/collaboration') void router.push('/collaboration')
+  })
 })
 
 onBeforeUnmount(() => {
   window.electronAPI.removeListener(SHUTDOWN_START_CHANNEL, shutdownListener)
+  if (unsubscribeCollabFocus) unsubscribeCollabFocus()
+  collabStore.stop()
 })
 
 useShortcuts()

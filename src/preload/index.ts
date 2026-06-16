@@ -11,6 +11,7 @@ export interface ElectronAPI {
 const ALLOWED_INVOKE_CHANNELS = [
   // app / window
   'app:getVersion', 'app:getPlatform', 'app:getSystemInfo',
+  'app:setBadgeCount', 'app:notifyUser',
   'window:minimize', 'window:maximize', 'window:close',
   'dialog:selectFolder', 'shell:openPath', 'cli:check',
   // config
@@ -28,6 +29,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'session:restart', 'session:start', 'session:pause',
   'session:updateOptions', 'session:sendTo',
   'bus:snapshot', 'bus:sendMessage', 'bus:createTask', 'bus:taskTransition', 'bus:getCollabSkill', 'bus:setTaskStatus',
+  'bus:archiveTask', 'bus:unarchiveTask',
   'bus:setSessionCollabMode', 'terminal:detectShells',
   // skill
   'skill:list', 'skill:get', 'skill:create', 'skill:delete',
@@ -75,7 +77,8 @@ const ALLOWED_RECEIVE_CHANNELS = [
   'cli:error',
   'protocol:message',
   'app:shutdown-start',
-  'bus:changed'
+  'bus:changed',
+  'collab:focus'
 ]
 
 const electronAPI: ElectronAPI = {

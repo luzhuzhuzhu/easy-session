@@ -13,6 +13,8 @@ const STALL_TIMEOUT_MS = 5 * 60_000
 const GUARD_TICK_MS = 20_000
 // 接单超时向派发方升级提醒达此次数后过期（避免无人接单时永久刷屏）。
 const MAX_ACCEPT_ESCALATIONS = 3
+// 终态集合：这些状态下任务已结束，可被归档（归档正交于状态机）。
+const TERMINAL_STATUSES: AgentTaskStatus[] = ['done', 'failed', 'rejected', 'cancelled', 'expired']
 
 interface TaskStoreDeps {
   bridge: SessionBridge
@@ -210,6 +212,36 @@ export class TaskStore {
       from: task.from,
       fromName: task.fromName
     })
+    this.deps.onChange()
+    return { task }
+  }
+
+  // 归档：正交标记，仅终态任务可归档（不进状态机、不改 status）。
+  // 已归档再归档视为幂等成功。
+  archive(id: string, by: string): { task?: AgentTask; error?: string } {
+    const task = this.tasks.get(id)
+    if (!task) return { error: `任务 ${id} 不存在` }
+    if (task.archivedAt !== undefined) return { task }
+    if (!TERMINAL_STATUSES.includes(task.status)) {
+      return { error: '仅已结束的任务可归档' }
+    }
+    const now = Date.now()
+    task.archivedAt = now
+    task.updatedAt = now
+    task.history.push({ at: now, status: 'note', by, text: '已归档' })
+    this.deps.onChange()
+    return { task }
+  }
+
+  // 取消归档：清除 archivedAt。未归档视为幂等成功（不产生噪声历史）。
+  unarchive(id: string, by: string): { task?: AgentTask; error?: string } {
+    const task = this.tasks.get(id)
+    if (!task) return { error: `任务 ${id} 不存在` }
+    if (task.archivedAt === undefined) return { task }
+    const now = Date.now()
+    delete task.archivedAt
+    task.updatedAt = now
+    task.history.push({ at: now, status: 'note', by, text: '已取消归档' })
     this.deps.onChange()
     return { task }
   }

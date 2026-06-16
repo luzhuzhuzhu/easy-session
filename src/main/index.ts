@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, dialog, Notification } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { exec } from 'child_process'
@@ -34,6 +34,7 @@ import { RemoteGatewayManager } from './services/remote-gateway-manager'
 import { SessionOutputManager } from './services/session-output'
 import { AgentBus } from './services/agent-bus'
 import { ES_SYSTEM_PROMPT_HINT, getEsSkillMarkdown } from './services/agent-bus/skill'
+import { aggregateBusResults, type BusTargetResult } from './services/agent-bus/bus-action-result'
 import { createLogger } from './services/logger'
 
 const log = createLogger('main')
@@ -255,6 +256,52 @@ ipcMain.handle('app:getPlatform', () => {
   return process.platform
 })
 
+// 取当前主窗口（用于通知点击聚焦、任务栏闪烁等）。无可用窗口时返回 null。
+function getMainWindow(): BrowserWindow | null {
+  const win = BrowserWindow.getAllWindows()[0]
+  return win && !win.isDestroyed() ? win : null
+}
+
+// 系统级未读角标：跨平台设置 app badge；Windows 额外闪烁任务栏（count>0 闪、归 0 停）。
+ipcMain.handle('app:setBadgeCount', (_event, count: number) => {
+  const n = typeof count === 'number' && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0
+  try {
+    app.setBadgeCount(n)
+  } catch {
+    // 部分平台/环境不支持 badge，忽略即可。
+  }
+  if (process.platform === 'win32') {
+    getMainWindow()?.flashFrame(n > 0)
+  }
+  return { ok: true }
+})
+
+// 系统级用户提醒：弹系统通知；点击后聚焦主窗口并向渲染层发 collab:focus(taskId) 以跳转。
+ipcMain.handle(
+  'app:notifyUser',
+  (_event, payload: { title: string; body: string; taskId?: string }) => {
+    if (!payload || typeof payload !== 'object') throw new Error('参数 payload 必须为对象')
+    const { title, body, taskId } = payload
+    if (typeof title !== 'string' || !title) throw new Error('参数 title 必须为非空字符串')
+    if (typeof body !== 'string') throw new Error('参数 body 必须为字符串')
+    if (taskId !== undefined && typeof taskId !== 'string') {
+      throw new Error('参数 taskId 必须为字符串')
+    }
+    if (!Notification.isSupported()) return { ok: false, error: '当前系统不支持通知' }
+    const notification = new Notification({ title, body })
+    notification.on('click', () => {
+      const win = getMainWindow()
+      if (!win) return
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+      win.webContents.send('collab:focus', taskId)
+    })
+    notification.show()
+    return { ok: true }
+  }
+)
+
 // 终端间通信：UI 把文本发送到另一个会话（人触发，走 agent bus 注入门控）。
 ipcMain.handle('session:sendTo', (_event, targetId: string, text: string) => {
   if (typeof targetId !== 'string' || !targetId) throw new Error('参数 targetId 必须为非空字符串')
@@ -265,16 +312,44 @@ ipcMain.handle('session:sendTo', (_event, targetId: string, text: string) => {
 // Agent 协作面板：拉取在线会话、任务板与消息流快照。
 ipcMain.handle('bus:snapshot', () => agentBus.snapshot())
 
-ipcMain.handle('bus:sendMessage', (_event, targetId: string, text: string) => {
-  if (typeof targetId !== 'string' || !targetId) throw new Error('参数 targetId 必须为非空字符串')
-  if (typeof text !== 'string' || !text.trim()) throw new Error('参数 text 必须为非空字符串')
-  return agentBus.sendFromUI(targetId, text)
+// 群发消息：targetIds 为目标会话数组，逐个投递并聚合结果（>=1 成功即 ok:true）。
+// 兼容旧单目标调用方：传入单个 string 时按单元素数组处理（前端切换窗口期不报错）。
+ipcMain.handle('bus:sendMessage', (_event, targetIds: string[] | string, text: string) => {
+  const ids = typeof targetIds === 'string' ? [targetIds] : targetIds
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { ok: false, error: '参数 targetIds 必须为非空字符串数组' }
+  }
+  if (typeof text !== 'string' || !text.trim()) {
+    return { ok: false, error: '参数 text 必须为非空字符串' }
+  }
+  const results: BusTargetResult[] = ids.map((targetId) => {
+    if (typeof targetId !== 'string' || !targetId) {
+      return { targetId: String(targetId), ok: false, error: '目标 id 必须为非空字符串' }
+    }
+    const r = agentBus.sendFromUI(targetId, text)
+    return { targetId, ok: r.ok, error: r.error }
+  })
+  return aggregateBusResults(results)
 })
 
-ipcMain.handle('bus:createTask', (_event, targetId: string, title: string) => {
-  if (typeof targetId !== 'string' || !targetId) throw new Error('参数 targetId 必须为非空字符串')
-  if (typeof title !== 'string' || !title.trim()) throw new Error('参数 title 必须为非空字符串')
-  return agentBus.createTaskFromUI(targetId, title)
+// 批量建任务：对 targetIds 每个目标各建一条任务，聚合结果；单目标成功时回填 taskId。
+// 兼容旧单目标调用方：传入单个 string 时按单元素数组处理（前端切换窗口期不报错）。
+ipcMain.handle('bus:createTask', (_event, targetIds: string[] | string, title: string) => {
+  const ids = typeof targetIds === 'string' ? [targetIds] : targetIds
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { ok: false, error: '参数 targetIds 必须为非空字符串数组' }
+  }
+  if (typeof title !== 'string' || !title.trim()) {
+    return { ok: false, error: '参数 title 必须为非空字符串' }
+  }
+  const results: BusTargetResult[] = ids.map((targetId) => {
+    if (typeof targetId !== 'string' || !targetId) {
+      return { targetId: String(targetId), ok: false, error: '目标 id 必须为非空字符串' }
+    }
+    const r = agentBus.createTaskFromUI(targetId, title)
+    return { targetId, ok: r.ok, error: r.error, taskId: r.taskId }
+  })
+  return aggregateBusResults(results)
 })
 
 ipcMain.handle('bus:taskTransition', (_event, taskId: string, action: string, text?: string) => {
@@ -293,6 +368,17 @@ ipcMain.handle('bus:setTaskStatus', (_event, taskId: string, status: string, tex
   if (!isAgentTaskStatus(status)) throw new Error('参数 status 无效')
   if (text !== undefined && typeof text !== 'string') throw new Error('参数 text 必须为字符串')
   return agentBus.setTaskStatusFromUI(taskId, status, text)
+})
+
+// 归档/取消归档：正交标记，仅终态任务可归档（前端按 archivedAt 区分活跃/归档视图）。
+ipcMain.handle('bus:archiveTask', (_event, taskId: string) => {
+  if (typeof taskId !== 'string' || !taskId) throw new Error('参数 taskId 必须为非空字符串')
+  return agentBus.archiveTaskFromUI(taskId)
+})
+
+ipcMain.handle('bus:unarchiveTask', (_event, taskId: string) => {
+  if (typeof taskId !== 'string' || !taskId) throw new Error('参数 taskId 必须为非空字符串')
+  return agentBus.unarchiveTaskFromUI(taskId)
 })
 
 ipcMain.handle('bus:setSessionCollabMode', (_event, sessionId: string, mode: string) => {

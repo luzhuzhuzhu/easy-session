@@ -160,6 +160,16 @@ export class AgentBus {
     return this.broker.setTaskStatusFromUI(taskId, status, text)
   }
 
+  archiveTaskFromUI(taskId: string): { ok: boolean; error?: string } {
+    if (!this.broker) return { ok: false, error: 'bus 未就绪' }
+    return this.broker.archiveTaskFromUI(taskId)
+  }
+
+  unarchiveTaskFromUI(taskId: string): { ok: boolean; error?: string } {
+    if (!this.broker) return { ok: false, error: 'bus 未就绪' }
+    return this.broker.unarchiveTaskFromUI(taskId)
+  }
+
   setSessionCollabMode(sessionId: string, mode: AgentCollabMode): { ok: boolean; error?: string } {
     const session = this.sessionManager.getSession(sessionId)
     if (!session) return { ok: false, error: '会话不存在' }

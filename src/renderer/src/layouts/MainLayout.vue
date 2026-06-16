@@ -45,6 +45,12 @@
               </svg>
             </span>
             <span class="top-nav-label">{{ $t(item.label) }}</span>
+            <span
+              v-if="item.path === '/collaboration' && collabBadge > 0"
+              class="nav-badge"
+              :title="$t('collab.badgeTitle', { count: collabBadge })"
+              :aria-label="$t('collab.badgeTitle', { count: collabBadge })"
+            >{{ collabBadge > 99 ? '99+' : collabBadge }}</span>
           </router-link>
         </nav>
 
@@ -133,6 +139,7 @@ import { useProjectsStore } from '@/stores/projects'
 import { useAppStore } from '@/stores/app'
 import { useSessionsStore } from '@/stores/sessions'
 import { useInstancesStore } from '@/stores/instances'
+import { useCollabStore } from '@/stores/collab'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import logoSrc from '@/assets/logo-easy-session-light.png'
@@ -146,7 +153,10 @@ const projectsStore = useProjectsStore()
 const appStore = useAppStore()
 const sessionsStore = useSessionsStore()
 const instancesStore = useInstancesStore()
+const collabStore = useCollabStore()
 const confirmDialog = useConfirmDialog()
+
+const collabBadge = computed(() => collabStore.badgeCount)
 
 const navItems = [
   { path: '/dashboard', icon: 'dashboard', label: 'nav.dashboard' },
@@ -345,6 +355,7 @@ onMounted(() => {
 }
 
 .top-nav-item {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -392,6 +403,26 @@ onMounted(() => {
 .top-nav-label {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.nav-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  z-index: 1;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--status-error);
+  color: #fff;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--bg-secondary) 94%, var(--bg-primary));
 }
 
 .context-trail {

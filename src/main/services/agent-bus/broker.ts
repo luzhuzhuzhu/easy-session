@@ -183,6 +183,16 @@ export class AgentBroker {
     return result.error ? { ok: false, error: result.error } : { ok: true }
   }
 
+  archiveTaskFromUI(taskId: string): { ok: boolean; error?: string } {
+    const result = this.taskStore.archive(taskId, 'user')
+    return result.error ? { ok: false, error: result.error } : { ok: true }
+  }
+
+  unarchiveTaskFromUI(taskId: string): { ok: boolean; error?: string } {
+    const result = this.taskStore.unarchive(taskId, 'user')
+    return result.error ? { ok: false, error: result.error } : { ok: true }
+  }
+
   // bus server 入口：处理一条 es 请求。
   async handle(req: AgentBusRequest, abort?: AbortToken): Promise<AgentBusResponse> {
     if (!req || typeof req.token !== 'string' || !safeEqual(req.token, this.token)) {

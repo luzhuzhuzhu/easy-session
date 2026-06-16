@@ -63,6 +63,9 @@ export interface AgentTask {
   updatedAt: number
   // 守护用：状态进入时间，用于接单超时 / 搁浅检测
   statusSince: number
+  // 归档标记（正交于 status 状态机）：归档时间戳；undefined=未归档。
+  // 仅终态任务可归档，可取消归档；不影响 status / allowed 流转表。
+  archivedAt?: number
   history: AgentTaskEvent[]
 }
 
