@@ -48,6 +48,15 @@ function loadEnvironmentFiles(): void {
 
 loadEnvironmentFiles()
 
+// 开发模式使用独立的 app 名与 userData 目录，与已安装版隔离：
+// 否则二者共享同一 single instance lock —— 安装版在运行时，dev 实例（同名 easysession）
+// 会 requestSingleInstanceLock() 失败而立即 app.quit() 退出，表现为 npm run dev 起不来。
+// 独立 userData 同时避免 dev 调试读写污染安装版的真实数据。
+if (is.dev) {
+  app.setName('easysession-dev')
+  app.setPath('userData', join(app.getPath('appData'), 'easysession-dev'))
+}
+
 const hasSingleInstanceLock = process.env.NODE_ENV === 'test' || app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) {
   app.quit()
