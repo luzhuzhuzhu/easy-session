@@ -1916,6 +1916,7 @@ textarea {
   height: 100%;
   display: grid;
   grid-template-columns: repeat(6, minmax(146px, 1fr));
+  grid-template-rows: minmax(0, 1fr);
   gap: 8px;
   overflow-x: auto;
 }
