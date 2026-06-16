@@ -155,6 +155,8 @@ export default {
     layoutMenu: 'Customize layout',
     layoutTopPanels: 'Columns',
     layoutDetailPanels: 'Detail blocks',
+    layoutPanels: 'Panels',
+    dockHide: 'Hide panel',
     resetLayout: 'Reset layout',
     panel: {
       members: 'Members',

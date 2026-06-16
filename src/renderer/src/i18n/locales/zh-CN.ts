@@ -155,6 +155,8 @@
     layoutMenu: '自定义布局',
     layoutTopPanels: '三栏区块',
     layoutDetailPanels: '详情子区块',
+    layoutPanels: '面板',
+    dockHide: '隐藏面板',
     resetLayout: '重置布局',
     panel: {
       members: '成员栏',

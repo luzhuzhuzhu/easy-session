@@ -86,30 +86,18 @@
           <div v-if="layoutMenuOpen" class="ms-backdrop" @click="layoutMenuOpen = false"></div>
           <div v-if="layoutMenuOpen" class="layout-panel">
             <div class="layout-section">
-              <span class="section-label">{{ $t('collab.layoutTopPanels') }}</span>
-              <label v-for="panel in topPanels" :key="panel.id" class="ms-option">
+              <span class="section-label">{{ $t('collab.layoutPanels') }}</span>
+              <label v-for="pid in ALL_PANELS" :key="pid" class="ms-option">
                 <input
                   type="checkbox"
-                  :checked="panel.visible"
-                  :disabled="panel.visible && topVisibleCount <= 1"
-                  @change="togglePanel('top', panel.id)"
+                  :checked="isPanelVisible(pid)"
+                  :disabled="isPanelVisible(pid) && dockLeafCount <= 1"
+                  @change="togglePanelVisible(pid)"
                 />
-                <span class="ms-option-name">{{ panelLabel(panel.id) }}</span>
+                <span class="ms-option-name">{{ panelLabel(pid) }}</span>
               </label>
             </div>
-            <div class="layout-section">
-              <span class="section-label">{{ $t('collab.layoutDetailPanels') }}</span>
-              <label v-for="panel in detailPanels" :key="panel.id" class="ms-option">
-                <input
-                  type="checkbox"
-                  :checked="panel.visible"
-                  :disabled="panel.visible && detailVisibleCount <= 1"
-                  @change="togglePanel('detail', panel.id)"
-                />
-                <span class="ms-option-name">{{ panelLabel(panel.id) }}</span>
-              </label>
-            </div>
-            <button type="button" class="ms-all" @click="resetLayout">{{ $t('collab.resetLayout') }}</button>
+            <button type="button" class="ms-all" @click="dock.resetLayout()">{{ $t('collab.resetLayout') }}</button>
           </div>
         </div>
         <button class="icon-button" type="button" :title="$t('collab.refresh')" @click="refresh">
@@ -127,21 +115,11 @@
     </div>
 
     <main class="collab-main">
-      <PaneLayout direction="horizontal" :panes="visibleTopPanes" @resize="onTopResize">
-        <!-- 成员栏 -->
-        <template #members>
-          <section class="panel" :class="panelDnDClass('top', 'members')">
-            <header
-              class="panel-head"
-              draggable="true"
-              @dragstart="topDragStart('members', $event)"
-              @dragover="topDragOver('members', $event)"
-              @dragleave="topDragLeave('members')"
-              @drop="topDrop('members', $event)"
-              @dragend="topDragEnd"
-            >
-              <span class="drag-grip" aria-hidden="true">⠿</span>
-              <span class="section-label">{{ $t('collab.agents') }}</span>
+      <CollabDock :node="dockRoot" path="root">
+        <template #panel="{ panelId }">
+          <!-- 成员栏 -->
+          <div v-if="panelId === 'members'" class="panel-content">
+            <div class="panel-toolbar">
               <button
                 v-if="snapshot.agents.length"
                 type="button"
@@ -150,73 +128,57 @@
               >
                 {{ allTargetsSelected ? $t('collab.clearAll') : $t('collab.selectAllOnline') }}
               </button>
-            </header>
-            <div class="panel-body">
-              <div v-if="snapshot.agents.length" class="agent-list">
-                <article
-                  v-for="agent in snapshot.agents"
-                  :key="agent.sessionId"
-                  class="agent-row"
-                  :class="{ selected: activeAgentId === agent.sessionId, targeted: isTarget(agent.sessionId) }"
-                  @click="focusAgent(agent.sessionId)"
-                >
-                  <label class="agent-check" :title="$t('collab.includeInBroadcast')" @click.stop>
-                    <input type="checkbox" :checked="isTarget(agent.sessionId)" @change="toggleTarget(agent.sessionId)" />
-                  </label>
-                  <div class="agent-main">
-                    <span class="agent-avatar" :class="`type-${agent.type}`">
-                      <span v-if="agentIcon(agent)" class="session-emoji">{{ agentIcon(agent) }}</span>
-                      <span v-else class="type-letter">{{ cliTypeBadgeLetter(agent.type) }}</span>
-                    </span>
-                    <div class="agent-name">
-                      <strong>{{ agent.name }}</strong>
-                      <small>
-                        <span>{{ agent.type }}</span>
-                        <span v-if="agentSession(agent.sessionId)"> · {{ statusLabelForSession(agent.sessionId) }}</span>
-                      </small>
-                    </div>
-                    <span class="mode-chip" :class="{ muted: !agent.injectable }">{{ shortModeLabel(agent.collabMode) }}</span>
-                  </div>
-                  <div class="agent-badges">
-                    <span class="badge">{{ agent.unread || 0 }}</span>
-                    <span class="badge">{{ agent.activeTaskCount || 0 }}</span>
-                  </div>
-                  <div v-if="agent.type === 'terminal'" class="terminal-mode" :title="$t('collab.terminalRisk')" @click.stop>
-                    <select :value="agent.collabMode" @change="handleModeSelect(agent.sessionId, $event)">
-                      <option value="terminal-readonly">{{ modeLabel('terminal-readonly') }}</option>
-                      <option value="terminal-nudge">{{ modeLabel('terminal-nudge') }}</option>
-                      <option value="terminal-inject">{{ modeLabel('terminal-inject') }}</option>
-                    </select>
-                  </div>
-                </article>
-              </div>
-              <p v-else class="empty">{{ $t('collab.noAgents') }}</p>
+              <span v-else class="count">{{ $t('collab.noAgents') }}</span>
             </div>
-          </section>
-        </template>
+            <div class="agent-list">
+              <article
+                v-for="agent in snapshot.agents"
+                :key="agent.sessionId"
+                class="agent-row"
+                :class="{ selected: activeAgentId === agent.sessionId, targeted: isTarget(agent.sessionId) }"
+                @click="focusAgent(agent.sessionId)"
+              >
+                <label class="agent-check" :title="$t('collab.includeInBroadcast')" @click.stop>
+                  <input type="checkbox" :checked="isTarget(agent.sessionId)" @change="toggleTarget(agent.sessionId)" />
+                </label>
+                <div class="agent-main">
+                  <span class="agent-avatar" :class="`type-${agent.type}`">
+                    <span v-if="agentIcon(agent)" class="session-emoji">{{ agentIcon(agent) }}</span>
+                    <span v-else class="type-letter">{{ cliTypeBadgeLetter(agent.type) }}</span>
+                  </span>
+                  <div class="agent-name">
+                    <strong>{{ agent.name }}</strong>
+                    <small>
+                      <span>{{ agent.type }}</span>
+                      <span v-if="agentSession(agent.sessionId)"> · {{ statusLabelForSession(agent.sessionId) }}</span>
+                    </small>
+                  </div>
+                  <span class="mode-chip" :class="{ muted: !agent.injectable }">{{ shortModeLabel(agent.collabMode) }}</span>
+                </div>
+                <div class="agent-badges">
+                  <span class="badge">{{ agent.unread || 0 }}</span>
+                  <span class="badge">{{ agent.activeTaskCount || 0 }}</span>
+                </div>
+                <div v-if="agent.type === 'terminal'" class="terminal-mode" :title="$t('collab.terminalRisk')" @click.stop>
+                  <select :value="agent.collabMode" @change="handleModeSelect(agent.sessionId, $event)">
+                    <option value="terminal-readonly">{{ modeLabel('terminal-readonly') }}</option>
+                    <option value="terminal-nudge">{{ modeLabel('terminal-nudge') }}</option>
+                    <option value="terminal-inject">{{ modeLabel('terminal-inject') }}</option>
+                  </select>
+                </div>
+              </article>
+            </div>
+          </div>
 
-        <!-- 任务看板 -->
-        <template #board>
-          <section class="panel" :class="panelDnDClass('top', 'board')">
-            <header
-              class="panel-head"
-              draggable="true"
-              @dragstart="topDragStart('board', $event)"
-              @dragover="topDragOver('board', $event)"
-              @dragleave="topDragLeave('board')"
-              @drop="topDrop('board', $event)"
-              @dragend="topDragEnd"
-            >
-              <span class="drag-grip" aria-hidden="true">⠿</span>
-              <span class="section-label">{{ showArchived ? $t('collab.archivedTitle') : $t('collab.tasks') }}</span>
-              <div class="board-head-tools">
-                <span v-if="!showArchived" class="board-filter">{{ activeAgentName || $t('collab.target') }}</span>
-                <button type="button" class="rail-all-button" @click="showArchived = !showArchived">
-                  {{ showArchived ? $t('collab.backToBoard') : $t('collab.showArchived', { count: archivedCount }) }}
-                </button>
-              </div>
-            </header>
-            <div class="panel-body">
+          <!-- 任务看板 -->
+          <div v-else-if="panelId === 'board'" class="panel-content">
+            <div class="panel-toolbar">
+              <span class="board-filter">{{ showArchived ? $t('collab.archivedTitle') : (activeAgentName || $t('collab.target')) }}</span>
+              <button type="button" class="rail-all-button" @click="showArchived = !showArchived">
+                {{ showArchived ? $t('collab.backToBoard') : $t('collab.showArchived', { count: archivedCount }) }}
+              </button>
+            </div>
+            <div class="board-region">
               <div v-if="!showArchived" class="board-grid">
                 <div v-for="col in taskColumns" :key="col.key" class="board-col">
                   <div class="col-head" :class="`col-${col.key}`">
@@ -277,277 +239,218 @@
                 <p v-if="!archivedTasks.length" class="empty compact">{{ $t('collab.noArchived') }}</p>
               </div>
             </div>
-          </section>
-        </template>
+          </div>
 
-        <!-- 详情栏（内含纵向子区块） -->
-        <template #detail>
-          <section class="panel" :class="panelDnDClass('top', 'detail')">
-            <header
-              class="panel-head"
-              draggable="true"
-              @dragstart="topDragStart('detail', $event)"
-              @dragover="topDragOver('detail', $event)"
-              @dragleave="topDragLeave('detail')"
-              @drop="topDrop('detail', $event)"
-              @dragend="topDragEnd"
-            >
-              <span class="drag-grip" aria-hidden="true">⠿</span>
-              <span class="section-label">{{ $t('collab.detail') }}</span>
-            </header>
-            <div class="panel-body detail-body">
-              <PaneLayout direction="vertical" :panes="visibleDetailPanes" @resize="onDetailResize">
-                <!-- 任务详情子区块 -->
-                <template #taskDetail>
-                  <section class="subpanel" :class="panelDnDClass('detail', 'taskDetail')">
-                    <header
-                      class="panel-head sub"
-                      draggable="true"
-                      @dragstart="detailDragStart('taskDetail', $event)"
-                      @dragover="detailDragOver('taskDetail', $event)"
-                      @dragleave="detailDragLeave('taskDetail')"
-                      @drop="detailDrop('taskDetail', $event)"
-                      @dragend="detailDragEnd"
-                    >
-                      <span class="drag-grip" aria-hidden="true">⠿</span>
-                      <span class="section-label">{{ $t('collab.panel.taskDetail') }}</span>
-                      <div class="detail-tools">
-                        <button v-if="targetSessionRef" class="tiny-button" type="button" @click="openTargetSession">
-                          {{ $t('collab.openSession') }}
-                        </button>
-                        <button v-if="selectedTask?.result" class="tiny-button" type="button" @click="copyResult(selectedTask.result)">
-                          {{ $t('collab.copyResult') }}
-                        </button>
-                      </div>
-                    </header>
-                    <div class="panel-body">
-                      <div v-if="selectedTask" class="detail-content">
-                        <div class="detail-title">
-                          <span class="task-id">{{ selectedTask.id }}</span>
-                          <span class="task-status" :class="`st-${selectedTask.status}`">{{ statusLabel(selectedTask.status) }}</span>
-                        </div>
-                        <h3>{{ selectedTask.title }}</h3>
-                        <p class="detail-flow">{{ selectedTask.fromName }} -> {{ selectedTask.toName }}</p>
-
-                        <div v-if="latestTaskText(selectedTask)" class="task-note">
-                          <span>{{ $t('collab.history') }}</span>
-                          <p>{{ latestTaskText(selectedTask) }}</p>
-                        </div>
-
-                        <div v-if="selectedTask.result" class="result-box">
-                          <span>{{ $t('collab.result') }}</span>
-                          <p>{{ selectedTask.result }}</p>
-                        </div>
-
-                        <div class="task-actions">
-                          <button
-                            v-if="selectedTask.status === 'review' && selectedTask.from === 'user'"
-                            class="primary-button small"
-                            type="button"
-                            @click="transitionTask('confirm')"
-                          >
-                            {{ $t('collab.confirmDone') }}
-                          </button>
-                          <button
-                            v-if="selectedTask.status === 'blocked' && selectedTask.from === 'user'"
-                            class="secondary-button small"
-                            type="button"
-                            @click="showUnblock = !showUnblock"
-                          >
-                            {{ $t('collab.unblockTask') }}
-                          </button>
-                          <button
-                            v-if="canCancel(selectedTask)"
-                            class="danger-button small"
-                            type="button"
-                            @click="showCancel = !showCancel"
-                          >
-                            {{ $t('collab.cancelTask') }}
-                          </button>
-                          <button
-                            v-if="isArchivable(selectedTask)"
-                            class="secondary-button small"
-                            type="button"
-                            @click="archiveTask(selectedTask.id)"
-                          >
-                            {{ $t('collab.archive') }}
-                          </button>
-                          <button
-                            v-if="selectedTask.archivedAt"
-                            class="secondary-button small"
-                            type="button"
-                            @click="unarchiveTask(selectedTask.id)"
-                          >
-                            {{ $t('collab.unarchive') }}
-                          </button>
-                        </div>
-
-                        <div class="manual-status">
-                          <div class="manual-status-row">
-                            <label>{{ $t('collab.manualStatus') }}</label>
-                            <select v-model="manualStatus" @change="manualStatusTouched = true">
-                              <option v-for="status in manualStatusOptions" :key="status" :value="status">
-                                {{ statusLabel(status) }}
-                              </option>
-                            </select>
-                            <button
-                              class="secondary-button small"
-                              type="button"
-                              :disabled="manualStatusBusy || !selectedTask || (manualStatus === selectedTask.status && !manualStatusNote)"
-                              @click="applyManualStatus"
-                            >
-                              {{ $t('collab.applyStatus') }}
-                            </button>
-                          </div>
-                          <textarea v-model.trim="manualStatusNote" :placeholder="$t('collab.manualStatusPlaceholder')"></textarea>
-                        </div>
-
-                        <div v-if="showUnblock" class="inline-form">
-                          <textarea v-model.trim="unblockText" :placeholder="$t('collab.unblockPlaceholder')"></textarea>
-                          <button class="primary-button small" type="button" @click="transitionTask('unblock', unblockText)">
-                            {{ $t('collab.unblockTask') }}
-                          </button>
-                        </div>
-
-                        <div v-if="showCancel" class="inline-form">
-                          <textarea v-model.trim="cancelText" :placeholder="$t('collab.cancelPlaceholder')"></textarea>
-                          <button class="danger-button small" type="button" @click="transitionTask('cancel', cancelText)">
-                            {{ $t('collab.cancelTask') }}
-                          </button>
-                        </div>
-
-                        <div class="history">
-                          <span class="section-label">{{ $t('collab.history') }}</span>
-                          <ol>
-                            <li v-for="item in selectedTask.history" :key="`${item.at}-${item.status}-${item.by}`">
-                              <time>{{ clock(item.at) }}</time>
-                              <b :class="`st-${item.status}`">{{ statusLabel(item.status) }}</b>
-                              <span v-if="item.text">{{ item.text }}</span>
-                            </li>
-                          </ol>
-                        </div>
-                      </div>
-                      <p v-else class="empty">{{ $t('collab.noTaskSelected') }}</p>
-                    </div>
-                  </section>
-                </template>
-
-                <!-- 会话预览子区块 -->
-                <template #preview>
-                  <section class="subpanel" :class="panelDnDClass('detail', 'preview')">
-                    <header
-                      class="panel-head sub"
-                      draggable="true"
-                      @dragstart="detailDragStart('preview', $event)"
-                      @dragover="detailDragOver('preview', $event)"
-                      @dragleave="detailDragLeave('preview')"
-                      @drop="detailDrop('preview', $event)"
-                      @dragend="detailDragEnd"
-                    >
-                      <span class="drag-grip" aria-hidden="true">⠿</span>
-                      <span class="section-label">{{ $t('collab.sessionPreview') }}</span>
-                      <span class="count">{{ activeTerminalName || '-' }}</span>
-                    </header>
-                    <div class="panel-body preview-body">
-                      <TerminalOutput
-                        v-if="targetSessionRef"
-                        class="collab-terminal"
-                        :session-ref="targetSessionRef"
-                        :process-key="targetProcessKey"
-                        pane-id="collaboration"
-                        @clear="clearTargetSessionOutput"
-                      />
-                      <p v-else class="empty compact">{{ $t('collab.noOutputPreview') }}</p>
-                    </div>
-                  </section>
-                </template>
-
-                <!-- 聊天子区块 -->
-                <template #chat>
-                  <section class="subpanel" :class="panelDnDClass('detail', 'chat')">
-                    <header
-                      class="panel-head sub"
-                      draggable="true"
-                      @dragstart="detailDragStart('chat', $event)"
-                      @dragover="detailDragOver('chat', $event)"
-                      @dragleave="detailDragLeave('chat')"
-                      @drop="detailDrop('chat', $event)"
-                      @dragend="detailDragEnd"
-                    >
-                      <span class="drag-grip" aria-hidden="true">⠿</span>
-                      <span class="section-label">{{ $t('collab.chat') }}</span>
-                      <span class="count">{{ activeAgentName || $t('collab.chatNoMember') }}</span>
-                    </header>
-                    <div class="panel-body chat-body">
-                      <div ref="chatScrollEl" class="chat-scroll">
-                        <p v-if="!activeAgentId" class="empty compact">{{ $t('collab.chatPickMember') }}</p>
-                        <template v-else>
-                          <article
-                            v-for="msg in conversation"
-                            :key="msg.id"
-                            class="chat-msg"
-                            :class="{ mine: msg.from === 'user' }"
-                          >
-                            <div class="chat-msg-head">
-                              <strong>{{ msg.fromName }}</strong>
-                              <time>{{ clock(msg.createdAt) }}</time>
-                            </div>
-                            <p>{{ msg.body }}</p>
-                          </article>
-                          <p v-if="!conversation.length" class="empty compact">{{ $t('collab.noMessages') }}</p>
-                        </template>
-                      </div>
-                      <div v-if="activeAgentId" class="chat-composer">
-                        <div v-if="commandMenuOpen" class="cmd-menu" role="listbox">
-                          <button
-                            v-for="(cmd, i) in filteredCommands"
-                            :key="cmd.name"
-                            type="button"
-                            class="cmd-item"
-                            :class="{ active: i === activeMenuIndex }"
-                            @mousedown.prevent="completeCommand(cmd)"
-                          >
-                            <b>/{{ cmd.name }}</b>
-                            <span v-if="cmd.argHint" class="cmd-arg">{{ cmd.argHint }}</span>
-                            <span class="cmd-desc">{{ $t(cmd.descKey) }}</span>
-                          </button>
-                        </div>
-                        <textarea
-                          ref="chatInputEl"
-                          v-model="chatInput"
-                          class="chat-input"
-                          rows="1"
-                          :placeholder="$t('collab.chatPlaceholder')"
-                          @keydown="handleChatKeydown"
-                        ></textarea>
-                        <button
-                          class="primary-button small"
-                          type="button"
-                          :disabled="chatSending || !chatInput.trim()"
-                          @click="submitChat"
-                        >
-                          {{ $t('collab.send') }}
-                        </button>
-                      </div>
-                    </div>
-                  </section>
-                </template>
-              </PaneLayout>
+          <!-- 任务详情 -->
+          <div v-else-if="panelId === 'taskDetail'" class="panel-content">
+            <div class="panel-toolbar detail-tools">
+              <button v-if="targetSessionRef" class="tiny-button" type="button" @click="openTargetSession">
+                {{ $t('collab.openSession') }}
+              </button>
+              <button v-if="selectedTask?.result" class="tiny-button" type="button" @click="copyResult(selectedTask.result)">
+                {{ $t('collab.copyResult') }}
+              </button>
             </div>
-          </section>
+            <div class="detail-region">
+              <div v-if="selectedTask" class="detail-content">
+                <div class="detail-title">
+                  <span class="task-id">{{ selectedTask.id }}</span>
+                  <span class="task-status" :class="`st-${selectedTask.status}`">{{ statusLabel(selectedTask.status) }}</span>
+                </div>
+                <h3>{{ selectedTask.title }}</h3>
+                <p class="detail-flow">{{ selectedTask.fromName }} -> {{ selectedTask.toName }}</p>
+
+                <div v-if="latestTaskText(selectedTask)" class="task-note">
+                  <span>{{ $t('collab.history') }}</span>
+                  <p>{{ latestTaskText(selectedTask) }}</p>
+                </div>
+
+                <div v-if="selectedTask.result" class="result-box">
+                  <span>{{ $t('collab.result') }}</span>
+                  <p>{{ selectedTask.result }}</p>
+                </div>
+
+                <div class="task-actions">
+                  <button
+                    v-if="selectedTask.status === 'review' && selectedTask.from === 'user'"
+                    class="primary-button small"
+                    type="button"
+                    @click="transitionTask('confirm')"
+                  >
+                    {{ $t('collab.confirmDone') }}
+                  </button>
+                  <button
+                    v-if="selectedTask.status === 'blocked' && selectedTask.from === 'user'"
+                    class="secondary-button small"
+                    type="button"
+                    @click="showUnblock = !showUnblock"
+                  >
+                    {{ $t('collab.unblockTask') }}
+                  </button>
+                  <button
+                    v-if="canCancel(selectedTask)"
+                    class="danger-button small"
+                    type="button"
+                    @click="showCancel = !showCancel"
+                  >
+                    {{ $t('collab.cancelTask') }}
+                  </button>
+                  <button
+                    v-if="isArchivable(selectedTask)"
+                    class="secondary-button small"
+                    type="button"
+                    @click="archiveTask(selectedTask.id)"
+                  >
+                    {{ $t('collab.archive') }}
+                  </button>
+                  <button
+                    v-if="selectedTask.archivedAt"
+                    class="secondary-button small"
+                    type="button"
+                    @click="unarchiveTask(selectedTask.id)"
+                  >
+                    {{ $t('collab.unarchive') }}
+                  </button>
+                </div>
+
+                <div class="manual-status">
+                  <div class="manual-status-row">
+                    <label>{{ $t('collab.manualStatus') }}</label>
+                    <select v-model="manualStatus" @change="manualStatusTouched = true">
+                      <option v-for="status in manualStatusOptions" :key="status" :value="status">
+                        {{ statusLabel(status) }}
+                      </option>
+                    </select>
+                    <button
+                      class="secondary-button small"
+                      type="button"
+                      :disabled="manualStatusBusy || !selectedTask || (manualStatus === selectedTask.status && !manualStatusNote)"
+                      @click="applyManualStatus"
+                    >
+                      {{ $t('collab.applyStatus') }}
+                    </button>
+                  </div>
+                  <textarea v-model.trim="manualStatusNote" :placeholder="$t('collab.manualStatusPlaceholder')"></textarea>
+                </div>
+
+                <div v-if="showUnblock" class="inline-form">
+                  <textarea v-model.trim="unblockText" :placeholder="$t('collab.unblockPlaceholder')"></textarea>
+                  <button class="primary-button small" type="button" @click="transitionTask('unblock', unblockText)">
+                    {{ $t('collab.unblockTask') }}
+                  </button>
+                </div>
+
+                <div v-if="showCancel" class="inline-form">
+                  <textarea v-model.trim="cancelText" :placeholder="$t('collab.cancelPlaceholder')"></textarea>
+                  <button class="danger-button small" type="button" @click="transitionTask('cancel', cancelText)">
+                    {{ $t('collab.cancelTask') }}
+                  </button>
+                </div>
+
+                <div class="history">
+                  <span class="section-label">{{ $t('collab.history') }}</span>
+                  <ol>
+                    <li v-for="item in selectedTask.history" :key="`${item.at}-${item.status}-${item.by}`">
+                      <time>{{ clock(item.at) }}</time>
+                      <b :class="`st-${item.status}`">{{ statusLabel(item.status) }}</b>
+                      <span v-if="item.text">{{ item.text }}</span>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+              <p v-else class="empty">{{ $t('collab.noTaskSelected') }}</p>
+            </div>
+          </div>
+
+          <!-- 会话预览 -->
+          <div v-else-if="panelId === 'preview'" class="panel-content">
+            <div class="panel-toolbar">
+              <span class="count">{{ activeTerminalName || '-' }}</span>
+            </div>
+            <div class="preview-region">
+              <TerminalOutput
+                v-if="targetSessionRef"
+                class="collab-terminal"
+                :session-ref="targetSessionRef"
+                :process-key="targetProcessKey"
+                pane-id="collaboration"
+                @clear="clearTargetSessionOutput"
+              />
+              <p v-else class="empty compact">{{ $t('collab.noOutputPreview') }}</p>
+            </div>
+          </div>
+
+          <!-- 聊天 -->
+          <div v-else-if="panelId === 'chat'" class="panel-content">
+            <div class="panel-toolbar">
+              <span class="count">{{ activeAgentName || $t('collab.chatNoMember') }}</span>
+            </div>
+            <div class="chat-region">
+              <div ref="chatScrollEl" class="chat-scroll">
+                <p v-if="!activeAgentId" class="empty compact">{{ $t('collab.chatPickMember') }}</p>
+                <template v-else>
+                  <article
+                    v-for="msg in conversation"
+                    :key="msg.id"
+                    class="chat-msg"
+                    :class="{ mine: msg.from === 'user' }"
+                  >
+                    <div class="chat-msg-head">
+                      <strong>{{ msg.fromName }}</strong>
+                      <time>{{ clock(msg.createdAt) }}</time>
+                    </div>
+                    <p>{{ msg.body }}</p>
+                  </article>
+                  <p v-if="!conversation.length" class="empty compact">{{ $t('collab.noMessages') }}</p>
+                </template>
+              </div>
+              <div v-if="activeAgentId" class="chat-composer">
+                <div v-if="commandMenuOpen" class="cmd-menu" role="listbox">
+                  <button
+                    v-for="(cmd, i) in filteredCommands"
+                    :key="cmd.name"
+                    type="button"
+                    class="cmd-item"
+                    :class="{ active: i === activeMenuIndex }"
+                    @mousedown.prevent="completeCommand(cmd)"
+                  >
+                    <b>/{{ cmd.name }}</b>
+                    <span v-if="cmd.argHint" class="cmd-arg">{{ cmd.argHint }}</span>
+                    <span class="cmd-desc">{{ $t(cmd.descKey) }}</span>
+                  </button>
+                </div>
+                <textarea
+                  ref="chatInputEl"
+                  v-model="chatInput"
+                  class="chat-input"
+                  rows="1"
+                  :placeholder="$t('collab.chatPlaceholder')"
+                  @keydown="handleChatKeydown"
+                ></textarea>
+                <button
+                  class="primary-button small"
+                  type="button"
+                  :disabled="chatSending || !chatInput.trim()"
+                  @click="submitChat"
+                >
+                  {{ $t('collab.send') }}
+                </button>
+              </div>
+            </div>
+          </div>
         </template>
-      </PaneLayout>
+      </CollabDock>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import TerminalOutput from '@/components/TerminalOutput.vue'
-import PaneLayout from '@/components/PaneLayout.vue'
-import { useCollabLayout } from '@/composables/useCollabLayout'
+import CollabDock from '@/components/CollabDock.vue'
+import { useCollabDock, COLLAB_DOCK_KEY, ALL_PANELS } from '@/composables/useCollabDock'
 import {
   archiveBusTask,
   createBusTask,
@@ -613,32 +516,24 @@ const menuDismissed = ref(false)
 const chatScrollEl = ref<HTMLElement | null>(null)
 const chatInputEl = ref<HTMLTextAreaElement | null>(null)
 
-// ===== 可定制布局（逻辑见 composables/useCollabLayout.ts）=====
-const {
-  topPanels,
-  detailPanels,
-  layoutMenuOpen,
-  visibleTopPanes,
-  visibleDetailPanes,
-  topVisibleCount,
-  detailVisibleCount,
-  panelDnDClass,
-  onTopResize,
-  onDetailResize,
-  togglePanel,
-  resetLayout,
-  panelLabel,
-  topDragStart,
-  topDragOver,
-  topDragLeave,
-  topDrop,
-  topDragEnd,
-  detailDragStart,
-  detailDragOver,
-  detailDragLeave,
-  detailDrop,
-  detailDragEnd
-} = useCollabLayout()
+// ===== 自由 dock 布局（二叉树，逻辑见 composables/useCollabDock.ts）=====
+const layoutMenuOpen = ref(false)
+const dock = useCollabDock()
+provide(COLLAB_DOCK_KEY, dock)
+const dockRoot = dock.root
+const visiblePanelIds = dock.visiblePanelIds
+const dockLeafCount = dock.leafCount
+
+function isPanelVisible(id: string): boolean {
+  return visiblePanelIds.value.includes(id)
+}
+function togglePanelVisible(id: string): void {
+  if (isPanelVisible(id)) dock.hidePanel(id)
+  else dock.showPanel(id)
+}
+function panelLabel(id: string): string {
+  return t(`collab.panel.${id}`)
+}
 
 // ===== 任务/归档 =====
 const OPEN_STATUSES: AgentTaskStatus[] = ['created', 'delivered', 'accepted', 'in_progress', 'blocked', 'review']
@@ -1450,11 +1345,6 @@ textarea {
   gap: 2px;
   padding: 4px 2px;
 
-  & + .layout-section {
-    border-top: 1px solid color-mix(in srgb, var(--border-color) 62%, transparent);
-    margin-top: 2px;
-  }
-
   .section-label {
     margin: 2px 4px 4px;
   }
@@ -1643,83 +1533,26 @@ textarea {
 .collab-main {
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 
-// ===== panel 通用外壳 =====
-.panel,
-.subpanel {
-  min-width: 0;
-  min-height: 0;
+// ===== panel 内容容器（外壳由 CollabDock 提供）=====
+.panel-content {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--bg-secondary) 74%, transparent);
-
-  &.dragging {
-    opacity: 0.5;
-  }
-
-  &.dropping {
-    border-color: var(--accent-primary);
-    box-shadow: inset 0 0 0 1px var(--accent-primary);
-  }
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
 }
 
-.subpanel {
-  border-radius: 6px;
-  background: var(--bg-primary);
-}
-
-.panel-head {
-  min-height: 30px;
+.panel-toolbar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 28px;
   padding: 5px 8px;
-  border-bottom: 1px solid var(--border-color);
-  cursor: grab;
-  user-select: none;
-
-  &:active {
-    cursor: grabbing;
-  }
-
-  &.sub {
-    min-height: 26px;
-    padding: 3px 7px;
-  }
-}
-
-.drag-grip {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1;
-  letter-spacing: -1px;
-}
-
-.panel-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.detail-body,
-.preview-body,
-.chat-body {
-  padding: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.preview-body,
-.chat-body {
-  padding: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
 }
 
 .rail-all-button {
@@ -1740,11 +1573,35 @@ textarea {
   }
 }
 
-.board-head-tools {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.detail-tools {
+  justify-content: flex-end;
+}
+
+.board-region,
+.detail-region,
+.preview-region,
+.chat-region {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.board-region {
+  padding: 8px;
+  overflow: hidden;
+}
+
+.detail-region {
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.preview-region,
+.chat-region {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  overflow: hidden;
 }
 
 .section-label {
@@ -1761,17 +1618,14 @@ textarea {
   font-size: 11px;
 }
 
-.detail-tools {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
 .agent-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 5px;
+  padding: 8px;
 }
 
 .agent-row {
@@ -1913,6 +1767,7 @@ textarea {
 }
 
 .board-grid {
+  width: 100%;
   height: 100%;
   display: grid;
   grid-template-columns: repeat(6, minmax(146px, 1fr));
@@ -2077,6 +1932,7 @@ textarea {
 }
 
 .archived-list {
+  height: 100%;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(208px, 1fr));
   align-content: start;
@@ -2374,6 +2230,7 @@ textarea {
   color: var(--text-muted);
   font-size: 12px;
   margin: 10px 0;
+  padding: 0 8px;
 
   &.compact {
     min-height: 10px;
