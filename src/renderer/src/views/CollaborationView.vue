@@ -1274,9 +1274,9 @@ async function refresh(): Promise<void> {
   await collabStore.refresh()
 }
 
-onMounted(() => {
+onMounted(async () => {
   void sessionsStore.fetchSessions()
-  void collabStore.refresh()
+  await collabStore.refresh()
   collabStore.markSeen()
   consumePendingFocus()
 })

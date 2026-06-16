@@ -160,6 +160,10 @@ export class TaskStore {
     } else if (!['done', 'failed', 'rejected', 'cancelled', 'expired', 'review'].includes(next)) {
       delete task.result
     }
+    // 改回非终态时自动取消归档，维持「归档 ⟹ 终态」不变量（否则任务从看板消失却滞留归档列表）。
+    if (task.archivedAt && !TERMINAL_STATUSES.includes(next)) {
+      delete task.archivedAt
+    }
     task.history.push({
       at: now,
       status: next,

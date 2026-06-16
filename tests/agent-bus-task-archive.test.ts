@@ -114,4 +114,16 @@ describe('TaskStore archive / unarchive', () => {
     store.archive(task.id, 'user')
     expect(task.status).toBe('done') // 仍是 done，归档只是附加标记
   })
+
+  it('归档任务被 forceStatus 改回非终态时自动取消归档（维持 归档⟹终态 不变量）', () => {
+    const { store } = makeStore()
+    const task = store.create('A', 'B', '归档后改活跃')
+    toStatus(store, task.id, 'done')
+    store.archive(task.id, 'user')
+    expect(typeof task.archivedAt).toBe('number')
+
+    store.forceStatus(task.id, 'user', 'in_progress')
+    expect(task.status).toBe('in_progress')
+    expect(task.archivedAt).toBeUndefined()
+  })
 })
