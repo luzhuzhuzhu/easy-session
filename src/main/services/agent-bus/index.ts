@@ -13,6 +13,7 @@ import { DispatchGate } from './dispatch-gate'
 import { AgentBroker } from './broker'
 import { AgentBusServer } from './bus-server'
 import { installEsSkill, type EsSkillInstallSummary } from './skill'
+import { tailVisibleLines } from './peek-clean'
 
 const IDLE_MS = 8000
 const PERSIST_DEBOUNCE_MS = 600
@@ -328,10 +329,13 @@ export class AgentBus {
         return !!s && s.status === 'running' && !!s.processId
       },
       readHistory: (sessionId, lines) =>
-        sm.outputManager
-          .getHistory(sessionId, lines)
-          .map((line) => line.text)
-          .join('\n'),
+        tailVisibleLines(
+          sm.outputManager
+            .getHistory(sessionId)
+            .map((line) => line.text)
+            .join(''),
+          lines
+        ),
       writeRaw: (sessionId, data) => sm.writeRaw(sessionId, data)
     }
   }
