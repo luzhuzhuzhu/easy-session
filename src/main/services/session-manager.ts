@@ -33,6 +33,7 @@ import type { Session, CodexSession, OpenCodeSession, CreateSessionParams, Sessi
 export interface SessionStatusChangeEvent {
   sessionId: string
   status: string
+  lastActiveAt?: number
 }
 
 export class SessionManager {
@@ -51,6 +52,10 @@ export class SessionManager {
   private persistDirty = false
   private lifecycles: Record<CliType, ISessionLifecycle>
   private statusListeners = new Set<(event: SessionStatusChangeEvent) => void>()
+  // 会话意外退出提醒（系统通知 + 任务栏闪烁）。由 index.ts 注入，主进程测试可留空。
+  private exitNotifier: ((session: Session, exitCode: number | null) => void) | null = null
+  // loadSessions 期间启动的 journal 回灌任务，供串行等待。
+  private journalRestores: Array<Promise<void>> = []
 
   private broadcaster: SessionBroadcaster
 
@@ -179,10 +184,21 @@ export class SessionManager {
       }
 
       if (lifecycle.migrateOnLoad(session)) migrated = true
-      if (await lifecycle.hydrateSessionId(session)) migrated = true
+
+      this.journalRestores.push(
+        this.outputManager.restoreJournal(session.id).catch(() => undefined)
+      )
 
       this.sessions.set(session.id, session)
     }
+
+    // ID 补全（codex 扫文件 / opencode 跑 CLI）可能很慢且带重试，不能阻塞启动链：
+    // 会话列表先整体加载，缺 ID 的会话在后台补齐后再持久化。
+    void this.hydrateMissingSessionIdsInBackground()
+    // journal 回灌同样不阻塞启动，完成即丢弃句柄。
+    void Promise.all(this.journalRestores).then(() => {
+      this.journalRestores = []
+    })
 
     for (const session of this.sessions.values()) {
       const current = this.sessionCounter.get(session.type) || 0
@@ -194,6 +210,28 @@ export class SessionManager {
     }
 
     if (migrated) this.persist()
+  }
+
+  // 后台补齐缺失的原生会话 ID：串行逐个跑（避免并发 CLI 探测挤占事件循环），
+  // 全部完成后若有过迁移则持久化一次。失败只记日志，不影响会话可用性。
+  private async hydrateMissingSessionIdsInBackground(): Promise<void> {
+    try {
+      let migrated = false
+      for (const session of Array.from(this.sessions.values())) {
+        const lifecycle = this.lifecycles[session.type]
+        if (!lifecycle) continue
+        let hydrated = false
+        try {
+          hydrated = await lifecycle.hydrateSessionId(session)
+        } catch (err) {
+          log.warn({ err }, `[SessionManager] hydrateSessionId failed for ${session.id}`)
+        }
+        if (hydrated) migrated = true
+      }
+      if (migrated) this.persist()
+    } catch (err) {
+      log.warn({ err }, '[SessionManager] background session id hydration failed')
+    }
   }
 
   getValidSessionIds(): Set<string> {
@@ -262,6 +300,9 @@ export class SessionManager {
       await this.lifecycles[session.type].startProcess(session, startAt)
       this.indexProcess(session)
       this.scheduleSessionIdDiscovery(session, startAt)
+      // 成功启动后解除 resume 失效自动重启的一次性守卫（load 时持久化字段一并清掉）
+      if (session.type === 'codex') delete (session as CodexSession).noAutoRestart
+      if (session.type === 'opencode') delete (session as OpenCodeSession).noAutoRestart
     } catch (err) {
       session.processId = null
       session.status = 'error'
@@ -313,6 +354,8 @@ export class SessionManager {
       await this.lifecycles[session.type].startProcess(session, restartAt)
       this.indexProcess(session)
       this.scheduleSessionIdDiscovery(session, restartAt)
+      if (session.type === 'codex') delete (session as CodexSession).noAutoRestart
+      if (session.type === 'opencode') delete (session as OpenCodeSession).noAutoRestart
     } catch (err) {
       session.processId = null
       session.status = 'error'
@@ -338,7 +381,9 @@ export class SessionManager {
     session.processId = null
     session.status = 'stopped'
     this.lifecycles[session.type].cleanup(session)
+    // 删除是永久移除：只等在途写入结束后删 journal，不再额外写（避免文件被重建）。
     this.outputManager.removeSession(id)
+    void this.outputManager.removeJournal(id)
     this.sessions.delete(id)
     this.activityPersistAt.delete(id)
     this.persist()
@@ -425,7 +470,9 @@ export class SessionManager {
         this.unindexProcess(session.processId)
       }
       this.lifecycles[session.type].cleanup(session)
+      // destroyAll 后会话全部消失，journal 一并清除（等在途写入完成再删）。
       this.outputManager.removeSession(id)
+      void this.outputManager.removeJournal(id)
       this.sessions.delete(id)
       this.activityPersistAt.delete(id)
     }
@@ -477,10 +524,34 @@ export class SessionManager {
     session.processId = null
 
     this.lifecycles[session.type].cleanup(session)
+    // 进程退出即落一份输出日志：重启后 terminal 会话的日志/报错现场仍可回看。
+    this.outputManager.writeJournal(sessionId, { name: session.name, type: session.type })
+
+    // resume ID 失效等可自动恢复的退出：清死 ID 后自动重启一次（实现自带一次性守卫防循环）。
+    const lifecycle = this.lifecycles[session.type]
+    if (code !== 0 && typeof lifecycle.shouldAutoRestartAfterExit === 'function') {
+      let shouldRestart = false
+      try {
+        shouldRestart = lifecycle.shouldAutoRestartAfterExit(session, code)
+      } catch (err) {
+        log.warn({ err }, '[SessionManager] shouldAutoRestartAfterExit failed')
+      }
+      if (shouldRestart) {
+        this.exitNotifier?.(session, code)
+        void this.startSession(sessionId)
+        return
+      }
+    }
+
+    this.exitNotifier?.(session, code)
 
     session.status = code === 0 ? 'stopped' : 'error'
     this.pushStatusChange(session.id, session.status)
     this.persist()
+  }
+
+  setExitNotifier(fn: (session: Session, exitCode: number | null) => void): void {
+    this.exitNotifier = fn
   }
 
   private indexProcess(session: Session): void {
@@ -588,7 +659,12 @@ export class SessionManager {
   }
 
   private pushStatusChange(sessionId: string, status: string): void {
-    const payload = { sessionId, status }
+    const session = this.sessions.get(sessionId)
+    const payload: SessionStatusChangeEvent = {
+      sessionId,
+      status,
+      lastActiveAt: session?.lastActiveAt
+    }
 
     for (const listener of this.statusListeners) {
       listener(payload)

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
 const { sendSpy, getAllWindowsSpy } = vi.hoisted(() => {
   const send = vi.fn()
@@ -68,8 +68,13 @@ function createLifecycle(type: 'claude' | 'codex') {
 
 describe('remote bridge compatibility', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     sendSpy.mockClear()
     getAllWindowsSpy.mockClear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('SessionOutputManager should keep renderer push while allowing subscribe', () => {
@@ -78,6 +83,7 @@ describe('remote bridge compatibility', () => {
     const off = manager.subscribe(listener)
 
     manager.appendOutput('s1', 'hello\n', 'stdout')
+    vi.advanceTimersByTime(20)
 
     expect(listener).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -132,11 +138,13 @@ describe('remote bridge compatibility', () => {
 
     expect(statusListener).toHaveBeenCalledWith({
       sessionId: session.id,
-      status: 'stopped'
+      status: 'stopped',
+      lastActiveAt: expect.any(Number)
     })
     expect(sendSpy).toHaveBeenCalledWith('session:status', {
       sessionId: session.id,
-      status: 'stopped'
+      status: 'stopped',
+      lastActiveAt: expect.any(Number)
     })
 
     off()

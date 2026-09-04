@@ -71,7 +71,13 @@ describe('SessionManager Claude exit handling', () => {
       setPersistCallback: vi.fn(), ensureCodexSessionIdAsync: vi.fn()
     }
 
-    outputManager = { appendOutput: vi.fn(), removeSession: vi.fn() }
+    outputManager = {
+      appendOutput: vi.fn(),
+      removeSession: vi.fn(),
+      writeJournal: vi.fn(),
+      removeJournal: vi.fn().mockResolvedValue(undefined),
+      restoreJournal: vi.fn().mockResolvedValue(undefined)
+    }
 
     sessionManager = new SessionManager(
       cliManager as any, claudeLifecycle as any,

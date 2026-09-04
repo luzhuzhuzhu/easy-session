@@ -80,7 +80,10 @@ describe('SessionManager legacy persistence compatibility', () => {
     }
     const outputManager = {
       appendOutput: vi.fn(),
-      removeSession: vi.fn()
+      removeSession: vi.fn(),
+      writeJournal: vi.fn(),
+      removeJournal: vi.fn().mockResolvedValue(undefined),
+      restoreJournal: vi.fn().mockResolvedValue(undefined)
     }
 
     const sessionManager = new SessionManager(

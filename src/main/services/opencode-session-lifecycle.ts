@@ -13,6 +13,8 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
   private _persistFn: (() => void) | null = null
   private sessionHintBuffers = new Map<string, string>()
   private pendingTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  // 同一会话的 discovery 并发去重：重试期间再来一次（如手动恢复）只等在飞结果，不再叠加子进程。
+  private inFlightDiscovery = new Map<string, Promise<boolean>>()
 
   constructor(
     private openCodeAdapter: OpenCodeAdapter,
@@ -117,6 +119,37 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
     }
   }
 
+  // resume 进程非零退出后调用：CLI 启动成功但拒绝失效 session（spawn 不抛错，
+  // catch 的降级覆盖不到），清 ID 并自动重启一次；noAutoRestart 守卫防循环。
+  shouldAutoRestartAfterExit(session: Session, exitCode: number | null): boolean {
+    if (session.type !== 'opencode') return false
+    if (exitCode === 0) return false
+    const s = session as OpenCodeSession & { noAutoRestart?: boolean }
+    if (s.noAutoRestart) return false
+    if (!s.opencodeSessionId || s.opencodeSessionIdSource === 'user') return false
+
+    const tail = this.getRecentOutputTail(s.id)
+    if (!/session.*not found|no session found|failed to resume|unable to resume|invalid session/i.test(tail)) {
+      return false
+    }
+
+    s.noAutoRestart = true
+    s.opencodeSessionId = null
+    s.opencodeSessionIdSource = null
+    this._persistFn?.()
+    this.outputManager.appendOutput(
+      s.id,
+      'Warning: OpenCode could not resume the stored session (it may have been deleted). Restarting with a new session.\n',
+      'stdout'
+    )
+    return true
+  }
+
+  private getRecentOutputTail(sessionId: string): string {
+    const history = this.outputManager.getHistory(sessionId, 40)
+    return this.stripAnsi(history.map((line) => line.text).join(''))
+  }
+
   cleanup(session: Session): void {
     this.sessionHintBuffers.delete(session.id)
     const timer = this.pendingTimers.get(session.id)
@@ -124,6 +157,7 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
       clearTimeout(timer)
       this.pendingTimers.delete(session.id)
     }
+    this.inFlightDiscovery.delete(session.id)
   }
 
   migrateOnLoad(_session: Session): boolean {
@@ -139,18 +173,30 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
     const strictFallback = !this.shouldUseListDiscovery(s)
     const maxSkew = strictFallback ? 60_000 : undefined
 
-    const discovered = await this.openCodeAdapter.findSessionIdByProjectPath(
-      s.projectPath,
-      s.options?.cliPath,
-      80,
-      targetStart,
-      maxSkew,
-      strictFallback
-    )
-    if (!discovered) return false
-    s.opencodeSessionId = discovered
-    s.opencodeSessionIdSource = 'list'
-    return true
+    // 同会话并发去重：重试循环在飞时，重复调用（loadSessions + ensureAsync）共享同一 Promise。
+    const inFlight = this.inFlightDiscovery.get(s.id)
+    if (inFlight) return inFlight
+
+    const task = (async () => {
+      const discovered = await this.openCodeAdapter.findSessionIdByProjectPath(
+        s.projectPath,
+        s.options?.cliPath,
+        80,
+        targetStart,
+        maxSkew,
+        strictFallback
+      )
+      if (!discovered) return false
+      s.opencodeSessionId = discovered
+      s.opencodeSessionIdSource = 'list'
+      return true
+    })()
+    this.inFlightDiscovery.set(s.id, task)
+    try {
+      return await task
+    } finally {
+      this.inFlightDiscovery.delete(s.id)
+    }
   }
 
   ensureOpenCodeSessionIdAsync(

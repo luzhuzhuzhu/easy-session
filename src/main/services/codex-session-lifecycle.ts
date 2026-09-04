@@ -91,6 +91,40 @@ export class CodexSessionLifecycle implements ISessionLifecycle {
     this.updateCodexSessionIdFromOutput(session, data)
   }
 
+  // resume 进程非零退出后调用：若 CLI 端找不到该会话（存储文件被删），清掉死 ID
+  // 让下次 startProcess 重新发现或开新会话，避免永远 resume 同一个失效 ID。
+  // 返回 true 时 SessionManager 会自动重启会话一次；noAutoRestart 守卫防循环。
+  shouldAutoRestartAfterExit(session: Session, exitCode: number | null): boolean {
+    if (session.type !== 'codex') return false
+    if (exitCode === 0) return false
+    const s = session as CodexSession & { noAutoRestart?: boolean }
+    if (s.noAutoRestart) return false
+
+    // 需要同时满足：本次是 resume 启动、退出前输出的尾部包含 resume 失败特征。
+    if (!s.codexSessionId) return false
+    const tail = this.getRecentOutputTail(s.id)
+    if (!this.shouldClearDeadSessionId(tail)) return false
+
+    s.noAutoRestart = true
+    s.codexSessionId = null
+    this.persistFn?.()
+    this.outputManager.appendOutput(
+      s.id,
+      'Warning: Codex could not resume the stored session (it may have been deleted). Restarting with a new conversation.\n',
+      'stdout'
+    )
+    return true
+  }
+
+  private getRecentOutputTail(sessionId: string): string {
+    const history = this.outputManager.getHistory(sessionId, 40)
+    return this.stripAnsi(history.map((line) => line.text).join(''))
+  }
+
+  private shouldClearDeadSessionId(output: string): boolean {
+    return /session.*not found|no session found|failed to resume|unable to resume/i.test(output)
+  }
+
   cleanup(session: Session): void {
     this.resumeHintBuffers.delete(session.id)
 

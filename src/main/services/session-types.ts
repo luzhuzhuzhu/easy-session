@@ -30,6 +30,9 @@ export interface ClaudeSession extends SessionBase {
   type: 'claude'
   options: ClaudeSessionOptions
   claudeSessionId: string | null
+  // 本运行周期内检测到 resume ID 失效（No conversation found），
+  // 进程退出后由 SessionManager 清 ID 自动重启一次，防止循环重启
+  invalidSessionId?: boolean
 }
 
 // Codex 专属会话类型
@@ -37,6 +40,8 @@ export interface CodexSession extends SessionBase {
   type: 'codex'
   options: CodexSessionOptions
   codexSessionId: string | null
+  // resume 失效自动重启只执行一次，防止循环重启
+  noAutoRestart?: boolean
 }
 
 export interface OpenCodeSession extends SessionBase {
@@ -44,6 +49,8 @@ export interface OpenCodeSession extends SessionBase {
   options: OpenCodeSessionOptions
   opencodeSessionId: string | null
   opencodeSessionIdSource?: 'user' | 'output' | 'list' | null
+  // resume 失效自动重启只执行一次，防止循环重启
+  noAutoRestart?: boolean
 }
 
 export interface TerminalSession extends SessionBase {

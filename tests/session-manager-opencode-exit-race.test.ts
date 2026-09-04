@@ -88,7 +88,10 @@ describe('SessionManager OpenCode exit/output race', () => {
 
     const outputManager = {
       appendOutput: vi.fn(),
-      removeSession: vi.fn()
+      removeSession: vi.fn(),
+      writeJournal: vi.fn(),
+      removeJournal: vi.fn().mockResolvedValue(undefined),
+      restoreJournal: vi.fn().mockResolvedValue(undefined)
     }
 
     sessionManager = new SessionManager(

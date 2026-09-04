@@ -14,4 +14,7 @@ export interface ISessionLifecycle {
   migrateOnLoad(session: Session): boolean
   // 加载时尝试补全原生会话ID
   hydrateSessionId(session: Session): boolean | Promise<boolean>
+  // 进程非零退出后询问是否可自动恢复一次（如 resume ID 失效 → 清 ID 降级新会话）。
+  // 返回 true 时 SessionManager 会重新走 startSession；实现必须自带一次性守卫防循环。
+  shouldAutoRestartAfterExit?(session: Session, exitCode: number | null): boolean
 }

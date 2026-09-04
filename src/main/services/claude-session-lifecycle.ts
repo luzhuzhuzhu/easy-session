@@ -63,23 +63,57 @@ export class ClaudeSessionLifecycle implements ISessionLifecycle {
     if (!s.claudeSessionId) {
       throw new Error('Claude session ID is missing, cannot resume')
     }
-    s.processId = this.claudeAdapter.resumeSession(s.projectPath, s.options, s.claudeSessionId)
+    // invalidSessionId 仍为 true：说明 shouldAutoRestartAfterExit 已换上全新 UUID，
+    // 但该 UUID 的会话在 Claude 存储里还不存在，必须用 --session-id「创建」而非
+    // --resume（直接 resume 一个新 UUID 会再次报 No conversation found 死循环）。
+    if (s.invalidSessionId) {
+      s.processId = this.claudeAdapter.startSession(s.projectPath, s.options, s.claudeSessionId)
+      s.invalidSessionId = false
+    } else {
+      s.processId = this.claudeAdapter.resumeSession(s.projectPath, s.options, s.claudeSessionId)
+    }
     s.status = 'running'
     s.lastStartAt = startAt
     s.lastActiveAt = startAt
   }
 
+  // 运行中输出「No conversation found」说明存储里的会话文件已被删，resume 已无意义。
+  // 这里只标记 invalidSessionId，等进程退出后由 shouldAutoRestartAfterExit 统一处理：
+  // 清掉死 ID 让 startProcess 走全新会话路径，且重启经 SessionManager 索引（不自起进程）。
   handleOutput(session: Session, data: string): void {
     if (session.type !== 'claude') return
 
     if (session.claudeSessionId && CLAUDE_INVALID_SESSION_PATTERN.test(data)) {
-      // 不清除 claudeSessionId，保留原始 ID 以便下次仍用 --resume 恢复正确会话
+      const s = session as ClaudeSession
+      if (s.invalidSessionId) return
+      s.invalidSessionId = true
       this.outputManager.appendOutput(
-        session.id,
-        'Warning: Claude reported session not found, will retry with same ID on next resume.\n',
+        s.id,
+        'Warning: Claude reported session not found. Will start a new conversation after this process exits.\n',
         'stdout'
       )
     }
+  }
+
+  // resume 进程非零退出后调用：本次运行中已确认 resume ID 失效时清掉死 ID，
+  // 返回 true 让 SessionManager 走标准 startSession（重建 processIndex）。
+  // invalidSessionId 本身就是一次性守卫——只有本运行周期检测到失效才重启，防循环。
+  shouldAutoRestartAfterExit(session: Session, exitCode: number | null): boolean {
+    if (session.type !== 'claude') return false
+    if (exitCode === 0) return false
+    const s = session as ClaudeSession
+    if (!s.invalidSessionId) return false
+
+    // 换全新 UUID，但保持 invalidSessionId = true：新 UUID 在 Claude 存储里还不存在，
+    // startProcess 必须走 --session-id「创建」路径（resume 一个不存在的 UUID 会再次
+    // 报 No conversation found 死循环）。标志由 startProcess 启动成功后清除。
+    s.claudeSessionId = randomUUID()
+    this.outputManager.appendOutput(
+      s.id,
+      'Info: Starting a fresh Claude conversation (the previous session file no longer exists).\n',
+      'stdout'
+    )
+    return true
   }
 
   cleanup(_session: Session): void {}
