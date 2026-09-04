@@ -190,8 +190,45 @@ export function setupRemoteSocketBridge(options: SetupSocketBridgeOptions): () =
   const { io, deps, idleTimeoutMs, logger } = options
   const lastActivityBySocket = new Map<string, number>()
 
+  // 远程输出合帧：把 16ms 窗口内同一会话的 chunk 拼成一次 emit，降低刷屏时
+  // Socket.IO 的包频率（与桌面端 BrowserWindow IPC 的合帧策略一致）。
+  const REMOTE_FLUSH_INTERVAL_MS = 16
+  const pendingRemote = new Map<
+    string,
+    { chunks: string[]; stream: 'stdout' | 'stderr'; timestamp: number; seq: number }
+  >()
+  let remoteFlushTimer: ReturnType<typeof setTimeout> | null = null
+
+  const flushRemotePending = (): void => {
+    remoteFlushTimer = null
+    if (pendingRemote.size === 0) return
+    for (const [sessionId, pending] of pendingRemote) {
+      pendingRemote.delete(sessionId)
+      const merged = pending.chunks.join('')
+      io.to(sessionRoom(sessionId)).emit('session:output', {
+        sessionId,
+        data: merged,
+        stream: pending.stream,
+        timestamp: pending.timestamp,
+        seq: pending.seq
+      })
+    }
+  }
+
   const outputUnsubscribe = deps.outputManager.subscribe((event) => {
-    io.to(sessionRoom(event.sessionId)).emit('session:output', event)
+    let pending = pendingRemote.get(event.sessionId)
+    if (!pending) {
+      pending = { chunks: [], stream: event.stream, timestamp: event.timestamp, seq: event.seq }
+      pendingRemote.set(event.sessionId, pending)
+    }
+    pending.chunks.push(event.data)
+    pending.stream = event.stream
+    pending.timestamp = event.timestamp
+    pending.seq = event.seq
+    if (!remoteFlushTimer) {
+      remoteFlushTimer = setTimeout(flushRemotePending, REMOTE_FLUSH_INTERVAL_MS)
+      remoteFlushTimer.unref?.()
+    }
   })
 
   const statusUnsubscribe = deps.sessionManager.subscribeStatus((event) => {
@@ -251,6 +288,11 @@ export function setupRemoteSocketBridge(options: SetupSocketBridgeOptions): () =
 
   return () => {
     clearInterval(idleTimer)
+    if (remoteFlushTimer) {
+      clearTimeout(remoteFlushTimer)
+      remoteFlushTimer = null
+    }
+    pendingRemote.clear()
     outputUnsubscribe()
     statusUnsubscribe()
     io.removeAllListeners('connection')

@@ -336,7 +336,32 @@ export class AgentBus {
             .join(''),
           lines
         ),
-      writeRaw: (sessionId, data) => sm.writeRaw(sessionId, data)
+      writeRaw: (sessionId, data) => sm.writeRaw(sessionId, data),
+      // 生命周期控制（es start/stop/restart）：直接复用 SessionManager 的公开方法。
+      startSession: async (sessionId) => {
+        const result = await sm.startSession(sessionId)
+        return !!result && result.status === 'running'
+      },
+      stopSession: (sessionId) => !!sm.pauseSession(sessionId),
+      restartSession: async (sessionId) => {
+        const result = await sm.restartSession(sessionId)
+        return !!result && result.status === 'running'
+      },
+      listKnownSessions: () =>
+        sm.listSessions().map((s) => ({
+          id: s.id,
+          name: s.name,
+          type: s.type,
+          status: s.status,
+          projectPath: s.projectPath
+        })),
+      // 已停止会话的事后取证：journal 是退出/关停时落盘的最近输出，
+      // 运行中会话走内存历史（readHistory），这里只兜底停止态。
+      readStoppedSessionHistory: async (sessionId, lines) => {
+        const session = sm.getSession(sessionId)
+        if (!session || session.status === 'running') return null
+        return sm.outputManager.readJournalTail(sessionId, lines)
+      }
     }
   }
 

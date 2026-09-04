@@ -228,6 +228,14 @@ export class AgentBroker {
           return this.cmdTask(me, rest)
         case 'mode':
           return this.cmdMode(me)
+        case 'start':
+          return await this.cmdLifecycle(me, rest, 'start')
+        case 'stop':
+          return this.cmdLifecycle(me, rest, 'stop')
+        case 'restart':
+          return await this.cmdLifecycle(me, rest, 'restart')
+        case 'output':
+          return this.cmdOutput(me, rest)
         default:
           return fail(`未知命令：${cmd}\n运行 es help 查看用法`, 1)
       }
@@ -543,6 +551,123 @@ export class AgentBroker {
     return ok(`—— 「${to.name}」最近 ${lines} 行 ——\n${history}`)
   }
 
+  // ---- 会话生命周期控制（es start/stop/restart/output）----
+
+  // 授权模型：stop/restart/start 他人会话属于重操作，仅允许「深度协作」目标
+  // （known-agent / terminal-inject，与 peek 同一信任级别）；自己随时可以重启/停止自己。
+  private async cmdLifecycle(
+    me: AgentIdentity,
+    rest: string[],
+    action: 'start' | 'stop' | 'restart'
+  ): Promise<AgentBusResponse> {
+    const positional = rest.filter((t) => !t.startsWith('--'))
+    const target = positional[0]
+    if (!target) return fail(`用法：es ${action} <会话名|id>`, 1)
+
+    if (action === 'start') {
+      // start 语义：恢复一个已停止的会话（不是新建）。
+      // listKnownSessions 覆盖停止会话，resolveByQuery 只看运行中，所以这里单独匹配。
+      // 匹配规则与 resolveTarget 一致：精确 id → 精确名（忽略大小写）→ 唯一前缀。
+      if (!this.bridge.startSession) return fail('当前版本不支持 es start（bridge 能力缺失）', 1)
+      const knownList = this.bridge.listKnownSessions?.() ?? []
+      const byId = knownList.find((item) => item.id === target)
+      if (byId) return this.startKnownSession(byId)
+      const q = target.trim().toLowerCase()
+      const exact = knownList.filter((item) => item.name.toLowerCase() === q)
+      const prefix = knownList.filter((item) => item.name.toLowerCase().startsWith(q))
+      if (exact.length === 1) return this.startKnownSession(exact[0])
+      if (exact.length > 1) {
+        return fail(`「${target}」匹配到多个会话：${exact.map((c) => c.name).join('、')}，请用更精确的名字或 id`, 1)
+      }
+      if (prefix.length === 1) return this.startKnownSession(prefix[0])
+      if (prefix.length > 1) {
+        return fail(`「${target}」匹配到多个会话：${prefix.map((c) => c.name).join('、')}，请用更精确的名字或 id`, 1)
+      }
+      return fail(`未找到会话「${target}」运行 es sessions 查看可用会话`, 1)
+    }
+
+    const resolved = this.resolveTarget(target, me, { allowSelf: true })
+    if (resolved.error) return fail(resolved.error, 1)
+    const to = resolved.match!
+    const isSelf = to.sessionId === me.sessionId
+    if (!isSelf && !isPeekable(to.collabMode)) {
+      return fail(`无权${action === 'stop' ? '停止' : '重启'}「${to.name}」：仅深度协作会话（known-agent / terminal-inject）可被他人控制`, 1)
+    }
+
+    if (action === 'stop') {
+      if (!this.bridge.stopSession) return fail('当前版本不支持 es stop（bridge 能力缺失）', 1)
+      if (!this.bridge.isRunning(to.sessionId)) return ok(`「${to.name}」本就未在运行`)
+      const done = this.bridge.stopSession(to.sessionId)
+      return done ? ok(`已停止「${to.name}」`) : fail(`停止「${to.name}」失败`, 1)
+    }
+
+    if (!this.bridge.restartSession) return fail('当前版本不支持 es restart（bridge 能力缺失）', 1)
+    const done = await this.bridge.restartSession(to.sessionId)
+    return done ? ok(`已重启「${to.name}」`) : fail(`重启「${to.name}」失败`, 1)
+  }
+
+  private async startKnownSession(known: { id: string; name: string; status: string }): Promise<AgentBusResponse> {
+    if (known.status === 'running') return ok(`「${known.name}」已在运行中`)
+    const done = await this.bridge.startSession!(known.id)
+    return done ? ok(`已启动「${known.name}」`) : fail(`启动「${known.name}」失败`, 1)
+  }
+
+  // es output <会话名|id> [--lines N] [--json]：比 peek 更程序化的整段输出导出（同样受 peek 授权约束）。
+  // 会话已停止时 resolveByQuery 找不到（只索引运行中），回退 listKnownSessions 精确匹配，
+  // 并从 output journal 读尾部——崩溃/退出的会话恰恰最有回看价值。
+  private async cmdOutput(me: AgentIdentity, rest: string[]): Promise<AgentBusResponse> {
+    const { value: linesRaw } = takeFlagValue(rest, '--lines')
+    const json = hasFlag(rest, '--json')
+    const positional = rest.filter((t) => !t.startsWith('--'))
+    const target = positional[0]
+    if (!target) return fail('用法：es output <会话名|id> [--lines N] [--json]', 1)
+    const parsedLines = parseInt(linesRaw ?? '', 10)
+    const lines = Number.isFinite(parsedLines) ? Math.min(Math.max(parsedLines, 1), 4000) : 200
+
+    const resolved = this.resolveTarget(target, me, { allowSelf: true })
+    if (resolved.error) {
+      // 运行中找不到 → 尝试已停止会话（精确 id / 忽略大小写名 / 唯一前缀）
+      const knownList = this.bridge.listKnownSessions?.() ?? []
+      const q = target.trim().toLowerCase()
+      const stopped =
+        knownList.find((item) => item.id === target && item.status !== 'running') ??
+        matchStoppedByName(knownList, q)
+      if (!stopped) return fail(resolved.error, 1)
+      const stoppedId = stopped.id
+      // 授权与运行时一致：自己随时可读，他人需要深度协作。
+      if (stoppedId !== me.sessionId) {
+        const mode = this.collabModeOf(stoppedId)
+        if (!isPeekable(mode)) return fail(`无权读取「${stopped.name}」的输出：仅深度协作会话可被读取`, 1)
+      }
+      if (!this.bridge.readStoppedSessionHistory) return fail(`「${stopped.name}」未在运行，且无法读取其退出日志`, 1)
+      const journalText = await this.bridge.readStoppedSessionHistory(stoppedId, lines)
+      if (!journalText) return ok(`（「${stopped.name}」未在运行，且没有退出日志）`)
+      if (json) return ok(JSON.stringify({ session: stopped.name, lines, output: journalText, stopped: true }))
+      return ok(journalText)
+    }
+
+    const to = resolved.match!
+    if (to.sessionId !== me.sessionId && !isPeekable(to.collabMode)) {
+      return fail(`无权读取「${to.name}」的输出：仅深度协作会话可被读取`, 1)
+    }
+    const history = this.bridge.readHistory(to.sessionId, lines)
+    if (json) return ok(JSON.stringify({ session: to.name, lines, output: history }))
+    if (!history.trim()) return ok(`（「${to.name}」暂无可见输出）`)
+    return ok(history)
+  }
+
+  // 查已停止会话的协作模式（terminal 会话有模式，agent 类型视为 known-agent）。
+  private collabModeOf(sessionId: string): AgentCollabMode {
+    const identity = this.bridge.listAgents().find((a) => a.sessionId === sessionId)
+    if (identity) return identity.collabMode
+    const name = this.bridge.getName(sessionId)
+    if (name) {
+      const known = this.bridge.listKnownSessions?.().find((k) => k.id === sessionId)
+      if (known && known.type !== 'terminal') return 'known-agent'
+    }
+    return 'terminal-readonly'
+  }
+
   private cmdTask(me: AgentIdentity, rest: string[]): AgentBusResponse {
     const sub = (rest[0] || '').toLowerCase()
     const args = rest.slice(1)
@@ -790,8 +915,21 @@ function isPeekable(mode: AgentCollabMode): boolean {
   return mode === 'known-agent' || mode === 'terminal-inject'
 }
 
-function isTaskStatus(value: unknown): value is AgentTask['status'] {
-  return (
+// 已停止会话的名称匹配：精确（忽略大小写）→ 唯一前缀；有歧义返回 undefined（走报错路径）。
+function matchStoppedByName(
+  knownList: Array<{ id: string; name: string; type: string; status: string; projectPath: string }>,
+  q: string
+): { id: string; name: string; type: string; status: string; projectPath: string } | undefined {
+  const stopped = knownList.filter((item) => item.status !== 'running')
+  const exact = stopped.filter((item) => item.name.toLowerCase() === q)
+  if (exact.length === 1) return exact[0]
+  if (exact.length > 1) return undefined
+  const prefix = stopped.filter((item) => item.name.toLowerCase().startsWith(q))
+  if (prefix.length === 1) return prefix[0]
+  return undefined
+}
+
+function isTaskStatus(value: unknown): value is AgentTask['status'] {  return (
     value === 'created' ||
     value === 'delivered' ||
     value === 'accepted' ||

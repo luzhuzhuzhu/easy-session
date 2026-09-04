@@ -107,4 +107,12 @@ export interface SessionBridge {
   isRunning(sessionId: string): boolean
   readHistory(sessionId: string, lines: number): string
   writeRaw(sessionId: string, data: string): boolean
+  // 会话生命周期控制（es start/stop/restart 用）：默认不存在时相关命令返回不可用。
+  startSession?(sessionId: string): Promise<boolean>
+  stopSession?(sessionId: string): boolean
+  restartSession?(sessionId: string): Promise<boolean>
+  createSession?(params: { type: string; projectPath: string; name?: string }): Promise<{ sessionId: string; name: string }>
+  listKnownSessions?(): Array<{ id: string; name: string; type: string; status: string; projectPath: string }>
+  // 读取已停止会话的落盘日志（output journal）。不存在或未启用时返回 null。
+  readStoppedSessionHistory?(sessionId: string, lines: number): Promise<string | null>
 }

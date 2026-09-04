@@ -19,6 +19,13 @@ export const ES_HELP_TEXT = `es —— EasySession 会话间通信工具。让�
                                  取我的未读（消息与任务事件统一从这里收）；
                                  --wait 阻塞直到有新内容或超时；--kind 只收某一类
   es peek <会话名|id> [--lines N] 只读地查看某会话最近输出，不打扰对方
+  es output <会话名|id> [--lines N] [--json]
+                                 读取某会话的整段输出（比 peek 更程序化，支持 --json）
+
+会话控制（仅限自己，或已开启深度协作 known-agent / terminal-inject 的会话）：
+  es stop <会话名|id>            停止某会话进程（自己发现同伴卡死时可代为收口）
+  es restart <会话名|id>         重启某会话
+  es start <会话名或sessionId>   启动一个已停止的会话（名称或 sessionId，非新建）
 
 任务（带状态机，适合长事务；派发方与接单方都不会阻塞，靠通知驱动）：
   es task create <会话名|id> "<任务描述>"   派发任务，立即返回任务 id
