@@ -33,6 +33,23 @@
           <option value="opencode">OpenCode</option>
           <option value="terminal">{{ $t('session.terminal') }}</option>
         </select>
+        <input
+          v-if="!isListCollapsed"
+          :value="searchKeyword"
+          class="session-search-input top-search"
+          type="search"
+          :placeholder="$t('session.searchPlaceholder')"
+          @input="emit('update:searchKeyword', ($event.target as HTMLInputElement).value)"
+        />
+        <IconButton
+          v-else
+          :title="$t('session.searchPlaceholder')"
+          :label="$t('session.searchPlaceholder')"
+          size="sm"
+          @click="onCollapsedSearchClick()"
+        >
+          <UiIcon name="search" />
+        </IconButton>
       </div>
 
       <div class="top-list-area">
@@ -94,6 +111,7 @@
                   tabindex="0"
                   draggable="true"
                   @click="onSessionClick(session)"
+                  @dblclick.prevent="onSessionRename(session)"
                   @keydown.enter.prevent="onSessionClick(session)"
                   @keydown.space.prevent="onSessionClick(session)"
                   @dragstart="onSessionDragStart($event, session)"
@@ -154,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProjectSessionGroup, SessionTreeSessionItem } from '@/features/sessions/session-tree'
 import { cliTypeBadgeLetter } from '@shared/cli-types'
@@ -166,6 +184,7 @@ const props = defineProps<{
   projectSessionTree: ProjectSessionGroup[]
   activeGlobalSessionKey: string | null
   filterType: string
+  searchKeyword?: string
   isListCollapsed: boolean
   isTopLayout: boolean
   desktopRemoteMountEnabled: boolean
@@ -177,6 +196,7 @@ const props = defineProps<{
   onToggleListPosition: () => void
   onToggleListCollapsed: () => void
   onSessionClick: (session: SessionTreeSessionItem) => void
+  onSessionRename: (session: SessionTreeSessionItem) => void
   onSessionDragStart: (event: DragEvent, session: SessionTreeSessionItem) => void
   onSessionDragOver: (event: DragEvent, projectKey: string) => void
   onSessionDrop: (event: DragEvent, projectKey: string, targetSessionId: string) => void
@@ -190,6 +210,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:filterType': [value: string]
+  'update:searchKeyword': [value: string]
+  'collapsed-search-click': []
 }>()
 
 const { t } = useI18n()
@@ -203,6 +225,11 @@ let scrollAnimationId: number | null = null
 function onFilterChange(event: Event): void {
   const target = event.target as HTMLSelectElement | null
   emit('update:filterType', target?.value ?? '')
+}
+
+// 折叠态点放大镜：请求展开列表（视图展开后输入框随之出现并获得焦点）。
+function onCollapsedSearchClick(): void {
+  emit('collapsed-search-click')
 }
 
 function handleTopFlowWheel(event: WheelEvent): void {
@@ -288,13 +315,43 @@ onUnmounted(() => {
   }
 })
 
-watch(
-  () => [props.projectSessionTree, props.isListCollapsed, props.filterType, props.activeGlobalSessionKey],
-  () => {
-    void nextTick(updateTopFlowScrollState)
-  },
-  { deep: true }
+const activeKeySignature = computed(() =>
+  props.projectSessionTree
+    .map((group) => `${group.key}:${group.sessions.map((s) => s.id).join(',')}`)
+    .join('|')
 )
+
+watch(
+  () => [activeKeySignature.value, props.isListCollapsed, props.filterType, props.activeGlobalSessionKey],
+  () => {
+    void nextTick(() => {
+      updateTopFlowScrollState()
+      scrollToActiveSession()
+    })
+  }
+)
+
+// 切到某会话后把活动泳道滚进视野：否则 15+ 项目泳道时，激活项常年在视口外，
+// 每次都要连点右箭头（每次 700ms 动画）去找。
+function scrollToActiveSession(): void {
+  const row = topFlowRowRef.value
+  if (!row || !props.activeGlobalSessionKey) return
+
+  const activeItem = row.querySelector<HTMLElement>('.session-top-item.active')
+  const lane = activeItem?.closest<HTMLElement>('.top-project-lane')
+  if (!lane) return
+
+  const laneLeft = lane.offsetLeft
+  const laneRight = laneLeft + lane.offsetWidth
+  const viewLeft = row.scrollLeft
+  const viewRight = viewLeft + row.clientWidth
+
+  // 已整体可见则不打断用户当前的滚动位置
+  if (laneLeft >= viewLeft && laneRight <= viewRight) return
+
+  const target = Math.max(0, laneLeft - row.clientWidth / 2 + lane.offsetWidth / 2)
+  animateScrollBy(row, target - row.scrollLeft, 400)
+}
 
 function formatSessionStatus(status: SessionTreeSessionItem['status']): string {
   return t(`session.status.${status}`)

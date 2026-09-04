@@ -22,6 +22,8 @@
         @close-tabs-right="emit('close-tabs-right', $event)"
         @toggle-tab-pin="emit('toggle-tab-pin', $event)"
         @resize-split="emit('resize-split', $event)"
+        @resize-split-live="emit('resize-split-live', $event)"
+        @resize-split-commit="emit('resize-split-commit')"
         @even-split-pane="emit('even-split-pane', $event)"
         @open-session-drop="emit('open-session-drop', $event)"
         @undo-layout="emit('undo-layout')"
@@ -36,7 +38,7 @@
         @swap-pane-tabs="emit('swap-pane-tabs', $event)"
       />
     </div>
-    <div class="splitter" @mousedown.prevent="startSplitResize"></div>
+    <div class="splitter" @mousedown.prevent="startSplitResize" @dblclick.prevent="resetSplitRatio"></div>
     <div class="split-child second" :style="secondChildStyle">
       <WorkspacePaneTree
         :node-path="`${nodePath}.second`"
@@ -59,6 +61,8 @@
         @close-tabs-right="emit('close-tabs-right', $event)"
         @toggle-tab-pin="emit('toggle-tab-pin', $event)"
         @resize-split="emit('resize-split', $event)"
+        @resize-split-live="emit('resize-split-live', $event)"
+        @resize-split-commit="emit('resize-split-commit')"
         @even-split-pane="emit('even-split-pane', $event)"
         @open-session-drop="emit('open-session-drop', $event)"
         @undo-layout="emit('undo-layout')"
@@ -97,6 +101,7 @@
     <div class="pane-content">
       <div
         v-if="showPaneTabs"
+        ref="tabStripEl"
         class="pane-tabs"
         role="tablist"
         :aria-label="$t('session.paneTabs')"
@@ -110,11 +115,12 @@
           :aria-selected="tab.active"
           :tabindex="tab.active ? 0 : -1"
           :title="tab.name"
+          :data-tab-id="tab.tabId"
           draggable="true"
           @click="handleSelectTab(tab.tabId)"
           @keydown.enter.prevent="handleSelectTab(tab.tabId)"
           @keydown.space.prevent="handleSelectTab(tab.tabId)"
-          @auxclick.middle.prevent="handleCloseTab(tab.tabId)"
+          @auxclick.middle.prevent="handleMiddleClickTab(tab.tabId)"
           @dragstart="handleTabDragStart(tab.tabId, $event)"
           @dragend="handleTabDragEnd"
         >
@@ -300,7 +306,7 @@ let draggingHeaderPaneId: string | null = null
 </script>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type {
@@ -348,6 +354,8 @@ const emit = defineEmits<{
   'close-tabs-right': [payload: { paneId: string; tabId: string }]
   'toggle-tab-pin': [tabId: string]
   'resize-split': [payload: { path: string; ratio: number }]
+  'resize-split-live': [payload: { path: string; ratio: number }]
+  'resize-split-commit': []
   'even-split-pane': [paneId: string]
   'open-session-drop': [payload: { sessionRef: SessionRef; targetPaneId: string; direction?: WorkspaceSplitDirection }]
   'undo-layout': []
@@ -444,6 +452,19 @@ const paneTabs = computed<PaneTabView[]>(() => {
 // swapping to an invisible neighbour tab.
 const showPaneTabs = computed(() => paneTabs.value.length > 1)
 
+const tabStripEl = ref<HTMLElement | null>(null)
+
+// 标签多到溢出时，激活标签变化后滚到可见（你常开很多标签，切换后目标可能藏在滚动区外）。
+watch(
+  () => paneTabs.value.find((t) => t.active)?.tabId,
+  async (activeTabId) => {
+    if (!activeTabId || !tabStripEl.value) return
+    await nextTick()
+    const el = tabStripEl.value.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(activeTabId)}"]`)
+    el?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }
+)
+
 function handleSelectTab(tabId: string): void {
   if (props.node.type !== 'leaf') return
   emit('set-active-tab', { paneId: props.node.paneId, tabId })
@@ -452,6 +473,13 @@ function handleSelectTab(tabId: string): void {
 function handleCloseTab(tabId: string): void {
   if (props.node.type !== 'leaf') return
   emit('close-tab', { paneId: props.node.paneId, tabId })
+}
+
+// 中键关闭：与 ✕ 按钮同效，但固定标签先解除固定再关（中键是肌肉记忆操作，
+// 被 📌 静默拦截反而困惑；双保险的 close-tab 本身允许关闭固定标签）。
+function handleMiddleClickTab(tabId: string): void {
+  if (props.node.type !== 'leaf') return
+  handleCloseTab(tabId)
 }
 
 function handleTabDragStart(tabId: string, e: DragEvent): void {
@@ -604,6 +632,12 @@ function clearResizeListeners(): void {
   }
 }
 
+// 双击分隔条：恢复 50/50（走持久化路径，一次 mutate 即可）。
+function resetSplitRatio(): void {
+  if (props.node.type !== 'split') return
+  emit('resize-split', { path: props.nodePath, ratio: 0.5 })
+}
+
 function startSplitResize(e: MouseEvent): void {
   if (props.node.type !== 'split') return
   if (detachResizeListeners) {
@@ -633,10 +667,11 @@ function startSplitResize(e: MouseEvent): void {
         ? (ev.clientX - rect.left) / rect.width
         : (ev.clientY - rect.top) / rect.height
     const ratio = Math.max(0.15, Math.min(0.85, rawRatio))
-    emit('resize-split', { path: props.nodePath, ratio })
+    emit('resize-split-live', { path: props.nodePath, ratio })
   }
 
   const onUp = () => {
+    emit('resize-split-commit')
     clearResizeListeners()
   }
 

@@ -5,6 +5,7 @@
       :project-session-tree="projectSessionTree"
       :active-global-session-key="sessionsStore.activeGlobalSessionKey"
       :filter-type="filterType"
+      :search-keyword="searchKeyword"
       :is-list-collapsed="isListCollapsed"
       :is-top-layout="isTopLayout"
           :desktop-remote-mount-enabled="settingsStore.settings.desktopRemoteMountEnabled"
@@ -16,6 +17,7 @@
           :on-toggle-list-position="toggleListPosition"
           :on-toggle-list-collapsed="toggleListCollapsed"
       :on-session-click="handleSessionClick"
+      :on-session-rename="handleSessionRename"
       :on-session-drag-start="handleSessionDragStart"
       :on-session-drag-over="handleSessionDragOver"
       :on-session-drop="handleSessionDrop"
@@ -26,6 +28,8 @@
       :on-top-project-drop="handleTopProjectDrop"
       :on-top-project-drag-end="handleTopProjectDragEnd"
       @update:filter-type="filterType = $event"
+      @update:search-keyword="searchKeyword = $event"
+      @collapsed-search-click="expandForSearch"
     />
 
     <div ref="sessionsMainAreaRef" class="sessions-main-area">
@@ -39,6 +43,7 @@
           :is-auto-collapsed="isListAutoCollapsed"
           :is-top-layout="isTopLayout"
           :filter-type="filterType"
+          :search-keyword="searchKeyword"
           :desktop-remote-mount-enabled="settingsStore.settings.desktopRemoteMountEnabled"
           :refreshing-remote-data="refreshingRemoteData"
           :remote-refresh-summary="remoteRefreshSummary"
@@ -47,6 +52,7 @@
           @toggle-list-position="toggleListPosition"
           @toggle-list-collapsed="toggleListCollapsed"
           @update:filter-type="filterType = $event"
+          @update:search-keyword="searchKeyword = $event"
         />
 
         <template v-if="!isEffectiveListCollapsed">
@@ -93,6 +99,7 @@
               :on-open-create-dialog="openCreateDialogFromGroup"
               :on-open-project="openProject"
               :on-session-click="handleSessionClick"
+              :on-session-rename="handleSessionRename"
               :on-session-drag-start="handleSessionDragStart"
               :on-session-drag-over="handleSessionDragOver"
               :on-session-drop="handleSessionDrop"
@@ -161,6 +168,8 @@
           @close-tabs-right="handleCloseTabsRight"
           @toggle-tab-pin="handleToggleTabPin"
           @resize-split="handleResizeSplit"
+          @resize-split-live="handleResizeSplitLive"
+          @resize-split-commit="handleResizeSplitCommit"
           @even-split-pane="handleEvenSplitPane"
           @open-session-drop="handleOpenSessionDrop"
           @undo-layout="handleUndoLayout"
@@ -236,7 +245,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionsPageCoordination } from '@/composables/useSessionsPageCoordination'
@@ -281,6 +290,7 @@ import {
 import { buildProjectRouteLocation } from '@/utils/project-routing'
 import { cliTypeBadgeLetter } from '@shared/cli-types'
 import { buildSessionRestartConfirmCopy } from '@/utils/session-confirm'
+import { onSessionFocusRequest } from '@/api/local-session'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -305,6 +315,8 @@ function toSessionRef(session: Pick<UnifiedSession, 'instanceId' | 'sessionId' |
 }
 
 const filterType = ref('')
+const searchKeyword = ref('')
+let cleanupFocusRequest: (() => void) | null = null
 const projectSessionTreeBuilder = createProjectSessionTreeBuilder()
 const instanceTreeBuilder = createInstanceTreeBuilder()
 const flattenSidebarTree = createSessionSidebarTreeFlattener()
@@ -388,8 +400,22 @@ const projectMetaItems = createProjectMetaProjector()
 
 const filteredSessions = computed(() => {
   const items = projectSessionItems(sessionsStore.unifiedSessions)
-  if (!filterType.value) return items
-  return items.filter((s) => s.type === filterType.value)
+  let result = items
+  if (filterType.value) {
+    result = result.filter((s) => s.type === filterType.value)
+  }
+  // 关键字搜索（与远程 Web 会话页同一匹配规则）：命中名称/ID/类型/状态/项目路径。
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (keyword) {
+    result = result.filter((s) =>
+      [s.name, s.id, s.type, s.status, s.projectPath]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(keyword)
+    )
+  }
+  return result
 })
 
 const projectMetaIndex = computed(() => {
@@ -700,6 +726,13 @@ onMounted(() => {
   if (sessionsMainAreaRef.value) {
     sessionsMainAreaResizeObserver.observe(sessionsMainAreaRef.value)
   }
+
+  // 系统通知点击 → 主进程发 focus-request → 定位到对应会话（同 handleSessionClick）。
+  cleanupFocusRequest = onSessionFocusRequest((sessionId) => {
+    const session = sessionsStore.sessions.find((s) => s.id === sessionId)
+    if (!session) return
+    void handleSessionClick(session as SessionListItem)
+  })
 })
 
 onUnmounted(() => {
@@ -707,6 +740,8 @@ onUnmounted(() => {
   narrowSessionsLayoutQuery = null
   sessionsMainAreaResizeObserver?.disconnect()
   sessionsMainAreaResizeObserver = null
+  cleanupFocusRequest?.()
+  cleanupFocusRequest = null
 })
 const {
   paneZoomPercentById,
@@ -724,6 +759,8 @@ const {
   handleCloseTabsRight,
   handleToggleTabPin,
   handleResizeSplit,
+  handleResizeSplitLive,
+  handleResizeSplitCommit,
   handleEvenSplitPane,
   handleOpenSessionDrop,
   handleSwapPaneTabs,
@@ -840,6 +877,16 @@ async function toggleListCollapsed() {
   await updateSessionUiSettings({ sessionsPanelCollapsed: !settingsStore.settings.sessionsPanelCollapsed })
 }
 
+// 顶栏折叠态点搜索图标：展开列表，下一帧聚焦搜索框。
+async function expandForSearch() {
+  if (settingsStore.settings.sessionsPanelCollapsed) {
+    await updateSessionUiSettings({ sessionsPanelCollapsed: false })
+  }
+  await nextTick()
+  const input = sessionsMainAreaRef.value?.parentElement?.querySelector<HTMLInputElement>('.top-search')
+  input?.focus()
+}
+
 async function restartSessionByRef(sessionRef: SessionRef, showSuccess = true) {
   const session = sessionsStore.getUnifiedSession(sessionRef.globalSessionKey)
   if (session?.status === 'running') {
@@ -911,6 +958,11 @@ async function handleSessionClick(session: SessionListItem) {
   }
   sessionsStore.setActiveSessionRef(sessionRef)
   await maybeHandleDormantSession(session)
+}
+
+// 双击会话条目直接进入重命名（与右键菜单 → 重命名等效，少一层菜单）。
+function handleSessionRename(session: SessionListItem) {
+  openRenameDialog(session)
 }
 
 async function handleStart(sessionRef: SessionRef) {

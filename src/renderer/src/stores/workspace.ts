@@ -701,6 +701,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   function updateSplitRatio(path: string, ratio: number): void {
+    // ratio 微调不进 undo 历史：一次拖动会触发几十次 mutate，若逐帧入栈会把
+    // 有意义的布局历史冲出 20 条上限，Ctrl+Z 只能在近似 ratio 间打转。
     mutate((draft) => {
       const segments = path.split('.').filter(Boolean)
       if (segments.length === 0 || segments[0] !== 'root') return
@@ -712,7 +714,27 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       }
       if (current.type !== 'split') return
       current.ratio = clampRatio(ratio)
-    })
+    }, { trackHistory: false })
+  }
+
+  // 拖拽中的高频路径：就地改 ratio（不 clone 两份布局、不做 equals 比较、不持久化），
+  // 配合 commitSplitRatio 在松手时落一次持久化。渲染更新靠直接换 root 引用触发。
+  function updateSplitRatioLive(path: string, ratio: number): void {
+    const segments = path.split('.').filter(Boolean)
+    if (segments.length === 0 || segments[0] !== 'root') return
+    let current: WorkspaceLayoutNode = layout.value.root
+    for (let i = 1; i < segments.length; i += 1) {
+      if (current.type !== 'split') return
+      current = segments[i] === 'first' ? current.first : current.second
+    }
+    if (current.type !== 'split') return
+    current.ratio = clampRatio(ratio)
+    // 就地改后用同树新外层对象触发响应式：直接复用 mutate 的 layout.value 赋值语义
+    layout.value = { ...layout.value }
+  }
+
+  function commitSplitRatio(): void {
+    schedulePersist()
   }
 
   function reconcileSessionRefs(
@@ -820,6 +842,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     closeTabsToRight,
     toggleTabPinned,
     updateSplitRatio,
+    updateSplitRatioLive,
+    commitSplitRatio,
     reconcileSessionRefs,
     reconcileSessions,
     undoLayoutChange,

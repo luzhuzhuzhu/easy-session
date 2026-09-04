@@ -36,6 +36,8 @@ type WorkspaceStoreLike = {
   closeTabsToRight(paneId: string, tabId: string): void
   toggleTabPinned(tabId: string): void
   updateSplitRatio(path: string, ratio: number): void
+  updateSplitRatioLive(path: string, ratio: number): void
+  commitSplitRatio(): void
   evenSplitForPane(paneId: string): void
   openSessionRefInPane(sessionRef: SessionRef, paneId: string): void
   swapPaneTabs(fromPaneId: string, toPaneId: string): void
@@ -212,6 +214,15 @@ export function useWorkspacePaneActions(options: UseWorkspacePaneActionsOptions)
     options.workspaceStore.updateSplitRatio(payload.path, payload.ratio)
   }
 
+  // 拖拽中走 live 路径：就地改 ratio，不 clone/比较/持久化；松手时统一落盘一次。
+  function handleResizeSplitLive(payload: { path: string; ratio: number }): void {
+    options.workspaceStore.updateSplitRatioLive(payload.path, payload.ratio)
+  }
+
+  function handleResizeSplitCommit(): void {
+    options.workspaceStore.commitSplitRatio()
+  }
+
   function handleEvenSplitPane(paneId: string): void {
     options.workspaceStore.evenSplitForPane(paneId)
   }
@@ -278,6 +289,8 @@ export function useWorkspacePaneActions(options: UseWorkspacePaneActionsOptions)
     handleCloseTabsRight,
     handleToggleTabPin,
     handleResizeSplit,
+    handleResizeSplitLive,
+    handleResizeSplitCommit,
     handleEvenSplitPane,
     handleOpenSessionDrop,
     handleSwapPaneTabs,

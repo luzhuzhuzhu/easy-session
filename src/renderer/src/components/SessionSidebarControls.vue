@@ -1,19 +1,27 @@
 <template>
   <template v-if="!isListCollapsed">
     <div class="list-toolbar">
-      <select
-        :value="filterType"
-        class="filter-select session-filter"
-        :class="{ filtering: !!filterType }"
-        @change="onFilterChange"
-      >
-        <option value="">{{ $t('session.filter') }}</option>
-        <option value="claude">Claude</option>
-        <option value="codex">Codex</option>
-        <option value="opencode">OpenCode</option>
-        <option value="terminal">{{ $t('session.terminal') }}</option>
-      </select>
-      <div class="toolbar-actions">
+      <input
+        :value="searchKeyword"
+        class="session-search-input"
+        type="search"
+        :placeholder="$t('session.searchPlaceholder')"
+        @input="emit('update:searchKeyword', ($event.target as HTMLInputElement).value)"
+      />
+      <div class="toolbar-row">
+        <select
+          :value="filterType"
+          class="filter-select session-filter"
+          :class="{ filtering: !!filterType }"
+          @change="onFilterChange"
+        >
+          <option value="">{{ $t('session.filter') }}</option>
+          <option value="claude">Claude</option>
+          <option value="codex">Codex</option>
+          <option value="opencode">OpenCode</option>
+          <option value="terminal">{{ $t('session.terminal') }}</option>
+        </select>
+        <div class="toolbar-actions">
         <IconButton
           tone="primary"
           :label="$t('session.create')"
@@ -43,6 +51,7 @@
         >
           <UiIcon name="chevron-left" />
         </IconButton>
+        </div>
       </div>
     </div>
   </template>
@@ -91,6 +100,7 @@ defineProps<{
   isAutoCollapsed?: boolean
   isTopLayout: boolean
   filterType: string
+  searchKeyword?: string
   desktopRemoteMountEnabled: boolean
   refreshingRemoteData: boolean
   remoteRefreshSummary: string
@@ -102,6 +112,7 @@ const emit = defineEmits<{
   'toggle-list-position': []
   'toggle-list-collapsed': []
   'update:filterType': [value: string]
+  'update:searchKeyword': [value: string]
 }>()
 
 useI18n()

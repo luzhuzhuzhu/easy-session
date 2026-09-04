@@ -170,9 +170,15 @@ export const useSessionsStore = defineStore('sessions', () => {
   function ensureListeners() {
     if (cleanupStatus) return
 
-    cleanupStatus = onSessionStatusChange(({ sessionId, status }) => {
+    cleanupStatus = onSessionStatusChange(({ sessionId, status, lastActiveAt }) => {
       const session = sessions.value.find((s) => s.id === sessionId)
-      if (session) session.status = status
+      if (!session) return
+      session.status = status
+      // 状态事件顺带回写活动时间：否则列表里的"智能排序"在两次手动刷新之间
+      // 一直用陈旧的 lastActiveAt，刚用过的会话不会浮上来。
+      if (typeof lastActiveAt === 'number' && Number.isFinite(lastActiveAt) && lastActiveAt > 0) {
+        session.lastActiveAt = lastActiveAt
+      }
     })
   }
 

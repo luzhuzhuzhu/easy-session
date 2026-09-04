@@ -111,6 +111,7 @@
           draggable="true"
           :aria-keyshortcuts="'Alt+ArrowUp Alt+ArrowDown'"
           @click="onSessionClick(node.session)"
+          @dblclick.prevent="onSessionRename(node.session)"
           @keydown.enter.prevent="onSessionClick(node.session)"
           @keydown.space.prevent="onSessionClick(node.session)"
           @keydown.alt.up.prevent="onSessionReorder(node.projectKey, siblingSessionIds(node.projectKey), node.session.id, -1)"
@@ -183,6 +184,7 @@ const props = defineProps<{
   onOpenCreateDialog: (group: ProjectSessionGroup) => void
   onOpenProject: (group: ProjectSessionGroup) => void
   onSessionClick: (session: SessionTreeSessionItem) => void
+  onSessionRename: (session: SessionTreeSessionItem) => void
   onSessionDragStart: (event: DragEvent, session: SessionTreeSessionItem) => void
   onSessionDragOver: (event: DragEvent, projectKey: string) => void
   onSessionDrop: (event: DragEvent, projectKey: string, targetSessionId: string) => void

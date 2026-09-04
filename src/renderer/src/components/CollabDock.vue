@@ -6,7 +6,7 @@
         <template #panel="scoped"><slot name="panel" v-bind="scoped" /></template>
       </CollabDock>
     </div>
-    <div class="dock-splitter" :class="node.direction" @mousedown.prevent="onSplitterDown"></div>
+    <div class="dock-splitter" :class="node.direction" @mousedown.prevent="onSplitterDown" @dblclick.prevent="onSplitterDblClick"></div>
     <div class="dock-region" :style="secondStyle">
       <CollabDock :node="node.second" :path="`${path}.second`">
         <template #panel="scoped"><slot name="panel" v-bind="scoped" /></template>
@@ -36,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref, type VNode } from 'vue'
+import { computed, inject, onBeforeUnmount, ref, type VNode } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { COLLAB_DOCK_KEY, type DockNode, type DropZone } from '@/composables/useCollabDock'
 
@@ -123,6 +123,14 @@ function onDrop(event: DragEvent): void {
   dock.endDrag()
 }
 
+let detachSplitterListeners: (() => void) | null = null
+
+// 双击分隔条：恢复 50/50 并立即持久化。
+function onSplitterDblClick(): void {
+  if (props.node.type !== 'split') return
+  dock.setRatio(props.path, 0.5)
+}
+
 function onSplitterDown(): void {
   if (props.node.type !== 'split') return
   const container = containerEl.value
@@ -135,19 +143,31 @@ function onSplitterDown(): void {
 
   function onMove(moveEvent: MouseEvent): void {
     const pos = horizontal ? moveEvent.clientX - rect.left : moveEvent.clientY - rect.top
-    dock.setRatio(path, pos / total)
+    // 拖拽中走 live 路径：就地改 ratio + triggerRef，不 clone 整棵树、不写 localStorage
+    dock.setRatioLive(path, pos / total)
   }
   function onUp(): void {
+    dock.commitRatio()
+    detachSplitterListeners?.()
+  }
+  detachSplitterListeners = () => {
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
+    detachSplitterListeners = null
   }
   document.body.style.cursor = horizontal ? 'col-resize' : 'row-resize'
   document.body.style.userSelect = 'none'
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
 }
+
+onBeforeUnmount(() => {
+  // 拖拽中途组件被卸载（切走 Collaboration 视图）时，mousemove 仍挂在 document 上
+  // 会对已卸载树反复 cloneTree + 持久化，必须随组件一并清理。
+  detachSplitterListeners?.()
+})
 </script>
 
 <style scoped lang="scss">

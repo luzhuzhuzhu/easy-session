@@ -1,4 +1,4 @@
-import { computed, ref, type ComputedRef, type InjectionKey, type Ref } from 'vue'
+import { computed, ref, triggerRef, type ComputedRef, type InjectionKey, type Ref } from 'vue'
 
 // 协作页「真·自由 dock」：二叉树布局，leaf 承载单一固定面板（无 tab）。
 // 借鉴 stores/workspace.ts 的 split/leaf 二叉树与拖放 dock 模式，但只管理面板 id。
@@ -44,6 +44,8 @@ export interface CollabDockApi {
   clearDropTarget: (panelId?: string) => void
   dropOnPanel: (targetPanelId: string, zone: DropZone) => void
   setRatio: (path: string, ratio: number) => void
+  setRatioLive: (path: string, ratio: number) => void
+  commitRatio: () => void
   hidePanel: (panelId: string) => void
   showPanel: (panelId: string) => void
   resetLayout: () => void
@@ -280,6 +282,26 @@ export function useCollabDock(): CollabDockApi {
     commit(next)
   }
 
+  // 拖拽期间的轻量更新：直接改原树上的 ratio（就地变更，不 clone、不持久化），
+  // 并用 triggerRef 通知依赖 root 的 computed。松手时调用 commitRatio 落一次持久化。
+  function setRatioLive(path: string, ratio: number): void {
+    const segments = path.split('.').filter(Boolean)
+    if (segments[0] !== 'root') return
+    let current: DockNode = root.value
+    for (let i = 1; i < segments.length; i += 1) {
+      if (current.type !== 'split') return
+      current = segments[i] === 'first' ? current.first : current.second
+    }
+    if (current.type !== 'split') return
+    current.ratio = clampRatio(ratio)
+    triggerRef(root)
+  }
+
+  // 拖拽结束：ratio 已在拖拽过程中就地写好，这里只需补一次持久化。
+  function commitRatio(): void {
+    persist()
+  }
+
   function hidePanel(panelId: string): void {
     if (leafCount.value <= 1) return // 至少保留一个面板可见
     const next = removeLeaf(cloneTree(root.value), panelId)
@@ -318,6 +340,8 @@ export function useCollabDock(): CollabDockApi {
     clearDropTarget,
     dropOnPanel,
     setRatio,
+    setRatioLive,
+    commitRatio,
     hidePanel,
     showPanel,
     resetLayout
