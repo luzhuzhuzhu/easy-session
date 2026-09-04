@@ -28,6 +28,9 @@ export class DataStore<T> {
   private static readonly DOUBLE_COMMA_REGEX = /,\s*,/m
   private static saveTails = new Map<string, Promise<void>>()
   private static readonly RENAME_RETRY_LIMIT = 2
+  // 备份代数：.bak.1 最新，.bak.N 最旧。单代备份会被高频持久化迅速覆盖
+  // （如误删会话后 5 秒内 .bak 即无删除痕迹），多代可回溯更早状态。
+  private static readonly BACKUP_GENERATIONS = 5
   private readonly queueKey: string
 
   private readonly backupPath: string
@@ -210,12 +213,15 @@ export class DataStore<T> {
     const result = await this.loadFile(this.filePath)
     if (result.data) return result
 
-    // 主文件损坏或不可读时，尝试从备份恢复
+    // 主文件损坏或不可读时，从最新一代备份开始逐代尝试恢复
     if (result.error === 'corrupted' || result.error === 'read_error') {
-      const backup = await this.loadFile(this.backupPath)
-      if (backup.data) {
-        log.warn(`[DataStore] 从备份恢复: ${this.backupPath}`)
-        return { data: backup.data, restoredFromBackup: true }
+      for (let generation = 1; generation <= DataStore.BACKUP_GENERATIONS; generation += 1) {
+        const backupPath = generation === 1 ? this.backupPath : `${this.backupPath}.${generation}`
+        const backup = await this.loadFile(backupPath)
+        if (backup.data) {
+          log.warn(`[DataStore] 从备份恢复: ${backupPath}`)
+          return { data: backup.data, restoredFromBackup: true }
+        }
       }
     }
 
@@ -228,9 +234,24 @@ export class DataStore<T> {
     await this.enqueueSave(async () => {
       await mkdir(dirname(this.filePath), { recursive: true })
 
-      // 保存前将当前文件备份为 .bak：先写临时副本再原子改名。
-      // copyFile 直写 .bak 若中途失败会留下「半个文件」覆盖掉原本完好的备份；
-      // 改为写临时文件、成功后才 rename 到 .bak，任何失败都不破坏既有好备份。
+      // 保存前轮转多代备份：.bak.N ← .bak.N-1 … .bak.2 ← .bak，再写新 .bak。
+      // 每一步都先写临时副本再原子改名；任一代失败仅告警并保留该代，绝不用半成品覆盖。
+      for (let generation = DataStore.BACKUP_GENERATIONS - 1; generation >= 1; generation -= 1) {
+        const fromPath = generation === 1 ? this.backupPath : `${this.backupPath}.${generation}`
+        const toPath = `${this.backupPath}.${generation + 1}`
+        const rotTemp = `${toPath}.tmp-${process.pid}-${randomUUID()}`
+        try {
+          await copyFile(fromPath, rotTemp)
+          await rename(rotTemp, toPath)
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException).code
+          if (code !== 'ENOENT') {
+            log.warn({ err }, `[DataStore] 备份轮转失败 ${fromPath} -> ${toPath}`)
+          }
+          await rm(rotTemp, { force: true }).catch(() => undefined)
+        }
+      }
+
       const backupTemp = `${this.backupPath}.tmp-${process.pid}-${randomUUID()}`
       try {
         await copyFile(this.filePath, backupTemp)

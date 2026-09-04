@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi, beforeEach } from 'vitest'
+﻿import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Protocol } from '../src/main/services/protocol'
 import { SessionOutputManager } from '../src/main/services/session-output'
 import { registerSkillHandlers } from '../src/main/ipc/skill-handlers'
@@ -46,6 +46,7 @@ describe('skill system integration', () => {
   let projectManager: any
 
   beforeEach(() => {
+    vi.useFakeTimers()
     handlers.clear()
     sendMock.mockClear()
     openPathMock.mockClear()
@@ -69,6 +70,10 @@ describe('skill system integration', () => {
     }
 
     registerSkillHandlers(skillManager, projectManager)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('protocol message can be formatted and parsed', () => {
@@ -98,6 +103,7 @@ describe('skill system integration', () => {
     )
 
     outputManager.appendOutput('s1', protocolMsg, 'stdout')
+    vi.advanceTimersByTime(20)
 
     const calls = sendMock.mock.calls.filter((args: any[]) => args[0] === 'protocol:message')
     expect(calls).toHaveLength(1)

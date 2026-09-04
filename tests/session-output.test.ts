@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock electron before importing SessionOutputManager
 vi.mock('electron', () => ({
@@ -18,7 +18,12 @@ describe('SessionOutputManager', () => {
 
   beforeEach(() => {
     manager = new SessionOutputManager()
+    vi.useFakeTimers()
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('should append and retrieve output', () => {
@@ -58,6 +63,7 @@ describe('SessionOutputManager', () => {
     vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([mockWin as any])
 
     manager.appendOutput('s1', 'test', 'stdout')
+    vi.advanceTimersByTime(20)
 
     expect(mockWin.webContents.send).toHaveBeenCalledWith(
       'session:output',
@@ -77,6 +83,7 @@ describe('SessionOutputManager', () => {
     )
 
     manager.appendOutput('s1', protocolMsg, 'stdout')
+    vi.advanceTimersByTime(20)
 
     const calls = mockWin.webContents.send.mock.calls
     const protocolCall = calls.find((c: any[]) => c[0] === 'protocol:message')
