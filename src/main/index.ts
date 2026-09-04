@@ -1,5 +1,5 @@
 import { app, BrowserWindow, shell, ipcMain, dialog, Notification } from 'electron'
-import { existsSync } from 'fs'
+import { existsSync, appendFileSync } from 'fs'
 import { join } from 'path'
 import { exec } from 'child_process'
 import dotenv from 'dotenv'
@@ -19,6 +19,7 @@ import { ProjectManager } from './services/project-manager'
 import { SkillManager } from './services/skill-manager'
 import { DataStore } from './services/data-store'
 import { registerAllHandlers } from './ipc'
+import { onSessionExitNotifyPrefChange } from './ipc/settings-handlers'
 import { registerRemoteInstanceHandlers } from './ipc/remote-instance-handlers'
 import { registerRemoteServiceHandlers } from './ipc/remote-service-handlers'
 import { registerCloudflareTunnelHandlers } from './ipc/cloudflare-tunnel-handlers'
@@ -104,6 +105,46 @@ const SHUTDOWN_FLUSH_WARN_MS = 12_000
 const SHUTDOWN_START_CHANNEL = 'app:shutdown-start'
 let isShuttingDown = false
 
+// 会话意外退出提醒：进程自己退出（用户主动 pause/restart/destroy 不经此路径）时，
+// 按设置弹系统通知 + 闪烁任务栏（sessionExitNotify：abnormal 仅异常退出 / all 全部 / off 关闭；
+// 窗口正聚焦时不打扰，仅闪烁）。窗口最小化/后台时后台 agent 死亡不再无感。
+let sessionExitNotifyPref: 'abnormal' | 'off' | 'all' = 'abnormal'
+
+sessionManager.setExitNotifier((session, exitCode) => {
+  if (isShuttingDown) return
+  const abnormal = exitCode !== 0
+  if (sessionExitNotifyPref === 'off') return
+  if (sessionExitNotifyPref === 'abnormal' && !abnormal) return
+
+  const win = getMainWindow()
+  const windowFocused = !!win && win.isFocused()
+  // 用户正盯着窗口时系统通知是噪音；仍闪烁任务栏兜底。
+  if (!windowFocused) {
+    const label = session.type === 'terminal' ? '终端会话' : `${session.type.toUpperCase()} 会话`
+    const title = `${session.name} 已退出`
+    const body = abnormal
+      ? `${label}异常退出（exit code ${exitCode ?? 'unknown'}），点击查看。`
+      : `${label}正常结束。`
+    try {
+      if (Notification.isSupported()) {
+        const notification = new Notification({ title, body, silent: false })
+        notification.on('click', () => {
+          const target = getMainWindow()
+          if (!target) return
+          if (target.isMinimized()) target.restore()
+          target.show()
+          target.focus()
+          target.webContents.send('session:focus-request', session.id)
+        })
+        notification.show()
+      }
+    } catch (err) {
+      log.warn({ err }, '[notify] session exit notification failed')
+    }
+  }
+  if (win && !win.isFocused()) win.flashFrame(true)
+})
+
 registerAllHandlers({
   cliManager,
   claudeAdapter,
@@ -115,6 +156,28 @@ registerAllHandlers({
   skillManager,
   workspaceLayoutManager
 })
+
+// 设置页改通知偏好 → settings:write → 同步给 exit notifier（无需重启应用）。
+onSessionExitNotifyPrefChange((pref) => {
+  if (pref === 'abnormal' || pref === 'off' || pref === 'all') {
+    sessionExitNotifyPref = pref
+  }
+})
+
+// 应用启动时读取一次已保存的通知偏好（settings 文件由 renderer 首次保存，读失败保持默认）。
+void (async () => {
+  try {
+    const { readFile } = await import('fs/promises')
+    const { join } = await import('path')
+    const raw = await readFile(join(app.getPath('userData'), 'app-settings.json'), 'utf-8')
+    const parsed = JSON.parse(raw) as { sessionExitNotify?: unknown }
+    if (parsed.sessionExitNotify === 'abnormal' || parsed.sessionExitNotify === 'off' || parsed.sessionExitNotify === 'all') {
+      sessionExitNotifyPref = parsed.sessionExitNotify
+    }
+  } catch {
+    // 文件不存在或解析失败：保持默认 'abnormal'
+  }
+})()
 
 async function flushAllStoresOnShutdown(): Promise<void> {
   let warned = false
@@ -200,6 +263,13 @@ async function shutdownApp(): Promise<void> {
 
   await agentBus.stop().catch((err) => log.warn({ err }, '[agent-bus] stop failed'))
 
+  // 关停前把全部会话的最近输出落一份 journal，重启后可回看（terminal 会话尤其救急）。
+  // await 落盘完成后再杀进程，否则最后一屏输出可能来不及写。
+  for (const session of sessionManager.listSessions()) {
+    outputManager.writeJournal(session.id, { name: session.name, type: session.type })
+  }
+  await outputManager.flushJournals()
+
   sessionManager.shutdownAll()
   cliManager.killAll()
   configService.unwatchAll()
@@ -229,8 +299,47 @@ function createWindow(): void {
     mainWindow.show()
   })
 
+  // 渲染进程崩溃（Vue 错误失控 / OOM）时自动重载：后台会话都在主进程，
+  // 布局与会话列表持久化在 userData，reload 即可恢复 UI，避免白屏等死。
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    if (isShuttingDown) return
+    log.error({ details }, '[window] renderer process gone, reloading')
+    const reason = details?.reason ?? 'unknown'
+    const exitCode = details?.exitCode ?? 0
+    try {
+      appendFileSync(
+        join(app.getPath('userData'), 'renderer-crash.log'),
+        `[${new Date().toISOString()}] reason=${reason} exitCode=${exitCode}\n`
+      )
+    } catch {
+      // 日志写失败不影响恢复
+    }
+    if (details?.reason === 'clean-exit') return
+    setTimeout(() => {
+      if (!mainWindow.isDestroyed() && !isShuttingDown) {
+        mainWindow.webContents.reload()
+      }
+    }, 300)
+  })
+
   mainWindow.on('close', (event) => {
     if (process.platform === 'darwin' || isShuttingDown) return
+    // 有运行中的会话时拦截：关窗会静默杀掉全部 agent，防护等级应高于删除单个会话。
+    const runningCount = sessionManager.listSessions({ status: 'running' }).length
+    if (runningCount > 0 && process.env.EASYSESSION_SKIP_CLOSE_CONFIRM !== '1') {
+      event.preventDefault()
+      const choice = dialog.showMessageBoxSync(mainWindow, {
+        type: 'warning',
+        title: 'EasySession',
+        message: `${runningCount} 个会话正在运行`,
+        detail: '关闭应用会停止所有运行中的会话进程（会话记录保留，可再次启动）。',
+        buttons: ['取消', '停止会话并关闭'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      })
+      if (choice !== 1) return
+    }
     event.preventDefault()
     void shutdownApp()
   })
@@ -458,7 +567,8 @@ ipcMain.handle('cli:check', (_event, cliName: string, preferredPath?: string) =>
 
   if (normalizedPreferredPath) {
     return new Promise((resolve) => {
-      exec(`"${normalizedPreferredPath}" --version`, (error, stdout) => {
+      // 坏 shim/挂起的可执行文件不能让可用性检测永久 pending，统一 5s 超时。
+      exec(`"${normalizedPreferredPath}" --version`, { timeout: 5000 }, (error, stdout) => {
         if (error) {
           resolve({ available: false, path: normalizedPreferredPath })
           return
@@ -474,13 +584,13 @@ ipcMain.handle('cli:check', (_event, cliName: string, preferredPath?: string) =>
 
   const cmd = process.platform === 'win32' ? `where ${cliName}` : `which ${cliName}`
   return new Promise((resolve) => {
-    exec(cmd, (error, stdout) => {
+    exec(cmd, { timeout: 5000 }, (error, stdout) => {
       if (error) {
         resolve({ available: false })
         return
       }
       const cliPath = stdout.trim().split('\n')[0]
-      exec(`${cliName} --version`, (verErr, verOut) => {
+      exec(`${cliName} --version`, { timeout: 5000 }, (verErr, verOut) => {
         resolve({
           available: true,
           path: cliPath,
@@ -501,6 +611,8 @@ app.whenReady().then(async () => {
   try {
     const userData = app.getPath('userData')
     sessionManager.setStore(new DataStore(join(userData, 'sessions.json')))
+    // 启用输出日志（output journal）：会话退出/应用关停时落最近 2000 条输出，重启后回灌。
+    outputManager.setJournalDir(join(userData, 'output-journal'))
     remoteInstanceManager = new RemoteInstanceManager(userData)
     remoteNetworkSettingsManager = new RemoteNetworkSettingsManager(userData)
     remoteGatewayManager = new RemoteGatewayManager(remoteInstanceManager)
@@ -558,19 +670,24 @@ app.whenReady().then(async () => {
     registerRemoteGatewayHandlers(remoteGatewayManager)
 
     // 启动 agent bus（终端 / agent 间通信），并把 es 环境注入与 claude 系统提示挂上。
-    try {
-      await agentBus.start({ userDataDir: userData, electronPath: process.execPath })
-      // env provider 始终挂上：bus 未就绪时 getEnvBundle 返回 null，buildSpawnEnv 自动跳过。
-      cliManager.setAgentBusEnvProvider((pid) => agentBus.getEnvBundle(pid))
-      if (agentBus.isReady()) {
-        claudeAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
-      } else {
-        // 未就绪时不挂 es 系统提示（避免 claude 误以为有 es 可用）；协作面板会显示不可用横幅。
-        log.error({ err: agentBus.getStartError() }, '[init] agent bus 未就绪，终端间协作不可用')
+    // 不阻塞首窗：bus 初始化（文件 I/O + listen）与窗口加载并行，未就绪时 env provider 返回 null。
+    const agentBusStart = (async () => {
+      try {
+        await agentBus.start({ userDataDir: userData, electronPath: process.execPath })
+        // env provider 始终挂上：bus 未就绪时 getEnvBundle 返回 null，buildSpawnEnv 自动跳过。
+        cliManager.setAgentBusEnvProvider((pid) => agentBus.getEnvBundle(pid))
+        if (agentBus.isReady()) {
+          claudeAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
+        } else {
+          // 未就绪时不挂 es 系统提示（避免 claude 误以为有 es 可用）；协作面板会显示不可用横幅。
+          log.error({ err: agentBus.getStartError() }, '[init] agent bus 未就绪，终端间协作不可用')
+        }
+      } catch (err) {
+        log.error({ err }, '[init] agent bus 启动失败')
       }
-    } catch (err) {
-      log.error({ err }, '[init] agent bus 启动失败')
-    }
+    })()
+    cliManager.setAgentBusEnvProvider((pid) => agentBus.getEnvBundle(pid))
+    void agentBusStart
 
     electronApp.setAppUserModelId('com.easysession')
 

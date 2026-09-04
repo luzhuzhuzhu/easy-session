@@ -11,7 +11,7 @@
 <p align="center">原生终端，统一管理，远程可达</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.4.1-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-0.7.5-blue" alt="Version" />
   <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-green" alt="License" />
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform" />
   <img src="https://img.shields.io/badge/Electron-33-47848F?logo=electron" alt="Electron" />
@@ -35,7 +35,7 @@ CLI 恢复会话本身很简单（`--resume`），但当你有多个项目、每
 
 ## 亮点速览
 
-- 🚀 **0.4.1 让 EasySession 更像真正的日常工作台** —— 远程 Web、桌面端远程挂载、Git 检查与 Markdown / 文件预览现在已经整合到同一个产品里
+- 🚀 **真正的日常工作台** —— 远程 Web、桌面端远程挂载、Git 检查与 Markdown / 文件预览现在已经整合到同一个产品里
 - 🖥️ **CLI 体验仍然是原生的** —— 终端透传优先，提示、快捷键、恢复流程和真实 CLI 行为都尽量保留
 - 🌍 **在你所在的地方继续工作** —— 桌面端适合日常主力使用，浏览器 / 手机端适合远程进入，远程挂载适合多机器统一管理
 - 🔐 **面向真实远程场景** —— Token 认证、实时 Socket 桥接、反代友好路由，并兼容 Cloudflare Tunnel 等接入方式

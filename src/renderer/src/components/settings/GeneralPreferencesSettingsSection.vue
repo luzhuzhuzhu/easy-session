@@ -50,6 +50,17 @@
       />
     </div>
     <div class="setting-row">
+      <label>{{ $t('settings.sessionExitNotify') }}</label>
+      <select
+        :value="sessionExitNotify"
+        @change="$emit('update:session-exit-notify', ($event.target as HTMLSelectElement).value as 'abnormal' | 'off' | 'all')"
+      >
+        <option value="abnormal">{{ $t('settings.sessionExitNotifyAbnormal') }}</option>
+        <option value="all">{{ $t('settings.sessionExitNotifyAll') }}</option>
+        <option value="off">{{ $t('settings.sessionExitNotifyOff') }}</option>
+      </select>
+    </div>
+    <div class="setting-row">
       <label>{{ $t('settings.sessionsListPosition') }}</label>
       <IconButton
         :label="$t('settings.sessionsListPosition')"
@@ -110,6 +121,7 @@ defineProps<{
   theme: AppTheme
   language: 'zh-CN' | 'en'
   sessionWakeConfirm: boolean
+  sessionExitNotify: 'abnormal' | 'off' | 'all'
   sessionsListPosition: 'left' | 'top'
   sessionsPanelCollapsed: boolean
   smartPriorityEnabled: boolean
@@ -121,6 +133,7 @@ const emit = defineEmits<{
   'update:theme': [value: AppTheme]
   'update:language': [value: 'zh-CN' | 'en']
   'update:session-wake-confirm': [value: boolean]
+  'update:session-exit-notify': [value: 'abnormal' | 'off' | 'all']
   'toggle-sessions-list-position': []
   'update:sessions-panel-collapsed': [value: boolean]
   'update:smart-priority-enabled': [value: boolean]

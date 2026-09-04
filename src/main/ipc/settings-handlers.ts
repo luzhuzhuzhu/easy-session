@@ -4,6 +4,15 @@ import { join } from 'path'
 
 const getSettingsPath = () => join(app.getPath('userData'), 'app-settings.json')
 
+// 会话退出通知偏好变化时通知主进程内订阅方（index.ts 的 exit notifier）。
+type NotifyPrefListener = (pref: unknown) => void
+const notifyPrefListeners = new Set<NotifyPrefListener>()
+
+export function onSessionExitNotifyPrefChange(listener: NotifyPrefListener): () => void {
+  notifyPrefListeners.add(listener)
+  return () => notifyPrefListeners.delete(listener)
+}
+
 export function registerSettingsHandlers(): void {
   ipcMain.handle('settings:read', async () => {
     try {
@@ -18,6 +27,15 @@ export function registerSettingsHandlers(): void {
     const filePath = getSettingsPath()
     await mkdir(join(filePath, '..'), { recursive: true })
     await writeFile(filePath, JSON.stringify(settings, null, 2), 'utf-8')
+    if ('sessionExitNotify' in settings) {
+      for (const listener of notifyPrefListeners) {
+        try {
+          listener(settings.sessionExitNotify)
+        } catch {
+          // 单个订阅方失败不影响写盘
+        }
+      }
+    }
     return true
   })
 

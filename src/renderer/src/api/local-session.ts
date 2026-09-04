@@ -171,8 +171,17 @@ export function onSessionOutput(callback: (event: OutputEvent) => void): () => v
   return () => ipc.removeListener('session:output', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
 }
 
-export function onSessionStatusChange(callback: (data: { sessionId: string; status: SessionStatus }) => void): () => void {
-  const handler = (_e: IpcRendererEvent, data: { sessionId: string; status: SessionStatus }) => callback(data)
+export function onSessionStatusChange(callback: (data: { sessionId: string; status: SessionStatus; lastActiveAt?: number }) => void): () => void {
+  const handler = (_e: IpcRendererEvent, data: { sessionId: string; status: SessionStatus; lastActiveAt?: number }) => callback(data)
   ipc.on('session:status', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
   return () => ipc.removeListener('session:status', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
+}
+
+// 主进程点击“会话退出”系统通知后请求聚焦该会话（窗口已同时被拉到前台）。
+export function onSessionFocusRequest(callback: (sessionId: string) => void): () => void {
+  const handler = (_e: IpcRendererEvent, sessionId: unknown): void => {
+    if (typeof sessionId === 'string') callback(sessionId)
+  }
+  ipc.on('session:focus-request', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
+  return () => ipc.removeListener('session:focus-request', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
 }

@@ -24,6 +24,8 @@ export interface AppSettings {
   terminalFontSize: number
   terminalFontSizeByPane: Record<string, number>
   sessionWakeConfirm: boolean
+  // 会话退出系统通知：'abnormal' 仅异常退出提醒（默认），'off' 完全关闭，'all' 全部提醒
+  sessionExitNotify: 'abnormal' | 'off' | 'all'
   sessionsPanelCollapsed: boolean
   sessionsListPosition: 'left' | 'top'
   smartPriorityEnabled: boolean
@@ -77,6 +79,7 @@ const defaults: AppSettings = {
   terminalFontSize: 13,
   terminalFontSizeByPane: {},
   sessionWakeConfirm: true,
+  sessionExitNotify: 'abnormal',
   sessionsPanelCollapsed: false,
   sessionsListPosition: 'left',
   smartPriorityEnabled: false,
@@ -164,6 +167,10 @@ function normalizeSettings(input: unknown): AppSettings {
     terminalFontSize: normalizeNumber(raw.terminalFontSize, defaults.terminalFontSize),
     terminalFontSizeByPane: normalizeFontSizeByPane(),
     sessionWakeConfirm: normalizeBoolean(raw.sessionWakeConfirm, defaults.sessionWakeConfirm),
+    sessionExitNotify:
+      raw.sessionExitNotify === 'off' || raw.sessionExitNotify === 'all'
+        ? raw.sessionExitNotify
+        : defaults.sessionExitNotify,
     sessionsPanelCollapsed: normalizeBoolean(raw.sessionsPanelCollapsed, defaults.sessionsPanelCollapsed),
     sessionsListPosition: raw.sessionsListPosition === 'top' ? 'top' : defaults.sessionsListPosition,
     smartPriorityEnabled: normalizeBoolean(raw.smartPriorityEnabled, defaults.smartPriorityEnabled),

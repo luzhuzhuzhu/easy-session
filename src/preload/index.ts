@@ -69,6 +69,7 @@ const ALLOWED_INVOKE_CHANNELS = [
 const ALLOWED_RECEIVE_CHANNELS = [
   'session:output',
   'session:status',
+  'session:focus-request',
   'remote-session:output',
   'remote-session:status',
   'config:changed',

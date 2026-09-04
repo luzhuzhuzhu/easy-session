@@ -11,7 +11,7 @@
 <p align="center">Native Terminal, Unified Management, Remote Ready</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.4.1-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-0.7.5-blue" alt="Version" />
   <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-green" alt="License" />
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform" />
   <img src="https://img.shields.io/badge/Electron-33-47848F?logo=electron" alt="Electron" />
@@ -35,7 +35,7 @@ Resuming a CLI session is easy (`--resume`), but when you have multiple projects
 
 ## Highlights
 
-- 🚀 **0.4.1 pushes EasySession further into a real daily workspace** — remote web, desktop remote mount, Git inspection, and Markdown/file preview now live in the same product
+- 🚀 **A real daily workspace** — remote web, desktop remote mount, Git inspection, and Markdown/file preview now live in the same product
 - 🖥️ **Keep the CLI native** — terminal passthrough stays terminal-first, so prompts, shortcuts, resume flows, and real CLI behavior are preserved
 - 🌍 **Use it where you are** — desktop app for daily work, browser/mobile remote web for quick control, and remote instance mount for multi-machine setups
 - 🔐 **Built for practical remote use** — token auth, realtime socket bridge, reverse proxy friendly routing, and Cloudflare Tunnel compatible access

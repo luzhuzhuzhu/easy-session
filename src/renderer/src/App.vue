@@ -25,7 +25,9 @@ import { useShortcuts } from '@/composables/useShortcuts'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useCollabStore } from '@/stores/collab'
+import { useSessionsStore } from '@/stores/sessions'
 import { onCollabFocus } from '@/api/agent-bus'
+import { onSessionFocusRequest } from '@/api/local-session'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -33,7 +35,9 @@ const router = useRouter()
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 const collabStore = useCollabStore()
+const sessionsStore = useSessionsStore()
 let unsubscribeCollabFocus: (() => void) | null = null
+let unsubscribeSessionFocus: (() => void) | null = null
 
 const SHUTDOWN_START_CHANNEL = 'app:shutdown-start'
 const isShuttingDown = ref(false)
@@ -71,11 +75,35 @@ onMounted(async () => {
     collabStore.setFocusTask(taskId)
     if (route.path !== '/collaboration') void router.push('/collaboration')
   })
+
+  // 点击"会话退出"通知：跳回会话页并在窗格中打开该会话。路由到位后走与
+  // SessionsView.handleSessionClick 相同的 focus/open + setActive 组合。
+  unsubscribeSessionFocus = onSessionFocusRequest((sessionId) => {
+    const focusInWorkspace = (): void => {
+      const session = sessionsStore.unifiedSessions.find((s) => s.sessionId === sessionId)
+      if (!session) return
+      const sessionRef = {
+        instanceId: session.instanceId,
+        sessionId: session.sessionId,
+        globalSessionKey: session.globalSessionKey
+      }
+      if (!workspaceStore.focusSessionRef(sessionRef)) {
+        workspaceStore.openSessionRefInActivePane(sessionRef)
+      }
+      sessionsStore.setActiveSessionRef(sessionRef)
+    }
+    if (route.path !== '/sessions') {
+      void router.push('/sessions').then(focusInWorkspace)
+    } else {
+      focusInWorkspace()
+    }
+  })
 })
 
 onBeforeUnmount(() => {
   window.electronAPI.removeListener(SHUTDOWN_START_CHANNEL, shutdownListener)
   if (unsubscribeCollabFocus) unsubscribeCollabFocus()
+  if (unsubscribeSessionFocus) unsubscribeSessionFocus()
   collabStore.stop()
 })
 

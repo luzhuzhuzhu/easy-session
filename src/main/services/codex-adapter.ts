@@ -1,6 +1,6 @@
 import { exec } from 'child_process'
 import { existsSync } from 'fs'
-import { readdir, stat, readFile } from 'fs/promises'
+import { readdir, stat, open } from 'fs/promises'
 import { homedir } from 'os'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
@@ -25,7 +25,7 @@ export class CodexAdapter {
   getCliPath(): Promise<string> {
     const cmd = process.platform === 'win32' ? 'where codex' : 'which codex'
     return new Promise((resolve, reject) => {
-      exec(cmd, (error, stdout) => {
+      exec(cmd, { timeout: 5000 }, (error, stdout) => {
         if (error) return reject(new Error('Codex CLI not found in PATH'))
         resolve(stdout.trim().split('\n')[0])
       })
@@ -34,7 +34,7 @@ export class CodexAdapter {
 
   getVersion(): Promise<string> {
     return new Promise((resolve, reject) => {
-      exec('codex --version', (error, stdout) => {
+      exec('codex --version', { timeout: 5000 }, (error, stdout) => {
         if (error) return reject(new Error('Failed to get Codex version'))
         resolve(stdout.trim())
       })
@@ -165,8 +165,19 @@ export class CodexAdapter {
 
   private async readSessionMeta(filePath: string): Promise<{ id: string; cwd: string; startedAt?: number } | null> {
     try {
-      const content = await readFile(filePath, 'utf8')
-      const firstLine = content.split(/\r?\n/, 1)[0]
+      // session_meta 永远在首行且远小于 4KB：只读文件头部，避免为取一行读入
+      // 整个（可达数十 MB 的）jsonl——发现扫描最多 600 个文件，全量读会拖垮主进程。
+      const handle = await open(filePath, 'r')
+      let head: string
+      try {
+        const buf = Buffer.alloc(4096)
+        const { bytesRead } = await handle.read(buf, 0, buf.length, 0)
+        head = buf.subarray(0, bytesRead).toString('utf8')
+      } finally {
+        await handle.close()
+      }
+
+      const firstLine = head.split(/\r?\n/, 1)[0]
       if (!firstLine) return null
 
       const parsed = JSON.parse(firstLine) as {

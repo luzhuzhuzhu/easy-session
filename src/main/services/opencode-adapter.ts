@@ -35,7 +35,7 @@ export class OpenCodeAdapter {
     if (this.customPath) return this.customPath
     const cmd = process.platform === 'win32' ? 'where opencode' : 'which opencode'
     return new Promise((resolve, reject) => {
-      exec(cmd, (error, stdout) => {
+      exec(cmd, { timeout: 5000 }, (error, stdout) => {
         if (error) return reject(new Error('OpenCode CLI not found in PATH'))
         resolve(stdout.trim().split('\n')[0])
       })
@@ -45,7 +45,7 @@ export class OpenCodeAdapter {
   async getVersion(): Promise<string> {
     const executable = this.getExecutable()
     return new Promise((resolve, reject) => {
-      exec(`"${executable}" --version`, (error, stdout) => {
+      exec(`"${executable}" --version`, { timeout: 5000 }, (error, stdout) => {
         if (error) return reject(new Error('Failed to get OpenCode version'))
         resolve(stdout.trim())
       })
@@ -55,7 +55,7 @@ export class OpenCodeAdapter {
   async getVersionWithPath(preferredPath?: string): Promise<string> {
     const executable = this.getExecutable(preferredPath)
     return new Promise((resolve, reject) => {
-      exec(`"${executable}" --version`, (error, stdout) => {
+      exec(`"${executable}" --version`, { timeout: 5000 }, (error, stdout) => {
         if (error) return reject(new Error('Failed to get OpenCode version'))
         resolve(stdout.trim())
       })
@@ -147,7 +147,9 @@ export class OpenCodeAdapter {
     const targetPath = this.normalizePath(projectPath)
 
     return new Promise((resolve) => {
-      exec(command, { cwd: projectPath || undefined, maxBuffer: 10 * 1024 * 1024 }, (error, stdout) => {
+      // 超时兜底：CLI 卡住（首次运行更新检查等）时 discovery 不能无限 pending，
+      // 否则重试循环会堆积挂起子进程且阻塞启动链。
+      exec(command, { cwd: projectPath || undefined, maxBuffer: 10 * 1024 * 1024, timeout: 8000 }, (error, stdout) => {
         if (error || !stdout) {
           resolve(null)
           return

@@ -29,7 +29,7 @@ export class ClaudeAdapter {
   getCliPath(): Promise<string> {
     const cmd = process.platform === 'win32' ? 'where claude' : 'which claude'
     return new Promise((resolve, reject) => {
-      exec(cmd, (error, stdout) => {
+      exec(cmd, { timeout: 5000 }, (error, stdout) => {
         if (error) return reject(new Error('Claude CLI not found in PATH'))
         resolve(stdout.trim().split('\n')[0])
       })
@@ -38,7 +38,7 @@ export class ClaudeAdapter {
 
   getVersion(): Promise<string> {
     return new Promise((resolve, reject) => {
-      exec('claude --version', (error, stdout) => {
+      exec('claude --version', { timeout: 5000 }, (error, stdout) => {
         if (error) return reject(new Error('Failed to get Claude version'))
         resolve(stdout.trim())
       })
