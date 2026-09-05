@@ -3,6 +3,7 @@ import type {
   ClaudeSessionOptions,
   CodexSessionOptions,
   OpenCodeSessionOptions,
+  GeminiSessionOptions,
   TerminalSessionOptions
 } from './types'
 
@@ -58,7 +59,15 @@ export interface TerminalSession extends SessionBase {
   options: TerminalSessionOptions
 }
 
-export type Session = ClaudeSession | CodexSession | OpenCodeSession | TerminalSession
+// FEAT-3：Gemini 会话（resume 失效自动重启对齐 Claude：一次性守卫防循环）。
+export interface GeminiSession extends SessionBase {
+  type: 'gemini'
+  options: GeminiSessionOptions
+  geminiSessionId: string | null
+  invalidSessionId?: boolean
+}
+
+export type Session = ClaudeSession | CodexSession | OpenCodeSession | TerminalSession | GeminiSession
 
 export interface CreateSessionParams {
   name?: string

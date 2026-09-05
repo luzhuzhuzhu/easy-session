@@ -68,9 +68,11 @@
         :claude-path="settingsStore.settings.claudePath"
         :codex-path="settingsStore.settings.codexPath"
         :opencode-path="settingsStore.settings.opencodePath"
+        :gemini-path="settingsStore.settings.geminiPath"
         @update:claude-path="settingsStore.settings.claudePath = $event; handleSave()"
         @update:codex-path="settingsStore.settings.codexPath = $event; handleSave()"
         @update:opencode-path="settingsStore.settings.opencodePath = $event; handleSave()"
+        @update:gemini-path="settingsStore.settings.geminiPath = $event; handleSave()"
       />
     </div>
 
@@ -390,9 +392,11 @@ const settingsSections = computed<SettingsSectionMeta[]>(() => [
       t('settings.claudePath'),
       t('settings.codexPath'),
       t('settings.opencodePath'),
+      t('settings.geminiPath'),
       'Claude',
       'Codex',
-      'OpenCode'
+      'OpenCode',
+      'Gemini'
     ]
   },
   {

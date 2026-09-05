@@ -55,9 +55,21 @@ export const CODEX_BUILTIN_ARGS: BuiltinArgDescriptor[] = [
   { flag: '--enable', control: 'text', placeholder: 'feature-name', help: 'codexEnable' }
 ]
 
+// FEAT-3：Gemini CLI 内置参数（依据 gemini-cli 官方参数：--model / --approval-mode）
+export const GEMINI_BUILTIN_ARGS: BuiltinArgDescriptor[] = [
+  { flag: '--model', control: 'text', placeholder: 'gemini-2.5-pro', help: 'geminiModel' },
+  {
+    flag: '--approval-mode',
+    control: 'select',
+    options: ['default', 'auto_edit', 'yolo'],
+    help: 'geminiApprovalMode'
+  }
+]
+
 export function getBuiltinArgDescriptors(cliType: string): BuiltinArgDescriptor[] {
   if (cliType === 'claude') return CLAUDE_BUILTIN_ARGS
   if (cliType === 'codex') return CODEX_BUILTIN_ARGS
+  if (cliType === 'gemini') return GEMINI_BUILTIN_ARGS
   return []
 }
 

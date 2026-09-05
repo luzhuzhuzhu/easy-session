@@ -1,5 +1,6 @@
 import type { OutputEvent, OutputLine, SessionFilter, SessionStatus } from '../api/session'
 import type { ProjectPromptCliType, ProjectPromptFile } from '../api/project'
+import type { CliType } from '@shared/cli-types'
 import type {
   InstanceCapabilities,
   UnifiedProject,
@@ -7,7 +8,7 @@ import type {
 } from '../models/unified-resource'
 
 export interface GatewayCreateSessionParams {
-  type: 'claude' | 'codex' | 'opencode' | 'terminal'
+  type: CliType
   projectId?: string
   projectPath?: string
   name?: string

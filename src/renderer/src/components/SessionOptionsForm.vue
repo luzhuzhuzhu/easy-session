@@ -368,6 +368,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { CliType } from '@shared/cli-types'
 import { useSettingsStore } from '@/stores/settings'
 import { useToast } from '@/composables/useToast'
 import UiIcon from '@/components/ui/UiIcon.vue'
@@ -405,7 +406,7 @@ import {
 } from '@/models/cli-launch-args'
 
 const props = withDefaults(defineProps<{
-  cliType: 'claude' | 'codex' | 'opencode' | 'terminal'
+  cliType: CliType
   initialOptions?: Record<string, unknown>
 }>(), {
   initialOptions: undefined
@@ -906,6 +907,16 @@ function buildOptions(): Record<string, unknown> {
       shellArgs: shellArgs.length > 0 ? shellArgs : undefined,
       startupCommands: startupCommands.length > 0 ? startupCommands : undefined,
       appearance
+    })
+  }
+
+  // FEAT-3：gemini 与 claude 同构——模型/审批模式经 customArgs 或专属字段下发
+  if (props.cliType === 'gemini') {
+    const args = collectAllArgs()
+    return mergeWithInitial({
+      customArgs: args.length > 0 ? args : undefined,
+      appearance,
+      model: undefined
     })
   }
 

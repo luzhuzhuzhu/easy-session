@@ -28,6 +28,15 @@
         @change="$emit('update:opencode-path', ($event.target as HTMLInputElement).value)"
       />
     </div>
+    <div class="setting-row">
+      <label>{{ $t('settings.geminiPath') }}</label>
+      <input
+        :value="geminiPath"
+        type="text"
+        :placeholder="$t('settings.autoDetect')"
+        @change="$emit('update:gemini-path', ($event.target as HTMLInputElement).value)"
+      />
+    </div>
   </section>
 </template>
 
@@ -38,12 +47,14 @@ defineProps<{
   claudePath: string
   codexPath: string
   opencodePath: string
+  geminiPath: string
 }>()
 
 defineEmits<{
   'update:claude-path': [value: string]
   'update:codex-path': [value: string]
   'update:opencode-path': [value: string]
+  'update:gemini-path': [value: string]
 }>()
 
 useI18n()

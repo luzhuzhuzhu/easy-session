@@ -49,6 +49,15 @@ export const terminalOptionsSchema = z
   })
   .passthrough()
 
+// FEAT-3：Gemini CLI launch options。
+export const geminiOptionsSchema = z
+  .object({
+    model: z.string().optional(),
+    approvalMode: z.enum(['default', 'auto_edit', 'yolo']).optional(),
+    customArgs: z.array(customCliArgSchema).optional()
+  })
+  .passthrough()
+
 export interface CliRegistryEntry {
   id: string
   /** settings 中该 CLI 的自定义可执行路径键（无则用 PATH 探测） */
@@ -61,7 +70,8 @@ export const CLI_REGISTRY: CliRegistryEntry[] = [
   { id: 'claude', settingsPathKey: 'claudePath', optionsSchema: claudeOptionsSchema },
   { id: 'codex', settingsPathKey: 'codexPath', optionsSchema: codexOptionsSchema },
   { id: 'opencode', settingsPathKey: 'opencodePath', optionsSchema: opencodeOptionsSchema },
-  { id: 'terminal', optionsSchema: terminalOptionsSchema }
+  { id: 'terminal', optionsSchema: terminalOptionsSchema },
+  { id: 'gemini', settingsPathKey: 'geminiPath', optionsSchema: geminiOptionsSchema }
 ]
 
 // 可 PATH 探测的 CLI（terminal 不参与 cli:check）。

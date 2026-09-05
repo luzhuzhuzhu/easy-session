@@ -240,6 +240,7 @@ session: {
     codex: 'Codex',
     opencode: 'OpenCode',
     terminal: '终端',
+    gemini: 'Gemini',
     noSessions: '暂无会话，点击上方按钮创建',
     noSessionsInProject: '该项目下暂无会话',
     instanceEmpty: '该实例下暂无项目或会话',
@@ -379,7 +380,9 @@ session: {
         claudeAddDir: '允许工具访问的额外目录；需要多个目录时可在自定义参数中重复添加 --add-dir',
         codexModel: '本次会话使用的模型，例如 gpt-5.5 / gpt-5.4 / gpt-5.4-mini',
         codexProfile: '使用 ~/.codex/config.toml 中定义的配置档（profile）作为默认选项',
-        codexEnable: '启用一个 feature flag，等价于 -c features.<名称>=true；需要多个时可在自定义参数中重复添加 --enable'
+        codexEnable: '启用一个 feature flag，等价于 -c features.<名称>=true；需要多个时可在自定义参数中重复添加 --enable',
+        geminiModel: '本次会话使用的模型，例如 gemini-2.5-pro / gemini-2.5-flash',
+        geminiApprovalMode: '审批模式：default 每步询问；auto_edit 自动接受文件编辑；yolo 跳过所有确认（有风险）'
       },
       launchArgs: '启动参数',
       appearance: '终端外观',
@@ -1049,6 +1052,7 @@ settings: {
     claudePath: 'Claude CLI 路径',
     codexPath: 'Codex CLI 路径',
     opencodePath: 'OpenCode CLI 路径',
+    geminiPath: 'Gemini CLI 路径',
     sessionWakeConfirm: '点击休眠会话时弹出启动确认',
     sessionExitNotify: '会话退出通知',
     sessionExitNotifyAbnormal: '仅异常退出时提醒',

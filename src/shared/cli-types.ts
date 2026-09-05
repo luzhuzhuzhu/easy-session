@@ -1,7 +1,7 @@
 // 会话类型的单一来源：主进程、远程路由、渲染层统一从这里取值，
 // 新增会话类型时只改这一个文件（显示名、徽章字母、运行时校验随之生效）。
 
-export const CLI_TYPES = ['claude', 'codex', 'opencode', 'terminal'] as const
+export const CLI_TYPES = ['claude', 'codex', 'opencode', 'terminal', 'gemini'] as const
 
 export type CliType = (typeof CLI_TYPES)[number]
 
@@ -13,14 +13,16 @@ export const CLI_TYPE_DISPLAY_NAMES: Record<CliType, string> = {
   claude: 'Claude',
   codex: 'Codex',
   opencode: 'OpenCode',
-  terminal: 'Terminal'
+  terminal: 'Terminal',
+  gemini: 'Gemini'
 }
 
 export const CLI_TYPE_BADGE_LETTERS: Record<CliType, string> = {
   claude: 'C',
   codex: 'X',
   opencode: 'O',
-  terminal: 'T'
+  terminal: 'T',
+  gemini: 'G'
 }
 
 export function cliTypeBadgeLetter(type: string): string {

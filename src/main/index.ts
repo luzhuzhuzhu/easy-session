@@ -15,6 +15,8 @@ import { ClaudeSessionLifecycle } from './services/claude-session-lifecycle'
 import { CodexSessionLifecycle } from './services/codex-session-lifecycle'
 import { OpenCodeSessionLifecycle } from './services/opencode-session-lifecycle'
 import { TerminalSessionLifecycle } from './services/terminal-session-lifecycle'
+import { GeminiAdapter } from './services/gemini-adapter'
+import { GeminiSessionLifecycle } from './services/gemini-session-lifecycle'
 import { ProjectManager } from './services/project-manager'
 import { SkillManager } from './services/skill-manager'
 import { DataStore } from './services/data-store'
@@ -98,13 +100,16 @@ const claudeLifecycle = new ClaudeSessionLifecycle(claudeAdapter, outputManager)
 const codexLifecycle = new CodexSessionLifecycle(codexAdapter, outputManager)
 const opencodeLifecycle = new OpenCodeSessionLifecycle(openCodeAdapter, outputManager)
 const terminalLifecycle = new TerminalSessionLifecycle(terminalAdapter, outputManager)
+const geminiAdapter = new GeminiAdapter(cliManager)
+const geminiLifecycle = new GeminiSessionLifecycle(geminiAdapter, outputManager)
 const sessionManager = new SessionManager(
   cliManager,
   claudeLifecycle,
   codexLifecycle,
   outputManager,
   opencodeLifecycle,
-  terminalLifecycle
+  terminalLifecycle,
+  geminiLifecycle
 )
 const projectManager = new ProjectManager()
 const skillManager = new SkillManager(sessionManager)

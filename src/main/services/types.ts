@@ -70,3 +70,11 @@ export interface OpenCodeSessionOptions {
   attachUrl?: string
   serverMode?: 'off' | 'attach'
 }
+
+// FEAT-3：Gemini CLI 一等支持。gemini --resume <id> / --checkpointing 对齐
+// 其官方参数；model 走 --model，approveMode 走 --approval-mode。
+export interface GeminiSessionOptions {
+  model?: string
+  approvalMode?: 'default' | 'auto_edit' | 'yolo'
+  customArgs?: CustomCliArgument[]
+}

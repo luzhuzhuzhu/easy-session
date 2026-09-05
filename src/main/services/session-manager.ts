@@ -66,6 +66,8 @@ export class SessionManager {
     outputManager: SessionOutputManager,
     private opencodeLifecycle?: OpenCodeSessionLifecycle,
     private terminalLifecycle?: TerminalSessionLifecycle,
+    // FEAT-3：Gemini lifecycle（可选注入；缺省 noop 与 terminal 同策略）。
+    private geminiLifecycle?: ISessionLifecycle,
     // 可注入广播器（默认走 BrowserWindow）：测试可传桩，无需依赖 Electron。
     broadcaster?: SessionBroadcaster
   ) {
@@ -89,7 +91,8 @@ export class SessionManager {
       claude: claudeLifecycle,
       codex: codexLifecycle,
       opencode: this.opencodeLifecycle || createNoopLifecycle('OpenCode'),
-      terminal: this.terminalLifecycle || createNoopLifecycle('Terminal')
+      terminal: this.terminalLifecycle || createNoopLifecycle('Terminal'),
+      gemini: this.geminiLifecycle || createNoopLifecycle('Gemini')
     }
     claudeLifecycle.setPersistCallback(() => this.persist())
     codexLifecycle.setPersistCallback(() => this.persist())

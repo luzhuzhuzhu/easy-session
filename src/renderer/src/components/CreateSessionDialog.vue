@@ -193,7 +193,7 @@ useOverlayStack({
   onEscape: () => emit('cancel')
 })
 
-type SessionType = 'claude' | 'codex' | 'opencode' | 'terminal'
+type SessionType = 'claude' | 'codex' | 'opencode' | 'terminal' | 'gemini'
 type CliStatus = 'checking' | 'available' | 'unavailable' | 'remote'
 
 const form = ref({ name: '', icon: '', type: 'claude' as SessionType, projectPath: '' })

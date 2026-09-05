@@ -240,6 +240,7 @@ session: {
     codex: 'Codex',
     opencode: 'OpenCode',
     terminal: 'Terminal',
+    gemini: 'Gemini',
     noSessions: 'No sessions yet, click the button above to create one',
     noSessionsInProject: 'No sessions in this project',
     instanceEmpty: 'No projects or sessions in this instance',
@@ -379,7 +380,9 @@ session: {
         claudeAddDir: 'Extra directory the tools may access; add --add-dir again under custom arguments for multiple directories',
         codexModel: 'Model for this session, e.g. gpt-5.5 / gpt-5.4 / gpt-5.4-mini',
         codexProfile: 'Use a profile defined in ~/.codex/config.toml for default options',
-        codexEnable: 'Enable a feature flag, equivalent to -c features.<name>=true; add --enable again under custom arguments for multiple flags'
+        codexEnable: 'Enable a feature flag, equivalent to -c features.<name>=true; add --enable again under custom arguments for multiple flags',
+        geminiModel: 'Model for this session, e.g. gemini-2.5-pro / gemini-2.5-flash',
+        geminiApprovalMode: 'Approval mode: default asks each step; auto_edit auto-accepts file edits; yolo skips all confirmations (risky)'
       },
       launchArgs: 'Launch arguments',
       appearance: 'Terminal appearance',
@@ -1049,6 +1052,7 @@ settings: {
     claudePath: 'Claude CLI Path',
     codexPath: 'Codex CLI Path',
     opencodePath: 'OpenCode CLI Path',
+    geminiPath: 'Gemini CLI Path',
     sessionWakeConfirm: 'Confirm before starting sleeping sessions',
     sessionExitNotify: 'Session Exit Notification',
     sessionExitNotifyAbnormal: 'Only on abnormal exit',
