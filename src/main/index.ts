@@ -19,6 +19,7 @@ import { ProjectManager } from './services/project-manager'
 import { SkillManager } from './services/skill-manager'
 import { DataStore } from './services/data-store'
 import { registerAllHandlers } from './ipc'
+import { getProbeableCliIds } from './ipc/cli-registry'
 import { registerCrashHandlers, recordCrashAndDecide, CRASH_NOTICE_CHANNEL } from './ipc/crash-handlers'
 import { onSessionExitNotifyPrefChange, onTaskNotifyPrefChange } from './ipc/settings-handlers'
 import { registerRemoteInstanceHandlers } from './ipc/remote-instance-handlers'
@@ -641,7 +642,8 @@ ipcMain.handle('shell:openPath', async (_event, targetPath: string) => {
 
 ipcMain.handle('cli:check', (_event, cliName: string, preferredPath?: string) => {
   if (process.env.NODE_ENV === 'test') return Promise.resolve({ available: false })
-  const allowedClis = ['claude', 'codex', 'opencode']
+  // FEAT-2：可探测 CLI 白名单由注册表派生（有 settingsPathKey 的即需要 PATH 探测）。
+  const allowedClis = getProbeableCliIds()
   if (!allowedClis.includes(cliName)) return Promise.resolve({ available: false })
 
   const normalizedPreferredPath =

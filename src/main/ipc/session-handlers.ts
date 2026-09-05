@@ -3,54 +3,12 @@ import { z } from 'zod'
 import { SessionManager } from '../services/session-manager'
 import { detectShells } from '../services/shell-detector'
 import type { CreateSessionParams, SessionFilter, Session } from '../services/session-types'
+import { CLI_REGISTRY } from './cli-registry'
 
 // session:create 的形状校验：用 zod 取代「不校验直接强转持久化」。
 // options 用 passthrough（校验已知字段类型，放过未知字段保兼容），校验作为准入门，
 // 通过后仍传原始 params，避免误删字段。
-const customCliArgSchema = z.object({ name: z.string(), value: z.string().optional() }).passthrough()
-
-const claudeOptionsSchema = z
-  .object({
-    model: z.string().optional(),
-    allowedTools: z.array(z.string()).optional(),
-    customArgs: z.array(customCliArgSchema).optional()
-  })
-  .passthrough()
-
-const codexOptionsSchema = z
-  .object({
-    model: z.string().optional(),
-    permissionsMode: z.enum(['read-only', 'default', 'full-access']).optional(),
-    sandboxMode: z.enum(['read-only', 'workspace-write', 'danger-full-access']).optional(),
-    approvalMode: z
-      .enum(['untrusted', 'on-request', 'never', 'suggest', 'auto-edit', 'full-auto'])
-      .optional(),
-    inlineMode: z.boolean().optional(),
-    customArgs: z.array(customCliArgSchema).optional()
-  })
-  .passthrough()
-
-const opencodeOptionsSchema = z
-  .object({
-    cliPath: z.string().optional(),
-    model: z.string().optional(),
-    agent: z.string().optional(),
-    prompt: z.string().optional(),
-    sessionId: z.string().optional(),
-    continueLast: z.boolean().optional(),
-    fork: z.boolean().optional(),
-    attachUrl: z.string().optional(),
-    serverMode: z.enum(['off', 'attach']).optional()
-  })
-  .passthrough()
-
-const terminalOptionsSchema = z
-  .object({
-    shell: z.string().optional(),
-    shellArgs: z.array(customCliArgSchema).optional(),
-    startupCommands: z.array(z.string()).optional()
-  })
-  .passthrough()
+// FEAT-2：discriminatedUnion 由 cli-registry 派生，新增 CLI 只改注册表。
 
 const baseSessionFields = {
   name: z.string().optional(),
@@ -62,12 +20,16 @@ const baseSessionFields = {
   collabMode: z.enum(['terminal-readonly', 'terminal-nudge', 'terminal-inject']).optional()
 }
 
-const createSessionSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('claude'), options: claudeOptionsSchema.optional(), ...baseSessionFields }),
-  z.object({ type: z.literal('codex'), options: codexOptionsSchema.optional(), ...baseSessionFields }),
-  z.object({ type: z.literal('opencode'), options: opencodeOptionsSchema.optional(), ...baseSessionFields }),
-  z.object({ type: z.literal('terminal'), options: terminalOptionsSchema.optional(), ...baseSessionFields })
-])
+const OPTIONS_SCHEMAS: Record<string, z.ZodTypeAny> = Object.fromEntries(
+  CLI_REGISTRY.map((entry) => [entry.id, entry.optionsSchema])
+)
+
+const createSessionSchema = z.discriminatedUnion(
+  'type',
+  CLI_REGISTRY.map((entry) =>
+    z.object({ type: z.literal(entry.id as never), options: OPTIONS_SCHEMAS[entry.id].optional(), ...baseSessionFields })
+  ) as never
+)
 
 function assertString(value: unknown, name: string): asserts value is string {
   if (typeof value !== 'string' || !value) {
