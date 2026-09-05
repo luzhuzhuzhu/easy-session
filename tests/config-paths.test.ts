@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { homedir } from 'os'
+import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import {
   CLAUDE_GLOBAL_CONFIG,
@@ -38,7 +38,8 @@ describe('config-paths', () => {
 
   describe('claudeProjectConfig', () => {
     it('在项目目录下拼出 .claude/settings.json', () => {
-      const projectPath = join('D:', 'work', 'demo')
+      // 平台无关：用 tmpdir 拼项目路径，避免断言绑定 Windows 盘符风格
+      const projectPath = join(tmpdir(), 'es-cfg-demo')
       expect(claudeProjectConfig(projectPath)).toBe(join(projectPath, '.claude', 'settings.json'))
     })
 

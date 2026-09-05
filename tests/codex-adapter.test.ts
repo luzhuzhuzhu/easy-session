@@ -1,6 +1,10 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, rmSync, writeFileSync, utimesSync } from 'fs'
+import { mkdirSync, rmSync, writeFileSync, utimesSync, realpathSync } from 'fs'
+// vi.mock('os') 拦截了整个 os 模块；真实 tmpdir 需在 mock 建立前快照。
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const tmpdirUnsafe: () => string = require('os').tmpdir
 import { dirname, join } from 'path'
+import { tmpdir } from 'os'
 import { randomUUID } from 'crypto'
 
 const mocked = vi.hoisted(() => ({
@@ -37,7 +41,7 @@ describe('CodexAdapter.findSessionIdByProjectPath', () => {
   let adapter: CodexAdapter
 
   beforeEach(() => {
-    tempHome = join(process.cwd(), '.tmp-tests', `codex-adapter-${randomUUID()}`)
+    tempHome = join(tmpdirUnsafe(), `codex-adapter-${randomUUID()}`)
     mocked.home = tempHome
     adapter = new CodexAdapter({} as any)
   })
