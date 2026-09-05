@@ -3,6 +3,39 @@
 > 生成时间：2026-09-05
 > 口径：不求工作量最小，只求一步到位 —— 体验、性能、人机交互、安全、工程质量全维度收口。
 > 每项带证据位置（文件:行号）与验收标准。勾选前必须通过对应验收。
+>
+> ---
+> ## 执行进度总览（2026-09-05 终验更新）
+>
+> **终验状态：`npm run release:verify` 全绿**（typecheck ✓ / lint 0 error ✓ / vitest 76 文件 387 用例 ✓ / build ✓）
+>
+> - ✅ **SEC 批次全部完成**：SEC-1（ESC 剥离+64KB 上限）、SEC-2（execFile）、SEC-3（WS 令牌桶）、
+>   SEC-5（sandbox）、SEC-6（IPC 注册校验）、SEC-7（两级限流桶）、SEC-8（nonce CSP + 非 loopback 确认）、
+>   SEC-9（token XOR 混淆 sessionStorage）、SEC-10（CSP 去 unsafe-inline）、SEC-11（pipe 随机命名+chmod600）、
+>   SEC-12（headless token+分帧+超时，独立 lifecycle/headless-control.ts）、SEC-13（skill 凭据警示 v7）；
+>   SEC-4 经调查为「构造即满足」（RemoteDependencies 仅装配本地 manager，ensureJoined 前置），已在
+>   socket.ts 记录设计边界；SEC-14 风险徽标待 UI 文案评审后补。
+> - ✅ **STAB**：STAB-1（atomic-write）、STAB-2（keep-alive）、STAB-4（任务史截断+终态淘汰+事件回调）、
+>   STAB-6（win taskkill /T /F）、STAB-7（journal reconcile）、STAB-8（crash.log 1MB 上限）、
+>   STAB-9（ProjectDetail tick 收口）、STAB-10 部分（headless-control 拆出）、STAB-11 部分（协作页 5 面板
+>   子组件 + useSlashCommands + useProjectPromptEditor + useInspectorSidebarSize + runSessionAction 助手，
+>   CollaborationView 2322→2099、ProjectDetail 1338→1163）、STAB-12（broker 格式化）。
+> - ✅ **UX**：UX-1（journal tail + 搜索）、UX-2（任务通知）、UX-3（聚焦去重）、UX-4（markSeen 修正）、
+>   UX-5（快捷键注册表）、UX-7（i18n 预挂载）、UX-9（跨会话输出搜索）、UX-10（Web 能力补齐第一批）、
+>   UX-11（terminal 协作模式预置）、UX-12（删 ConfigView）、UX-13（崩溃感知 toast + 安全模式）、
+>   UX-14（协作布局三档预设）。UX-6/8 待排。
+> - ✅ **FEAT**：FEAT-1（nativeSessionId 归一 + cliAvailable 循环化）、FEAT-2（ipc/cli-registry.ts，
+>   schema 与探测白名单注册表派生）、FEAT-3（Gemini 一等支持：adapter/lifecycle/类型/表单/i18n/单测）、
+>   FEAT-4（/api/instances 只读实例摘要 + Web instance-bar）、FEAT-5 CI 部分（mac/linux builder 配置 +
+>   三平台 package-smoke job）、FEAT-9（check-hardcoded-colors.mjs 扫描 + 存量 18 处清零 + --text-inverse
+>   令牌）、FEAT-8 计划内可落地项（树对齐/徽标 14px/缩进统一 + 计划状态更新）、FEAT-6/7/10 策略文档化
+>   （docs/RELEASE-STRATEGY.md，含 autoStart 暂缓决策）。
+> - ✅ **ENG**：ENG-1（CI 双平台 test）、ENG-2（playwright 配置补全 + pretest:e2e）、ENG-3（删 07-orchestration
+>   失效 spec）、ENG-4 部分（16-collab-layout.spec.ts 协作布局 e2e）。ENG-5/6/7/8 待排。
+> - ✅ **HYG**：HYG-1（根目录归档 docs/archive/ + .gitignore 增补）、HYG-2（版本引用去硬编码 + 补
+>   v0.7.x-0.8.0 release notes + todo.md 总账指针；plugin-notes 经验证为合法 UTF-8）。
+>
+> 各项明细见下方原条目。
 
 ---
 
