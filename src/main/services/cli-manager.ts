@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import { BrowserWindow } from 'electron'
+import { execFile } from 'child_process'
 import { homedir } from 'os'
 import { delimiter as pathDelimiter } from 'path'
 import { TextDecoder } from 'util'
@@ -359,7 +360,6 @@ export class CliManager {
     const pid = child.pid
     if (process.platform === 'win32' && pid) {
       try {
-        const { execFile } = require('child_process') as typeof import('child_process')
         execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { timeout: 5000 }, () => undefined)
       } catch {
         // taskkill 不可用时退回纯 kill 语义

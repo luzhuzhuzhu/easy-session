@@ -1,5 +1,5 @@
 import { app, BrowserWindow, shell, ipcMain, dialog, Notification } from 'electron'
-import { existsSync, appendFileSync } from 'fs'
+import { existsSync, appendFileSync, statSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { exec, execFile } from 'child_process'
 import dotenv from 'dotenv'
@@ -383,11 +383,9 @@ function createWindow(): void {
       const crashLogPath = join(app.getPath('userData'), 'renderer-crash.log')
       const entry = `[${new Date().toISOString()}] reason=${reason} exitCode=${exitCode}\n`
       try {
-        const { statSync, readFileSync } = require('fs') as typeof import('fs')
         const stats = statSync(crashLogPath)
         if (stats.size > 1024 * 1024) {
           const tail = readFileSync(crashLogPath, 'utf-8').slice(-512 * 1024)
-          const { writeFileSync } = require('fs') as typeof import('fs')
           writeFileSync(crashLogPath, tail, 'utf-8')
         }
       } catch {

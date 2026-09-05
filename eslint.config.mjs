@@ -18,6 +18,8 @@ export default tseslint.config(
       'node_modules/**',
       'playwright-report/**',
       'test-results/**',
+      // 本地遗留的 CLI 参考仓库（.gitignore 已排除），各自带独立 ESLint 配置
+      '.tmp_remote_cli_repos/**',
       '**/*.d.ts',
     ],
   },
@@ -59,6 +61,16 @@ export default tseslint.config(
         afterAll: 'readonly',
         beforeEach: 'readonly',
         afterEach: 'readonly',
+      },
+    },
+  },
+
+  // Node 脚本（scripts/*.mjs）：console/process 等 Node 全局。
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
       },
     },
   },
