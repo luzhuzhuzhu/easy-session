@@ -1,7 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain, dialog, Notification } from 'electron'
 import { existsSync, appendFileSync } from 'fs'
 import { join } from 'path'
-import { exec } from 'child_process'
+import { exec, execFile } from 'child_process'
 import dotenv from 'dotenv'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { CliManager } from './services/cli-manager'
@@ -19,7 +19,7 @@ import { ProjectManager } from './services/project-manager'
 import { SkillManager } from './services/skill-manager'
 import { DataStore } from './services/data-store'
 import { registerAllHandlers } from './ipc'
-import { onSessionExitNotifyPrefChange } from './ipc/settings-handlers'
+import { onSessionExitNotifyPrefChange, onTaskNotifyPrefChange } from './ipc/settings-handlers'
 import { registerRemoteInstanceHandlers } from './ipc/remote-instance-handlers'
 import { registerRemoteServiceHandlers } from './ipc/remote-service-handlers'
 import { registerCloudflareTunnelHandlers } from './ipc/cloudflare-tunnel-handlers'
@@ -37,6 +37,7 @@ import { AgentBus } from './services/agent-bus'
 import { ES_SYSTEM_PROMPT_HINT, getEsSkillMarkdown } from './services/agent-bus/skill'
 import { aggregateBusResults, type BusTargetResult } from './services/agent-bus/bus-action-result'
 import { createLogger } from './services/logger'
+import { HeadlessControlServer } from './lifecycle/headless-control'
 
 const log = createLogger('main')
 
@@ -49,6 +50,15 @@ function loadEnvironmentFiles(): void {
 }
 
 loadEnvironmentFiles()
+
+// headless（引擎模式）：外部宿主（如 DSH 插件包）以 `--headless` 参数或
+// EASYSESSION_HEADLESS=1 启动本应用时，不创建任何窗口，只跑主进程服务
+// （会话/终端管理 + remote API），供外部宿主经 EASYSESSION_REMOTE_* 环境变量
+// 配置 remote 服务后全权驱动。窗口相关的副作用（通知、任务栏闪烁、激活窗口等）
+// 一律旁路。注意：single instance lock 仍然生效——headless 引擎与桌面 GUI
+// 同一 userData 下互斥，外部宿主应先探测既有实例的 remote 端口再决定拉起。
+const isHeadless =
+  process.argv.includes('--headless') || process.env.EASYSESSION_HEADLESS === '1'
 
 // 开发模式使用独立的 app 名与 userData 目录，与已安装版隔离：
 // 否则二者共享同一 single instance lock —— 安装版在运行时，dev 实例（同名 easysession）
@@ -64,6 +74,9 @@ if (!hasSingleInstanceLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
+    // headless 引擎没有窗口可聚焦；同 userData 的桌面实例也因锁被本进程持有而无法
+    // 启动，故二次启动请求在引擎模式下直接忽略（外部宿主统一走 remote 协议）。
+    if (isHeadless) return
     const existing = BrowserWindow.getAllWindows()[0]
     if (!existing || existing.isDestroyed()) return
     if (existing.isMinimized()) existing.restore()
@@ -112,6 +125,8 @@ let sessionExitNotifyPref: 'abnormal' | 'off' | 'all' = 'abnormal'
 
 sessionManager.setExitNotifier((session, exitCode) => {
   if (isShuttingDown) return
+  // 引擎模式没有窗口：会话退出提醒没有可承载的 UI（通知点击需要聚焦窗口），直接跳过。
+  if (isHeadless) return
   const abnormal = exitCode !== 0
   if (sessionExitNotifyPref === 'off') return
   if (sessionExitNotifyPref === 'abnormal' && !abnormal) return
@@ -164,15 +179,60 @@ onSessionExitNotifyPrefChange((pref) => {
   }
 })
 
+// UX-2：任务事件系统通知。偏好 taskNotify：'fail' 仅失败/阻塞（默认）/ 'all' 全部终态 / 'off'。
+let taskNotifyPref: 'fail' | 'off' | 'all' = 'fail'
+onTaskNotifyPrefChange((pref) => {
+  if (pref === 'fail' || pref === 'off' || pref === 'all') {
+    taskNotifyPref = pref
+  }
+})
+
+agentBus.onTaskEvent((task, next) => {
+  if (isShuttingDown || isHeadless) return
+  if (taskNotifyPref === 'off') return
+  const interesting: Record<string, boolean> = {
+    failed: true,
+    blocked: true,
+    done: taskNotifyPref === 'all',
+    review: taskNotifyPref === 'all'
+  }
+  if (!interesting[next]) return
+  const win = getMainWindow()
+  if (win && win.isFocused()) return
+  const emoji = next === 'done' ? '🎉' : next === 'failed' ? '❌' : next === 'blocked' ? '⛔' : '🧾'
+  const title = `任务 ${task.id} ${next}`
+  const body = `${emoji} 「${task.title}」${next === 'blocked' ? '被阻塞，需要你的澄清' : `状态更新为 ${next}`}`
+  try {
+    if (Notification.isSupported()) {
+      const notification = new Notification({ title, body, silent: false })
+      notification.on('click', () => {
+        const target = getMainWindow()
+        if (!target) return
+        if (target.isMinimized()) target.restore()
+        target.show()
+        target.focus()
+        target.webContents.send('collab:focus', task.id)
+      })
+      notification.show()
+    }
+  } catch (err) {
+    log.warn({ err }, '[notify] task notification failed')
+  }
+  if (win && !win.isFocused()) win.flashFrame(true)
+})
+
 // 应用启动时读取一次已保存的通知偏好（settings 文件由 renderer 首次保存，读失败保持默认）。
 void (async () => {
   try {
     const { readFile } = await import('fs/promises')
     const { join } = await import('path')
     const raw = await readFile(join(app.getPath('userData'), 'app-settings.json'), 'utf-8')
-    const parsed = JSON.parse(raw) as { sessionExitNotify?: unknown }
+    const parsed = JSON.parse(raw) as { sessionExitNotify?: unknown; taskNotify?: unknown }
     if (parsed.sessionExitNotify === 'abnormal' || parsed.sessionExitNotify === 'off' || parsed.sessionExitNotify === 'all') {
       sessionExitNotifyPref = parsed.sessionExitNotify
+    }
+    if (parsed.taskNotify === 'fail' || parsed.taskNotify === 'off' || parsed.taskNotify === 'all') {
+      taskNotifyPref = parsed.taskNotify
     }
   } catch {
     // 文件不存在或解析失败：保持默认 'abnormal'
@@ -291,7 +351,9 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: false
+      // SEC-5：preload 仅使用 ipcRenderer/contextBridge，完全可沙箱化——
+      // renderer 被攻破时无法直接触碰 Node 原语，缩小爆炸半径。
+      sandbox: true
     }
   })
 
@@ -307,10 +369,21 @@ function createWindow(): void {
     const reason = details?.reason ?? 'unknown'
     const exitCode = details?.exitCode ?? 0
     try {
-      appendFileSync(
-        join(app.getPath('userData'), 'renderer-crash.log'),
-        `[${new Date().toISOString()}] reason=${reason} exitCode=${exitCode}\n`
-      )
+      // STAB-8：crash 日志限长（1MB），超限保留尾部，防止异常刷崩溃把文件撑爆
+      const crashLogPath = join(app.getPath('userData'), 'renderer-crash.log')
+      const entry = `[${new Date().toISOString()}] reason=${reason} exitCode=${exitCode}\n`
+      try {
+        const { statSync, readFileSync } = require('fs') as typeof import('fs')
+        const stats = statSync(crashLogPath)
+        if (stats.size > 1024 * 1024) {
+          const tail = readFileSync(crashLogPath, 'utf-8').slice(-512 * 1024)
+          const { writeFileSync } = require('fs') as typeof import('fs')
+          writeFileSync(crashLogPath, tail, 'utf-8')
+        }
+      } catch {
+        // 文件不存在或读失败：直接追加
+      }
+      appendFileSync(crashLogPath, entry)
     } catch {
       // 日志写失败不影响恢复
     }
@@ -568,7 +641,9 @@ ipcMain.handle('cli:check', (_event, cliName: string, preferredPath?: string) =>
   if (normalizedPreferredPath) {
     return new Promise((resolve) => {
       // 坏 shim/挂起的可执行文件不能让可用性检测永久 pending，统一 5s 超时。
-      exec(`"${normalizedPreferredPath}" --version`, { timeout: 5000 }, (error, stdout) => {
+      // execFile + shell:false（SEC-2）：preferredPath 来自 renderer，绝不能经 shell 拼接，
+      // 否则路径内含引号即可在 cmd.exe 逃逸成任意命令注入。
+      execFile(normalizedPreferredPath, ['--version'], { shell: false, timeout: 5000 }, (error, stdout) => {
         if (error) {
           resolve({ available: false, path: normalizedPreferredPath })
           return
@@ -576,7 +651,7 @@ ipcMain.handle('cli:check', (_event, cliName: string, preferredPath?: string) =>
         resolve({
           available: true,
           path: normalizedPreferredPath,
-          version: stdout.trim() || undefined
+          version: String(stdout).trim() || undefined
         })
       })
     })
@@ -647,6 +722,10 @@ app.whenReady().then(async () => {
     if (sessionResult.status === 'rejected') {
       log.error({ err: sessionResult.reason }, '[init] session load failed')
     }
+    // STAB-7：会话清单加载后清理孤儿 journal（sessions.json 恢复/删除中断留下的残留文件）。
+    void outputManager
+      .reconcileJournals(sessionManager.listSessions().map((s) => s.id))
+      .catch((err) => log.warn({ err }, '[init] journal reconcile failed'))
     if (workspaceResult.status === 'rejected') {
       log.error({ err: workspaceResult.reason }, '[init] workspace layout init failed')
     }
@@ -690,6 +769,39 @@ app.whenReady().then(async () => {
     void agentBusStart
 
     electronApp.setAppUserModelId('com.easysession')
+
+    if (isHeadless) {
+      // 引擎模式：不创建窗口。服务（会话/终端 + remote）已在上文启动完成，
+      // 进程生命周期交给外部宿主：控制端口（默认 19765，EASYSESSION_CONTROL_PORT
+      // 可改）收 quit 命令优雅关停（GUI 子系统进程的 stdin 管道在 Windows 上
+      // 不可靠，控制端口是主通道；信号仍作兜底注册）。
+      // SEC-12：鉴权 + 按行分帧 + 空闲超时，全部收口在 HeadlessControlServer。
+      log.info('[main] headless engine ready (no window); remote 服务由 EASYSESSION_REMOTE_* 配置')
+      const requestShutdown = (): void => {
+        if (isShuttingDown) return
+        log.info('[main] headless engine shutdown requested')
+        void shutdownApp()
+      }
+      const controlPort = Number.parseInt(process.env.EASYSESSION_CONTROL_PORT ?? '19765', 10)
+      const controlToken = process.env.EASYSESSION_CONTROL_TOKEN
+      const headlessControl = new HeadlessControlServer({ port: controlPort, requestShutdown, token: controlToken })
+      headlessControl.listen()
+      app.on('will-quit', () => headlessControl.dispose())
+      // stdin 兜底仅在确认可读/TTY 时注册：Windows GUI 子系统下 detached 进程的
+      // stdin 可能立即 emit 'end'，导致引擎随机自退。
+      try {
+        if (process.stdin && (process.stdin.isTTY || process.stdin.readable)) {
+          process.stdin.on('data', (chunk: Buffer | string) => {
+            if (String(chunk).trim().toLowerCase() === 'quit') requestShutdown()
+          })
+        }
+      } catch {
+        // stdin 不可用：控制端口与信号仍可关停
+      }
+      process.on('SIGINT', requestShutdown)
+      process.on('SIGTERM', requestShutdown)
+      return
+    }
 
     app.on('browser-window-created', (_, window) => {
       optimizer.watchWindowShortcuts(window)
