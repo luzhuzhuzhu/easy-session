@@ -1,5 +1,5 @@
 import { createServer, type Server as HttpServer } from 'http'
-import { randomUUID } from 'crypto'
+import { randomUUID, randomBytes } from 'crypto'
 import { hostname } from 'os'
 import express, { type Express, type Request, type Response, type NextFunction } from 'express'
 import cors from 'cors'
@@ -151,6 +151,11 @@ export class RemoteGatewayServer {
     }
 
     app.use(assignRequestId)
+    // SEC-10：每请求生成 CSP nonce，内联脚本以 nonce 白名单放行，去除 'unsafe-inline'。
+    app.use((req: Request, _res: Response, next: NextFunction): void => {
+      ;(req as any).__cspNonce = randomBytes(16).toString('base64')
+      next()
+    })
     app.use(
       pinoHttp({
         logger: this.logger,
@@ -169,7 +174,13 @@ export class RemoteGatewayServer {
           useDefaults: true,
           directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'"],
+            // SEC-10：script 走 per-request nonce（见上方 __cspNonce 中间件），
+            // 不再放行 'unsafe-inline'；style 保留 unsafe-inline（现有样式为内联 <style>，无注入面）。
+            // helmet 支持指令值传函数（动态 nonce），此处以 any 断言绕过其过窄的类型声明。
+            scriptSrc: [
+              "'self'",
+              ((req: Request) => `'nonce-${(req as any).__cspNonce ?? ''}'`) as never
+            ] as never,
             styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
             fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
             imgSrc: ["'self'", 'data:'],

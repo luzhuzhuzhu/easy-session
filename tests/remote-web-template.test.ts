@@ -4,8 +4,8 @@ import { renderLoginPage, renderSessionsPage } from '../src/main/remote/web'
 
 describe('remote web templates', () => {
   it('renders the modular login and sessions shells', () => {
-    const loginHtml = renderLoginPage('http://127.0.0.1:18765')
-    const sessionsHtml = renderSessionsPage('http://127.0.0.1:18765', true)
+    const loginHtml = renderLoginPage('http://127.0.0.1:18765', 'test-nonce')
+    const sessionsHtml = renderSessionsPage('http://127.0.0.1:18765', true, 'test-nonce')
 
     expect(loginHtml).toContain('<h1 class="page-title">浏览器远程入口</h1>')
     expect(loginHtml).toContain('data-theme-toggle')
@@ -24,7 +24,7 @@ describe('remote web templates', () => {
   })
 
   it('stores web auth in sessionStorage by default and only persists when remembering the device', () => {
-    const loginHtml = renderLoginPage('http://127.0.0.1:18765')
+    const loginHtml = renderLoginPage('http://127.0.0.1:18765', 'test-nonce')
 
     expect(loginHtml).toContain('id="rememberDevice"')
     expect(loginHtml).toContain('勾选后凭据将持久保存，否则仅在当前会话有效。')
@@ -40,7 +40,7 @@ describe('remote web templates', () => {
   })
 
   it('normalizes login and sessions page urls back to the remote base url', () => {
-    const loginHtml = renderLoginPage('http://127.0.0.1:18765')
+    const loginHtml = renderLoginPage('http://127.0.0.1:18765', 'test-nonce')
 
     expect(loginHtml).toContain("return new URL('.', location.href).toString().replace(/\\/$/, '');")
     expect(loginHtml).toContain("if (/^\\/(?:login|sessions)\\/?$/i.test(url.pathname)) {")
@@ -49,7 +49,7 @@ describe('remote web templates', () => {
   })
 
   it('includes responsive remount, auto refresh and socket fallback handling', () => {
-    const html = renderSessionsPage('http://127.0.0.1:18765', true)
+    const html = renderSessionsPage('http://127.0.0.1:18765', true, 'test-nonce')
 
     expect(html).toContain("MOBILE_BREAKPOINT_QUERY = '(max-width: 900px)'")
     expect(html).toContain('LIST_AUTO_REFRESH_INTERVAL_MS = 15000')
@@ -68,7 +68,7 @@ describe('remote web templates', () => {
   })
 
   it('streams terminal input as raw writes, keeps a local draft and trims the unusable soft keys', () => {
-    const html = renderSessionsPage('http://127.0.0.1:18765', true)
+    const html = renderSessionsPage('http://127.0.0.1:18765', true, 'test-nonce')
 
     expect(html).toContain('键入即发送，回车执行')
     expect(html).toContain('data-terminal-key="arrow-up"')
@@ -109,7 +109,7 @@ describe('remote web templates', () => {
   })
 
   it('renders the sessions list as a project-level tree in the new remote web', () => {
-    const html = renderSessionsPage('http://127.0.0.1:18765', true)
+    const html = renderSessionsPage('http://127.0.0.1:18765', true, 'test-nonce')
 
     expect(html).toContain("state.capabilities.projectsList ? api('/api/projects') : Promise.resolve([])")
     expect(html).toContain('function buildSessionGroups(list, keyword)')
@@ -120,7 +120,7 @@ describe('remote web templates', () => {
   })
 
   it('falls back to a plain-text terminal when xterm assets are unavailable', () => {
-    const html = renderSessionsPage('http://127.0.0.1:18765', true)
+    const html = renderSessionsPage('http://127.0.0.1:18765', true, 'test-nonce')
 
     expect(html).toContain("const token = sessionStorage.getItem(keyToken) || localStorage.getItem(keyToken) || '';")
     expect(html).toContain('function createPlainTerminal(host, reason)')
@@ -134,8 +134,8 @@ describe('remote web templates', () => {
   })
 
   it('renders an inline sessions script that parses without syntax errors', () => {
-    const html = renderSessionsPage('http://127.0.0.1:18765', true)
-    const matches = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+    const html = renderSessionsPage('http://127.0.0.1:18765', true, 'test-nonce')
+    const matches = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)]
     const inlineScript = matches.at(-1)?.[1]
 
     expect(inlineScript).toBeTruthy()
@@ -143,7 +143,7 @@ describe('remote web templates', () => {
   })
 
   it('avoids rendering session names through unsafe innerHTML string concatenation', () => {
-    const html = renderSessionsPage('http://127.0.0.1:18765', true)
+    const html = renderSessionsPage('http://127.0.0.1:18765', true, 'test-nonce')
 
     expect(html).toContain('nameEl.textContent = session.name || session.id;')
     expect(html).not.toContain('list.innerHTML = filtered.map')

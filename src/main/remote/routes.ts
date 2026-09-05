@@ -382,12 +382,12 @@ export function registerRemoteRoutes(
 
   app.get('/login', (req, res) => {
     res.set('Cache-Control', 'no-store')
-    res.type('html').send(renderLoginPage(resolveRequestBaseUrl(req, defaultBaseUrl)))
+    res.type('html').send(renderLoginPage(resolveRequestBaseUrl(req, defaultBaseUrl), (req as any).__cspNonce || ''))
   })
 
   app.get('/sessions', (req, res) => {
     res.set('Cache-Control', 'no-store')
-    res.type('html').send(renderSessionsPage(resolveRequestBaseUrl(req, defaultBaseUrl), passthroughOnly))
+    res.type('html').send(renderSessionsPage(resolveRequestBaseUrl(req, defaultBaseUrl), passthroughOnly, (req as any).__cspNonce || ''))
   })
 
   app.get(

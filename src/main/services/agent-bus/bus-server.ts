@@ -8,6 +8,7 @@ import { promises as fs } from 'fs'
 import type { AgentBroker } from './broker'
 import { ES_CLIENT_SOURCE, buildWindowsShim, buildPosixShim } from './es-client-source'
 import { createLogger } from '../logger'
+import { randomUUID } from 'crypto'
 
 const log = createLogger('agent-bus')
 const MAX_REQUEST_BYTES = 256 * 1024
@@ -73,15 +74,17 @@ export class AgentBusServer {
       } catch {
         /* Windows 下 chmod 能力有限，忽略 */
       }
-      const short = this.token.replace(/-/g, '').slice(0, 12)
-      this.pipePath = `\\\\.\\pipe\\easysession-bus-${short}`
+      // SEC-11：pipe 名用纯随机串——不再嵌 token 前缀，防止本机其他用户枚举
+      // pipe 名得到 token 片段。连接鉴权仍需完整 token，双保险。
+      this.pipePath = `\\.\pipe\easysession-bus-${randomUUID().replace(/-/g, '')}`
     } else {
       const shimFile = join(this.shimDir, 'es')
       await fs.writeFile(shimFile, buildPosixShim(), 'utf-8')
       await fs.chmod(shimFile, 0o755)
       // unix socket 路径有长度限制（~104），放 tmpdir 保证短。
-      const short = this.token.replace(/-/g, '').slice(0, 12)
-      this.socketPath = join(tmpdir(), `easysession-bus-${short}.sock`)
+      // SEC-11：unix socket 同样去 token 前缀 + 收紧权限（600），
+      // 防止 tmpdir 枚举泄露 token 片段、其他用户连接尝试。
+      this.socketPath = join(tmpdir(), `easysession-bus-${randomUUID().replace(/-/g, '')}.sock`)
       this.pipePath = this.socketPath
       try {
         await fs.unlink(this.socketPath)
@@ -102,6 +105,10 @@ export class AgentBusServer {
       })
       server.listen(this.pipePath, () => {
         this.server = server
+        // SEC-11：POSIX 下收紧 socket 文件权限到当前用户
+        if (process.platform !== 'win32' && this.socketPath) {
+          fs.chmod(this.socketPath, 0o600).catch(() => undefined)
+        }
         log.info(`[agent-bus] 已监听 ${this.pipePath}`)
         resolve()
       })

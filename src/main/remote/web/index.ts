@@ -26,7 +26,7 @@ const themeInitScript = `
   })();
 `
 
-export function renderLoginPage(defaultBaseUrl: string): string {
+export function renderLoginPage(defaultBaseUrl: string, nonce: string): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -34,12 +34,12 @@ export function renderLoginPage(defaultBaseUrl: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <title>EasySession Remote - 登录</title>
-  <script>${themeInitScript}</script>
+  <script nonce="${nonce}">${themeInitScript}</script>
   <style>${allStyles}</style>
 </head>
 <body>
   ${loginTemplate(defaultBaseUrl)}
-  <script>
+  <script nonce="${nonce}">
     ${authScript}
 
     applyStoredTheme();
@@ -85,7 +85,7 @@ export function renderLoginPage(defaultBaseUrl: string): string {
 </html>`
 }
 
-export function renderSessionsPage(defaultBaseUrl: string, passthroughOnly: boolean): string {
+export function renderSessionsPage(defaultBaseUrl: string, passthroughOnly: boolean, nonce: string): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -94,7 +94,7 @@ export function renderSessionsPage(defaultBaseUrl: string, passthroughOnly: bool
   <meta name="color-scheme" content="light dark" />
   <title>EasySession Remote - 会话</title>
   <link rel="stylesheet" href="./remote-assets/xterm.css" />
-  <script>${themeInitScript}</script>
+  <script nonce="${nonce}">${themeInitScript}</script>
   <style>${allStyles}</style>
 </head>
 <body>
@@ -102,7 +102,7 @@ export function renderSessionsPage(defaultBaseUrl: string, passthroughOnly: bool
   <script src="./socket.io/socket.io.js"></script>
   <script src="./remote-assets/xterm.js"></script>
   <script src="./remote-assets/xterm-addon-fit.js"></script>
-  <script>
+  <script nonce="${nonce}">
     ${authScript}
     ${sessionsScript}
     ${terminalScript}
