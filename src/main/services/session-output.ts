@@ -367,6 +367,8 @@ export class SessionOutputManager {
     this.pendingWindows.delete(sessionId)
     if (!pending || !pending.dirty) return
 
+    // electron 不可用（单测环境 / app 退出后期）时静默丢弃，避免定时器触发 unhandled error。
+    if (!BrowserWindow?.getAllWindows) return
     const windows = BrowserWindow.getAllWindows()
     if (windows.length === 0) return
 

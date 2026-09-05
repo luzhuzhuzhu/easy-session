@@ -207,3 +207,30 @@ export interface JournalSearchResult {
 export function searchSessionOutput(query: string, limitPerSession?: number): Promise<JournalSearchResult[]> {
   return ipc.invoke<JournalSearchResult[]>('session:output:search', query, limitPerSession)
 }
+
+// UX-13：崩溃恢复感知。主进程 reload 后推送一次通知；渲染层据此弹 toast。
+export interface CrashNoticePayload {
+  level: 'recovered' | 'safe-mode'
+  count: number
+}
+export function onCrashNotice(callback: (payload: CrashNoticePayload) => void): () => void {
+  const handler = (_e: IpcRendererEvent, payload: unknown): void => {
+    if (payload && typeof payload === 'object' && typeof (payload as CrashNoticePayload).level === 'string') {
+      callback(payload as CrashNoticePayload)
+    }
+  }
+  ipc.on('app:crash:notice', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
+  return () => ipc.removeListener('app:crash:notice', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
+}
+
+export interface CrashInfo {
+  safeMode: boolean
+  crashCount: number
+  logExists: boolean
+}
+export function getCrashInfo(): Promise<CrashInfo> {
+  return ipc.invoke<CrashInfo>('app:crash:info')
+}
+export function openCrashLog(): Promise<{ ok: boolean; error?: string }> {
+  return ipc.invoke<{ ok: boolean; error?: string }>('app:crash:openLog')
+}

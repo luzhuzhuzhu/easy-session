@@ -63,7 +63,9 @@ const ALLOWED_INVOKE_CHANNELS = [
   'settings:read', 'settings:write',
   // cli
   'cli:kill', 'cli:write', 'cli:list',
-  'cli:claude:version', 'cli:codex:version', 'cli:opencode:version'
+  'cli:claude:version', 'cli:codex:version', 'cli:opencode:version',
+  // crash awareness (UX-13)
+  'app:crash:info', 'app:crash:openLog'
 ]
 
 const ALLOWED_RECEIVE_CHANNELS = [
@@ -79,7 +81,8 @@ const ALLOWED_RECEIVE_CHANNELS = [
   'protocol:message',
   'app:shutdown-start',
   'bus:changed',
-  'collab:focus'
+  'collab:focus',
+  'app:crash:notice'
 ]
 
 const electronAPI: ElectronAPI = {

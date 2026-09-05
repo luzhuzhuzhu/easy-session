@@ -153,6 +153,10 @@
     cmdBadMode: '模式只能是 readonly、nudge 或 inject',
     cmdUnknown: '未知命令：/{name}',
     layoutMenu: '自定义布局',
+    layoutPresets: '布局预设',
+    layoutPreset_solo: '单人专注',
+    'layoutPreset_multi-agent': '多 agent 协作',
+    layoutPreset_monitor: '监控看板',
     layoutTopPanels: '三栏区块',
     layoutDetailPanels: '详情子区块',
     layoutPanels: '面板',
@@ -1116,5 +1120,13 @@ settings: {
     confirmCloseRunningMessage: '当前还有 {local} 个本机 CLI 会话和 {remote} 个远程会话处于运行中。关闭窗口会停止本机 CLI 进程，并断开远程挂载连接。',
     confirmCloseRunningDetails: '退出前会保存工作区状态；正在执行的本机命令会被中断，远程会话本身不会因为关闭这个桌面客户端而被删除。',
     confirmCloseRunningAction: '仍然关闭'
+  },
+  crash: {
+    recoveredTitle: '页面已自动恢复',
+    recoveredMessage: '界面在意外退出后已自动重启，后台会话未受影响。',
+    viewDetails: '查看崩溃日志',
+    safeModeTitle: '检测到连续崩溃',
+    safeModeMessage: '界面最近崩溃了 {count} 次，已暂停工作区状态恢复以排除损坏状态的影响。可在设置中重新开启。',
+    dismiss: '知道了'
   }
 }

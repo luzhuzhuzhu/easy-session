@@ -86,6 +86,18 @@
           <div v-if="layoutMenuOpen" class="ms-backdrop" @click="layoutMenuOpen = false"></div>
           <div v-if="layoutMenuOpen" class="layout-panel">
             <div class="layout-section">
+              <span class="section-label">{{ $t('collab.layoutPresets') }}</span>
+              <button
+                v-for="preset in LAYOUT_PRESETS"
+                :key="preset.id"
+                type="button"
+                class="ms-preset"
+                @click="dock.applyPreset(preset.id); layoutMenuOpen = false"
+              >
+                {{ $t(`collab.layoutPreset_${preset.id}`) }}
+              </button>
+            </div>
+            <div class="layout-section">
               <span class="section-label">{{ $t('collab.layoutPanels') }}</span>
               <label v-for="pid in ALL_PANELS" :key="pid" class="ms-option">
                 <input
@@ -452,7 +464,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import TerminalOutput from '@/components/TerminalOutput.vue'
 import CollabDock from '@/components/CollabDock.vue'
-import { useCollabDock, COLLAB_DOCK_KEY, ALL_PANELS } from '@/composables/useCollabDock'
+import { useCollabDock, COLLAB_DOCK_KEY, ALL_PANELS, LAYOUT_PRESETS } from '@/composables/useCollabDock'
 import {
   archiveBusTask,
   createBusTask,
@@ -1359,6 +1371,24 @@ textarea {
 
   .section-label {
     margin: 2px 4px 4px;
+  }
+}
+
+// UX-14：布局预设按钮（与面板复选行区分的次级样式）
+.ms-preset {
+  height: 26px;
+  margin: 0 2px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
   }
 }
 

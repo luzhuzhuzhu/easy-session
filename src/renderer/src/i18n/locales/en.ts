@@ -153,6 +153,10 @@ export default {
     cmdBadMode: 'Mode must be readonly, nudge, or inject',
     cmdUnknown: 'Unknown command: /{name}',
     layoutMenu: 'Customize layout',
+    layoutPresets: 'Layout presets',
+    layoutPreset_solo: 'Solo focus',
+    'layoutPreset_multi-agent': 'Multi-agent',
+    layoutPreset_monitor: 'Monitor board',
     layoutTopPanels: 'Columns',
     layoutDetailPanels: 'Detail blocks',
     layoutPanels: 'Panels',
@@ -1116,5 +1120,13 @@ settings: {
     confirmCloseRunningMessage: '{local} local CLI sessions and {remote} remote sessions are still running. Closing the window will stop local CLI processes and disconnect remote mounts.',
     confirmCloseRunningDetails: 'The workspace state is saved before exit. Local commands that are still running will be interrupted; remote sessions are not deleted by closing this desktop client.',
     confirmCloseRunningAction: 'Close anyway'
+  },
+  crash: {
+    recoveredTitle: 'Page recovered automatically',
+    recoveredMessage: 'The interface restarted after an unexpected exit. Running sessions were not affected.',
+    viewDetails: 'View crash log',
+    safeModeTitle: 'Repeated crashes detected',
+    safeModeMessage: 'The interface crashed {count} times recently. Workspace restore has been paused to rule out corrupted state. You can re-enable it in Settings.',
+    dismiss: 'Dismiss'
   }
 }

@@ -49,6 +49,7 @@ export interface CollabDockApi {
   hidePanel: (panelId: string) => void
   showPanel: (panelId: string) => void
   resetLayout: () => void
+  applyPreset: (presetId: LayoutPresetId) => void
 }
 
 export const COLLAB_DOCK_KEY: InjectionKey<CollabDockApi> = Symbol('collab-dock')
@@ -97,6 +98,39 @@ function defaultTree(): DockNode {
     }
   }
 }
+
+// UX-14：布局预设（单人 / 多 agent / 监控）。一键切换后仍走同一棵持久化树，
+// 用户随后拖动修改会覆盖预设，重启后保留的是自定义结果。
+export type LayoutPresetId = 'solo' | 'multi-agent' | 'monitor'
+export const LAYOUT_PRESETS: Array<{ id: LayoutPresetId; tree: () => DockNode }> = [
+  {
+    // 单人：主攻聊天，任务详情辅助，收起成员栏/看板/预览
+    id: 'solo',
+    tree: () => ({
+      type: 'split',
+      direction: 'horizontal',
+      ratio: 0.68,
+      first: { type: 'leaf', panelId: 'chat' },
+      second: { type: 'leaf', panelId: 'taskDetail' }
+    })
+  },
+  {
+    // 多 agent：成员栏 + 看板为主，聊天与任务详情保留
+    id: 'multi-agent',
+    tree: () => defaultTree()
+  },
+  {
+    // 监控：看板全宽 + 成员栏，收起详情/预览/聊天
+    id: 'monitor',
+    tree: () => ({
+      type: 'split',
+      direction: 'horizontal',
+      ratio: 0.25,
+      first: { type: 'leaf', panelId: 'members' },
+      second: { type: 'leaf', panelId: 'board' }
+    })
+  }
+]
 
 function collectPanelIds(node: DockNode, acc: string[] = []): string[] {
   if (node.type === 'leaf') {
@@ -327,6 +361,14 @@ export function useCollabDock(): CollabDockApi {
     commit(defaultTree())
   }
 
+  // UX-14：应用布局预设。树结构与默认布局同源持久化，拖动后即覆盖为自定义。
+  function applyPreset(presetId: LayoutPresetId): void {
+    const preset = LAYOUT_PRESETS.find((p) => p.id === presetId)
+    if (!preset) return
+    activePanelId = null
+    commit(cloneTree(preset.tree()))
+  }
+
   return {
     root,
     draggingPanelId,
@@ -344,6 +386,7 @@ export function useCollabDock(): CollabDockApi {
     commitRatio,
     hidePanel,
     showPanel,
-    resetLayout
+    resetLayout,
+    applyPreset
   }
 }

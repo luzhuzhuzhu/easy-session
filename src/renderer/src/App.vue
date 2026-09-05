@@ -27,17 +27,20 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useCollabStore } from '@/stores/collab'
 import { useSessionsStore } from '@/stores/sessions'
 import { onCollabFocus } from '@/api/agent-bus'
-import { onSessionFocusRequest } from '@/api/local-session'
+import { onSessionFocusRequest, onCrashNotice, openCrashLog } from '@/api/local-session'
+import { useToast } from '@/composables/useToast'
 
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
 const settingsStore = useSettingsStore()
 const workspaceStore = useWorkspaceStore()
 const collabStore = useCollabStore()
 const sessionsStore = useSessionsStore()
 let unsubscribeCollabFocus: (() => void) | null = null
 let unsubscribeSessionFocus: (() => void) | null = null
+let unsubscribeCrashNotice: (() => void) | null = null
 
 const SHUTDOWN_START_CHANNEL = 'app:shutdown-start'
 const isShuttingDown = ref(false)
@@ -64,6 +67,29 @@ onMounted(async () => {
   locale.value = settingsStore.settings.language
   document.documentElement.dataset.theme = resolveDocumentTheme(settingsStore.settings.theme)
   window.electronAPI.on(SHUTDOWN_START_CHANNEL, shutdownListener)
+
+  // UX-13：崩溃恢复 toast。主进程 reload 后推送一次；安全模式（10 分钟内 ≥3 崩）额外警示。
+  unsubscribeCrashNotice = onCrashNotice((payload) => {
+    if (payload.level === 'safe-mode') {
+      toast.withAction(
+        'warning',
+        t('crash.safeModeMessage', { count: payload.count }),
+        t('crash.safeModeTitle'),
+        t('crash.dismiss'),
+        () => {}
+      )
+    } else {
+      toast.withAction(
+        'info',
+        t('crash.recoveredMessage'),
+        t('crash.recoveredTitle'),
+        t('crash.viewDetails'),
+        () => {
+          void openCrashLog()
+        }
+      )
+    }
+  })
 
   // 全程订阅协作 bus，使离开协作页也能收到 badge/toast/系统通知。
   collabStore.start({
@@ -104,6 +130,7 @@ onBeforeUnmount(() => {
   window.electronAPI.removeListener(SHUTDOWN_START_CHANNEL, shutdownListener)
   if (unsubscribeCollabFocus) unsubscribeCollabFocus()
   if (unsubscribeSessionFocus) unsubscribeSessionFocus()
+  if (unsubscribeCrashNotice) unsubscribeCrashNotice()
   collabStore.stop()
 })
 

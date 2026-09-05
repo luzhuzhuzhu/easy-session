@@ -13,6 +13,11 @@
         <div class="toast-body">
           <div v-if="t.title" class="toast-title">{{ t.title }}</div>
           <div class="toast-msg">{{ t.message }}</div>
+          <button
+            v-if="t.actionLabel"
+            class="toast-action"
+            @click="runAction(t)"
+          >{{ t.actionLabel }}</button>
         </div>
         <button class="toast-close" @click="toastStore.remove(t.id)">&times;</button>
       </div>
@@ -22,7 +27,7 @@
 
 <script setup lang="ts">
 import { watch, onUnmounted } from 'vue'
-import { useToastStore } from '@/composables/useToast'
+import { useToastStore, type ToastItem } from '@/composables/useToast'
 
 const toastStore = useToastStore()
 
@@ -34,6 +39,11 @@ const icons: Record<string, string> = {
 }
 
 const timers = new Map<number, ReturnType<typeof setTimeout>>()
+
+function runAction(t: ToastItem): void {
+  toastStore.remove(t.id)
+  t.onAction?.()
+}
 
 function startTimer(id: number, duration: number) {
   clearTimer(id)
@@ -114,6 +124,22 @@ onUnmounted(() => timers.forEach((_, id) => clearTimer(id)))
   font-size: var(--font-size-xs);
   color: var(--text-secondary);
   word-break: break-word;
+}
+
+.toast-action {
+  margin-top: 6px;
+  padding: 2px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent-primary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+
+  &:hover {
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  }
 }
 
 .toast-close {

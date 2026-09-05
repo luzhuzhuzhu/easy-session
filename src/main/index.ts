@@ -19,6 +19,7 @@ import { ProjectManager } from './services/project-manager'
 import { SkillManager } from './services/skill-manager'
 import { DataStore } from './services/data-store'
 import { registerAllHandlers } from './ipc'
+import { registerCrashHandlers, recordCrashAndDecide, CRASH_NOTICE_CHANNEL } from './ipc/crash-handlers'
 import { onSessionExitNotifyPrefChange, onTaskNotifyPrefChange } from './ipc/settings-handlers'
 import { registerRemoteInstanceHandlers } from './ipc/remote-instance-handlers'
 import { registerRemoteServiceHandlers } from './ipc/remote-service-handlers'
@@ -172,6 +173,8 @@ registerAllHandlers({
   workspaceLayoutManager,
   agentBus
 })
+
+registerCrashHandlers()
 
 // 设置页改通知偏好 → settings:write → 同步给 exit notifier（无需重启应用）。
 onSessionExitNotifyPrefChange((pref) => {
@@ -389,10 +392,17 @@ function createWindow(): void {
       // 日志写失败不影响恢复
     }
     if (details?.reason === 'clean-exit') return
+    // UX-13：崩溃感知——记录本次崩溃并决定提示等级（单次恢复 / 连崩安全模式），
+    // reload 完成后向渲染层发 app:crash:notice，由渲染层弹 toast。
+    const crashNotice = recordCrashAndDecide()
     setTimeout(() => {
-      if (!mainWindow.isDestroyed() && !isShuttingDown) {
-        mainWindow.webContents.reload()
-      }
+      if (mainWindow.isDestroyed() || isShuttingDown) return
+      mainWindow.webContents.reload()
+      mainWindow.webContents.once('did-finish-load', () => {
+        if (!mainWindow.isDestroyed() && !isShuttingDown) {
+          mainWindow.webContents.send(CRASH_NOTICE_CHANNEL, crashNotice)
+        }
+      })
     }, 300)
   })
 
