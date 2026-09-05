@@ -635,8 +635,27 @@ function toggleSessionsListPosition(): void {
   handleSave()
 }
 
+function isLoopbackRemoteHost(host: string): boolean {
+  const h = host.trim().toLowerCase()
+  return h === '127.0.0.1' || h === 'localhost' || h === '::1' || h === '[::1]' || h === '::ffff:127.0.0.1'
+}
+
+// SEC-8：保存非 loopback 监听时弹不可跳过的明文风险确认，确认后主进程才接受。
+async function confirmInsecureRemoteHostIfNeeded(): Promise<boolean> {
+  if (isLoopbackRemoteHost(remoteServiceForm.host) || !remoteServiceForm.enabled) return true
+  return confirmDialog.confirm({
+    title: t('settings.remoteInsecureHostTitle'),
+    message: t('settings.remoteInsecureHostMessage', { host: remoteServiceForm.host.trim() }),
+    details: t('settings.remoteInsecureHostDetails'),
+    confirmText: t('settings.remoteInsecureHostConfirm'),
+    cancelText: t('confirm.cancel'),
+    tone: 'danger'
+  })
+}
+
 async function handleSaveRemoteService(): Promise<void> {
   if (!canSubmitRemoteServiceForm.value) return
+  if (!(await confirmInsecureRemoteHostIfNeeded())) return
   savingRemoteService.value = true
   try {
     const state = await updateRemoteServiceSettings({
@@ -648,7 +667,8 @@ async function handleSaveRemoteService(): Promise<void> {
       customToken:
         remoteServiceForm.tokenMode === 'custom'
           ? remoteServiceForm.customToken.trim() || undefined
-          : null
+          : null,
+      insecureNonLoopbackAck: !isLoopbackRemoteHost(remoteServiceForm.host) && remoteServiceForm.enabled
     })
     remoteServiceState.value = state
     syncRemoteServiceForm(state)
@@ -719,7 +739,8 @@ async function handleResetRemoteServiceToken(): Promise<void> {
       port: remoteServiceForm.port,
       passthroughOnly: remoteServiceForm.passthroughOnly,
       tokenMode: 'default',
-      customToken: null
+      customToken: null,
+      insecureNonLoopbackAck: !isLoopbackRemoteHost(remoteServiceForm.host) && remoteServiceForm.enabled
     })
     remoteServiceState.value = state
     syncRemoteServiceForm(state)

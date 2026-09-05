@@ -3,7 +3,31 @@ export const authScript = `
   const keyToken = 'easy_remote_token';
   const keyRemember = 'easy_remote_remember';
   const keyTheme = 'easy_remote_theme';
+  const keyObfKey = 'easy_remote_obf_key';
   let themeMediaQuery = null;
+
+  // SEC-9：记住设备时 token 不再明文落 localStorage——生成一枚设备随机密钥
+  // （sessionStorage，不持久）对 token 做异或混淆后存储。攻击者仅拿到 localStorage
+  // 得到的是混淆串，还需同机 sessionStorage 密钥才能还原；配合 nonce-CSP 构成纵深。
+  function getOrCreateObfKey() {
+    let k = sessionStorage.getItem(keyObfKey) || '';
+    if (!k) {
+      const bytes = new Uint8Array(32);
+      (window.crypto || window.msCrypto).getRandomValues(bytes);
+      k = Array.from(bytes, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+      sessionStorage.setItem(keyObfKey, k);
+    }
+    return k;
+  }
+
+  function obfuscateToken(token, key) {
+    let out = '';
+    for (let i = 0; i < token.length; i += 1) {
+      const kc = parseInt(key.slice((i * 2) % key.length, (i * 2) % key.length + 2), 16) || 0;
+      out += String.fromCharCode(token.charCodeAt(i) ^ kc);
+    }
+    return out;
+  }
 
   function toAbsoluteRemoteUrl(rawBaseUrl) {
     if (/^[a-z][a-z\\d+.-]*:\\/\\//i.test(rawBaseUrl)) return rawBaseUrl;
@@ -43,9 +67,21 @@ export const authScript = `
   }
 
   function loadAuth() {
-    const token = sessionStorage.getItem(keyToken) || localStorage.getItem(keyToken) || '';
+    // 会话内明文优先；否则尝试还原「记住设备」的混淆 token
+    let token = sessionStorage.getItem(keyToken) || '';
     const baseUrl = normalizeRemoteBaseUrl(sessionStorage.getItem(keyBase) || localStorage.getItem(keyBase) || '');
     const remember = localStorage.getItem(keyRemember) === '1';
+    if (!token && remember) {
+      const stored = localStorage.getItem(keyToken) || '';
+      if (stored) {
+        try {
+          token = obfuscateToken(stored, getOrCreateObfKey());
+        } catch (_error) {
+          token = '';
+        }
+        sessionStorage.setItem(keyToken, token);
+      }
+    }
     return { baseUrl, token, remember };
   }
 
@@ -55,9 +91,10 @@ export const authScript = `
     if (remember) {
       localStorage.setItem(keyRemember, '1');
       localStorage.setItem(keyBase, base);
-      localStorage.setItem(keyToken, token);
+      // SEC-9：混淆后再落盘（密钥留在 sessionStorage，不随存储外泄）
+      localStorage.setItem(keyToken, obfuscateToken(token, getOrCreateObfKey()));
+      sessionStorage.setItem(keyToken, token);
       sessionStorage.removeItem(keyBase);
-      sessionStorage.removeItem(keyToken);
       return;
     }
 

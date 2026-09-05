@@ -35,6 +35,8 @@ export interface RemoteServiceSettingsUpdate {
   passthroughOnly: boolean
   tokenMode: RemoteServiceTokenMode
   customToken?: string | null
+  /** SEC-8：非 loopback 监听的风险确认标记（UI 弹窗确认后传 true） */
+  insecureNonLoopbackAck?: boolean
 }
 
 export function getRemoteServiceState(): Promise<RemoteServiceState> {

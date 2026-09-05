@@ -122,7 +122,9 @@ describe('remote web templates', () => {
   it('falls back to a plain-text terminal when xterm assets are unavailable', () => {
     const html = renderSessionsPage('http://127.0.0.1:18765', true, 'test-nonce')
 
-    expect(html).toContain("const token = sessionStorage.getItem(keyToken) || localStorage.getItem(keyToken) || '';")
+    expect(html).toContain("let token = sessionStorage.getItem(keyToken) || '';")
+    // SEC-9：记住设备的混淆还原路径存在
+    expect(html).toContain('obfuscateToken(stored, getOrCreateObfKey())')
     expect(html).toContain('function createPlainTerminal(host, reason)')
     expect(html).toContain('function getTerminalTheme()')
     expect(html).toContain("document.addEventListener('easy:theme-change'")
