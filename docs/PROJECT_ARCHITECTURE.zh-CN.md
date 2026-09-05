@@ -15,7 +15,7 @@ EasySession 是一个基于 Electron 的桌面应用，用于统一管理多个 
 - 远程 Web 由主进程内置 Express + Socket.IO 服务提供，可在浏览器或移动端访问。
 - 本地和远程资源通过统一资源模型聚合，前端以 `local:<id>` 或 `remoteInstance:<id>` 形式处理全局项目与会话。
 
-当前 `package.json` 版本为 `0.5.0`，README 徽章仍显示 `0.4.1`，这是一个文档一致性问题，不影响运行。
+版本号以 `package.json` 为准（读取 `app:getVersion`），文档中不再维护具体数字，避免过期。
 
 ## 2. 技术栈
 
