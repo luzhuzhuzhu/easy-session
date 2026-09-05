@@ -11,6 +11,9 @@ interface RateLimitOptions {
   max: number
   // 内存桶硬上限（可选，默认 50k）：暴露出来便于测试用小桶覆盖驱逐路径。
   maxEntries?: number
+  // SEC-7：per-IP 全局硬顶（可选）。默认取 max 的 4 倍 —— 单 IP 在所有端点上
+  // 的总配额封顶，杜绝「按 path 分桶让总配额随端点数线性放大」的绕过路径。
+  ipMax?: number
 }
 
 function buildError(requestId: string): RemoteErrorBody {
@@ -26,6 +29,9 @@ const DEFAULT_MAX_BUCKET_ENTRIES = 50_000
 
 export function createMemoryRateLimitMiddleware(options: RateLimitOptions) {
   const bucket = new Map<string, RateLimitEntry>()
+  // per-IP 全局桶：key 前缀区分，与端点桶共存于同一 Map，统一清理。
+  const ipMax = options.ipMax ?? options.max * 4
+  const ipKeyPrefix = 'ip-global:'
   let lastSweepAt = 0
   const sweepIntervalMs = Math.max(options.windowMs, 30_000)
   const maxEntries = options.maxEntries ?? DEFAULT_MAX_BUCKET_ENTRIES
@@ -71,6 +77,23 @@ export function createMemoryRateLimitMiddleware(options: RateLimitOptions) {
     const requestId = (req.headers['x-request-id'] as string | undefined) || 'n/a'
     const ip = req.ip || req.socket.remoteAddress || 'unknown'
     const key = `${ip}:${req.method}:${req.path}`
+
+    // SEC-7：先过 per-IP 全局硬顶，再过端点细桶。全局桶被限流时同样回 429，
+    // 使单 IP 总配额不随端点数放大；全局桶不驱逐、不绕过（桶满时拒绝新端点计数无意义，
+    // 因为全局桶始终先消耗）。
+    const ipKey = `${ipKeyPrefix}${ip}`
+    const ipEntry = bucket.get(ipKey)
+    if (!ipEntry || now >= ipEntry.resetAt) {
+      bucket.set(ipKey, { count: 1, resetAt: now + options.windowMs })
+    } else if (ipEntry.count >= ipMax) {
+      const retryAfterSec = Math.max(1, Math.ceil((ipEntry.resetAt - now) / 1000))
+      res.setHeader('Retry-After', String(retryAfterSec))
+      res.status(429).json(buildError(requestId))
+      return
+    } else {
+      ipEntry.count += 1
+    }
+
     const entry = bucket.get(key)
 
     if (!entry || now >= entry.resetAt) {

@@ -55,7 +55,7 @@ function toLocalSession(session: UnifiedSession): Session {
 
 function toCreateSessionParams(params: GatewayCreateSessionParams): CreateSessionParams {
   if (!params.projectPath) {
-    throw new Error('本地创建会话时必须提供 projectPath')
+    throw new Error('[dev] createSession: projectPath is required')
   }
 
   return {
@@ -532,6 +532,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
       await destroySession(sessionRef.sessionId)
       await syncWorkspaceAfterSessionMutation(activeSessionRef.value)
+      // STAB-3：销毁后清掉 TerminalOutput 的 warm 快照，防内存滞留
+      try { window.__esClearHistorySnapshot?.(sessionRef.globalSessionKey) } catch { /* 忽略 */ }
       return
     }
 
@@ -547,6 +549,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       activeGlobalSessionKeyState.value = fallback?.globalSessionKey ?? null
     }
     await syncWorkspaceAfterSessionMutation(activeSessionRef.value)
+    try { window.__esClearHistorySnapshot?.(sessionRef.globalSessionKey) } catch { /* 忽略 */ }
   }
 
   async function renameSessionRef(sessionRef: SessionRef, name: string): Promise<boolean> {
@@ -614,6 +617,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     getSessionRef,
     getSessionRefByGlobalKey,
     getUnifiedSession,
+    syncWorkspaceAfterSessionMutation,
     dispose
   }
 })

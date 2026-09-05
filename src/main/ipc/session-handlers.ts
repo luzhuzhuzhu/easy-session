@@ -133,6 +133,16 @@ export function registerSessionHandlers(
     sessionManager.outputManager.clearHistory(id)
   })
 
+  // UX-1：已退出会话的桌面 UI 日志出口——读 output journal 尾部。
+  // 与 es output 共用同一份落盘文件；未启用 journal / 无文件时返回 null。
+  ipcMain.handle('session:output:journalTail', (_event, id: string, lines?: number) => {
+    assertString(id, 'id')
+    if (lines !== undefined && (typeof lines !== 'number' || !Number.isFinite(lines) || lines < 0)) {
+      throw new Error('参数 lines 必须为非负数')
+    }
+    return sessionManager.outputManager.readJournalTail(id, lines ?? 500)
+  })
+
   ipcMain.handle('session:resize', (_event, id: string, cols: number, rows: number) => {
     assertString(id, 'id')
     assertPositiveInt(cols, 'cols')

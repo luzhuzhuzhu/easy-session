@@ -56,7 +56,23 @@ function toUpdate(value: unknown): RemoteServiceSettingsUpdate {
     update.customToken = typeof value.customToken === 'string' ? value.customToken : null
   }
 
+  // SEC-8：非 loopback 需要显式风险确认（renderer 弹不可跳过的警示后传 true）
+  if (Object.prototype.hasOwnProperty.call(value, 'insecureNonLoopbackAck')) {
+    assertBoolean(value.insecureNonLoopbackAck, 'insecureNonLoopbackAck')
+    update.insecureNonLoopbackAck = value.insecureNonLoopbackAck
+  }
+
   return update
+}
+
+function isLoopbackHost(host: string): boolean {
+  return (
+    host === '127.0.0.1' ||
+    host === 'localhost' ||
+    host === '::1' ||
+    host === '[::1]' ||
+    host.toLowerCase() === '::ffff:127.0.0.1'
+  )
 }
 
 export function registerRemoteServiceHandlers(remoteServiceManager: RemoteServiceManager): void {
@@ -65,7 +81,13 @@ export function registerRemoteServiceHandlers(remoteServiceManager: RemoteServic
   })
 
   ipcMain.handle('remote-service:update', (_event, settings: unknown) => {
-    return remoteServiceManager.updateSettings(toUpdate(settings))
+    const update = toUpdate(settings)
+    // SEC-8：非 loopback 监听 = 明文 HTTP 传输 bearer token。renderer 必须显式带
+    // insecureNonLoopbackAck=true（UI 侧确认弹窗）才允许保存，防止误改 host 无感裸奔。
+    if (!isLoopbackHost(update.host) && update.enabled && !update.insecureNonLoopbackAck) {
+      throw new Error('REMOTE_INSECURE_HOST_ACK_REQUIRED')
+    }
+    return remoteServiceManager.updateSettings(update)
   })
 
   ipcMain.handle('remote-service:getToken', () => {

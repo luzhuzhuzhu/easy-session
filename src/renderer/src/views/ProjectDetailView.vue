@@ -251,7 +251,7 @@ const router = useRouter()
 const projectsStore = useProjectsStore()
 const instancesStore = useInstancesStore()
 const sessionsStore = useSessionsStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const confirmDialog = useConfirmDialog()
 const toast = useToast()
 
@@ -306,7 +306,8 @@ const remoteCapabilityNotice = computed(() => {
   missing.push(t('projectDetail.capabilityLocalSkills'))
 
   if (!missing.length) return ''
-  return t('projectDetail.remoteCapabilityLimited', { capabilities: missing.join('、') })
+  const separator = locale.value === 'zh-CN' ? '、' : ', '
+  return t('projectDetail.remoteCapabilityLimited', { capabilities: missing.join(separator) })
 })
 
 type PromptTabCache = {

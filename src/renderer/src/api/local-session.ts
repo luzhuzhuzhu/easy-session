@@ -185,3 +185,9 @@ export function onSessionFocusRequest(callback: (sessionId: string) => void): ()
   ipc.on('session:focus-request', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
   return () => ipc.removeListener('session:focus-request', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
 }
+
+// UX-1：读取已退出会话的 journal 尾部（桌面 UI「查看输出日志」入口）。
+// journal 未启用或无文件时返回 null。
+export function getSessionJournalTail(id: string, lines?: number): Promise<string | null> {
+  return ipc.invoke<string | null>('session:output:journalTail', id, lines)
+}

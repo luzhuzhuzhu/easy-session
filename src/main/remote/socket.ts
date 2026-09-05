@@ -7,6 +7,7 @@ import type {
   SessionWritePayload,
   SocketAck
 } from './types'
+import { TokenBucketLimiter } from './token-bucket'
 
 interface SetupSocketBridgeOptions {
   io: SocketIOServer
@@ -14,6 +15,13 @@ interface SetupSocketBridgeOptions {
   idleTimeoutMs: number
   logger: Pick<Console, 'info' | 'warn' | 'error'>
 }
+
+// SEC-3：WS 事件限流（REST 限流对 socket 通道不生效）。input/write 是直写 PTY 的
+// 通道，必须限速防洪泛/脚本化注入；subscribe 限的是历史回放风暴。
+// 容量按人类终端交互节奏放大（粘贴/按住方向键），稳态速率远低于机器洪泛。
+const INPUT_LIMITER = { capacity: 120, refillPerSecond: 40 }
+const WRITE_LIMITER = { capacity: 240, refillPerSecond: 80 }
+const SUBSCRIBE_LIMITER = { capacity: 10, refillPerSecond: 1 }
 
 function sessionRoom(sessionId: string): string {
   return `session:${sessionId}`
@@ -190,6 +198,11 @@ export function setupRemoteSocketBridge(options: SetupSocketBridgeOptions): () =
   const { io, deps, idleTimeoutMs, logger } = options
   const lastActivityBySocket = new Map<string, number>()
 
+  // SEC-3：per-socket 令牌桶。key 用 socket.id（每个连接独立配额）。
+  const inputLimiter = new TokenBucketLimiter(INPUT_LIMITER)
+  const writeLimiter = new TokenBucketLimiter(WRITE_LIMITER)
+  const subscribeLimiter = new TokenBucketLimiter(SUBSCRIBE_LIMITER)
+
   // 远程输出合帧：把 16ms 窗口内同一会话的 chunk 拼成一次 emit，降低刷屏时
   // Socket.IO 的包频率（与桌面端 BrowserWindow IPC 的合帧策略一致）。
   const REMOTE_FLUSH_INTERVAL_MS = 16
@@ -245,6 +258,11 @@ export function setupRemoteSocketBridge(options: SetupSocketBridgeOptions): () =
     })
 
     socket.on('session:subscribe', (payload: SessionSubscribePayload, ack?: (result: SocketAck) => void) => {
+      if (!subscribeLimiter.tryTake(socket.id)) {
+        logger.warn(`[remote] subscribe rate limited: ${socket.id}`)
+        ackErr(ack, 'Rate limited: too many subscribe requests')
+        return
+      }
       handleSubscribe(socket, deps, payload, ack)
     })
 
@@ -253,10 +271,18 @@ export function setupRemoteSocketBridge(options: SetupSocketBridgeOptions): () =
     })
 
     socket.on('session:input', (payload: SessionInputPayload, ack?: (result: SocketAck) => void) => {
+      if (!inputLimiter.tryTake(socket.id)) {
+        ackErr(ack, 'Rate limited: input too frequent')
+        return
+      }
       handleInput(socket, deps, payload, ack)
     })
 
     socket.on('session:write', (payload: SessionWritePayload, ack?: (result: SocketAck) => void) => {
+      if (!writeLimiter.tryTake(socket.id)) {
+        ackErr(ack, 'Rate limited: write too frequent')
+        return
+      }
       handleWrite(socket, deps, payload, ack)
     })
 
@@ -293,6 +319,9 @@ export function setupRemoteSocketBridge(options: SetupSocketBridgeOptions): () =
       remoteFlushTimer = null
     }
     pendingRemote.clear()
+    inputLimiter.clear()
+    writeLimiter.clear()
+    subscribeLimiter.clear()
     outputUnsubscribe()
     statusUnsubscribe()
     io.removeAllListeners('connection')

@@ -23,6 +23,14 @@
       <ToolbarButton :label="$t('terminal.copyAll')" @click="copyAll">
         <UiIcon name="copy" />
       </ToolbarButton>
+      <ToolbarButton
+        v-if="currentSessionStatus && currentSessionStatus !== 'running'"
+        :title="$t('terminal.viewJournal')"
+        :label="$t('terminal.viewJournal')"
+        @click="viewJournalTail"
+      >
+        <UiIcon name="file-text" />
+      </ToolbarButton>
       <ToolbarButton :label="$t('terminal.clearOutput')" tone="danger" @click="handleClear">
         <UiIcon name="eraser" />
       </ToolbarButton>
@@ -58,6 +66,7 @@ import type { OutputLine } from '@/api/session'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useToast } from '@/composables/useToast'
 import { useInstancesStore } from '@/stores/instances'
+import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
 import { useSettingsStore } from '@/stores/settings'
 import { useSessionsStore } from '@/stores/sessions'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -207,12 +216,38 @@ function readWarmHistorySnapshot(sessionKey: string): OutputLine[] | null {
   return cached.lines.map((line) => ({ ...line }))
 }
 
+// STAB-3：快照缓存上限（LRU）。缓存条目每条最多 HISTORY_LOAD_LINES 行深拷贝，
+// 长跑多会话 + 会话销毁无钩子会无限滞留内存——按写入顺序淘汰最旧条目并周期清理过期项。
+const HISTORY_CACHE_MAX_ENTRIES = 12
+let lastCacheSweepAt = 0
+
+function sweepHistorySnapshotCache(): void {
+  const now = Date.now()
+  if (now - lastCacheSweepAt < 30_000) return
+  lastCacheSweepAt = now
+  for (const [key, cached] of historySnapshotCache) {
+    if (now - cached.capturedAt > HISTORY_CACHE_TTL_MS) historySnapshotCache.delete(key)
+  }
+}
+
+function evictHistorySnapshotCacheLru(): void {
+  while (historySnapshotCache.size > HISTORY_CACHE_MAX_ENTRIES) {
+    const oldestKey = historySnapshotCache.keys().next().value
+    if (oldestKey === undefined) break
+    historySnapshotCache.delete(oldestKey)
+  }
+}
+
 function writeWarmHistorySnapshot(sessionKey: string, history: OutputLine[]): void {
+  // Map 迭代按插入序：先删后写让刚写入的条目位于最新位置（访问即续命）
+  historySnapshotCache.delete(sessionKey)
   historySnapshotCache.set(sessionKey, {
     lines: history.slice(-HISTORY_LOAD_LINES).map((line) => ({ ...line })),
     lastSeq: getLastSeq(history),
     capturedAt: Date.now()
   })
+  sweepHistorySnapshotCache()
+  evictHistorySnapshotCacheLru()
 }
 
 function appendWarmHistorySnapshot(sessionKey: string, line: OutputLine): void {
@@ -238,6 +273,8 @@ function appendWarmHistorySnapshot(sessionKey: string, line: OutputLine): void {
   }
   cached.lastSeq = nextSeq
   cached.capturedAt = Date.now()
+  sweepHistorySnapshotCache()
+  evictHistorySnapshotCacheLru()
 }
 
 function appendWarmHistorySnapshotBatch(sessionKey: string, lines: OutputLine[]): void {
@@ -249,6 +286,17 @@ function appendWarmHistorySnapshotBatch(sessionKey: string, lines: OutputLine[])
 function clearWarmHistorySnapshot(sessionKey: string | null | undefined): void {
   if (!sessionKey) return
   historySnapshotCache.delete(sessionKey)
+}
+
+// STAB-3：供 sessions store 在会话销毁后广播清理（跨模块唯一入口，避免循环 import——
+// store 不直接 import 本组件，组件挂载时把清理函数注册到全局句柄上）。
+declare global {
+  interface Window {
+    __esClearHistorySnapshot?: (globalSessionKey: string) => void
+  }
+}
+if (typeof window !== 'undefined') {
+  window.__esClearHistorySnapshot = (key: string) => historySnapshotCache.delete(key)
 }
 
 function clearLiveOutputQueue(): void {
@@ -1043,7 +1091,6 @@ async function copyAll(): Promise<void> {
     }
     return
   }
-
   if (!props.sessionRef) return
 
   try {
@@ -1061,6 +1108,27 @@ async function copyAll(): Promise<void> {
     }
   } catch {
     toast.error(t('terminal.copyFail'))
+  }
+}
+
+// UX-1：已退出/崩溃会话的日志出口——读 output journal 尾部贴到剪贴板。
+// journal 由主进程在会话退出/应用关停时落盘，重启后仍可回看。
+async function viewJournalTail(): Promise<void> {
+  if (!props.sessionRef || props.sessionRef.instanceId !== LOCAL_INSTANCE_ID) return
+  try {
+    const { getSessionJournalTail } = await import('@/api/local-session')
+    const text = await getSessionJournalTail(props.sessionRef.sessionId, 500)
+    if (!text) {
+      toast.info(t('terminal.journalEmpty'))
+      return
+    }
+    if (await safeWriteClipboard(text)) {
+      toast.success(t('terminal.journalCopied', { lines: text.split('\n').length }))
+    } else {
+      toast.error(t('terminal.copyFail'))
+    }
+  } catch {
+    toast.error(t('terminal.journalReadFail'))
   }
 }
 

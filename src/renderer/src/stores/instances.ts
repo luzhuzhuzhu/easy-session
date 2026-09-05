@@ -83,14 +83,16 @@ function resolveRemoteFailureStatus(error: unknown): RemoteInstance['status'] {
     return 'error'
   }
 
+  // UX-6：优先按结构化错误码判定；关键词匹配仅兜底旧错误，不再承载文案语义。
+  const code = (error as { code?: unknown } | null)?.code
+  if (code === 'REMOTE_UNREACHABLE') return 'offline'
   const message = normalizeRemoteError(error).toLowerCase()
   if (
     message.includes('failed to fetch') ||
     message.includes('econnrefused') ||
     message.includes('timed out') ||
     message.includes('timeout') ||
-    message.includes('cloudflare quick tunnel') ||
-    message.includes('远程服务当前不可达')
+    message.includes('cloudflare quick tunnel')
   ) {
     return 'offline'
   }

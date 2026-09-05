@@ -16,6 +16,17 @@ const MAX_ACCEPT_ESCALATIONS = 3
 // 终态集合：这些状态下任务已结束，可被归档（归档正交于状态机）。
 const TERMINAL_STATUSES: AgentTaskStatus[] = ['done', 'failed', 'rejected', 'cancelled', 'expired']
 
+// STAB-4：有界化——单个任务 history 上限（progress 心跳会持续追加，无上限会随
+// 长任务无限膨胀），超出保留最近 N 条；终态任务保留上限（超出滚动清除最旧）。
+const MAX_TASK_HISTORY = 50
+const MAX_TERMINAL_TASKS = 500
+
+function truncateHistory(history: AgentTask['history']): void {
+  if (history.length > MAX_TASK_HISTORY) {
+    history.splice(0, history.length - MAX_TASK_HISTORY)
+  }
+}
+
 interface TaskStoreDeps {
   bridge: SessionBridge
   // 通知某会话：作为系统事件进其收件箱（供 recv/recv --wait），并按需注入纯提醒。
@@ -24,6 +35,9 @@ interface TaskStoreDeps {
   isIdle(sessionId: string): boolean
   // 任务数据变化时通知（用于持久化与 UI 推送）。
   onChange(): void
+  // UX-2：任务发生用户关心的状态转移（done/failed/blocked/review）时回调，
+  // 供主进程弹系统通知。可选，缺省不回调（单测兼容）。
+  onTaskEvent?(task: AgentTask, next: AgentTaskStatus, text?: string): void
 }
 
 export class TaskStore {
@@ -104,6 +118,20 @@ export class TaskStore {
     return task
   }
 
+  // STAB-4：终态任务滚动清除——按 updatedAt 淘汰最旧的终态任务，防止 tasks Map
+  // 与 agent-bus-state.json 无界膨胀。归档任务同样受限（归档只是视图语义）。
+  private evictTerminalTasks(): void {
+    const terminal = Array.from(this.tasks.values())
+      .filter((t) => TERMINAL_STATUSES.includes(t.status))
+      .sort((a, b) => a.updatedAt - b.updatedAt)
+    const excess = terminal.length - MAX_TERMINAL_TASKS
+    if (excess <= 0) return
+    for (const task of terminal.slice(0, excess)) {
+      this.tasks.delete(task.id)
+      this.clearGuards(task.id)
+    }
+  }
+
   // 状态流转的统一入口；返回错误字符串或 null（成功）。
   transition(
     id: string,
@@ -124,9 +152,12 @@ export class TaskStore {
     task.updatedAt = now
     if (actualNext === 'done' || actualNext === 'failed' || actualNext === 'review') task.result = text
     task.history.push({ at: now, status: actualNext, by, text })
+    truncateHistory(task.history)
     this.clearGuards(id)
+    this.evictTerminalTasks()
 
     this.wakeForTransition(task, actualNext, text)
+    this.deps.onTaskEvent?.(task, actualNext, text)
     this.deps.onChange()
     return { task }
   }
@@ -258,6 +289,7 @@ export class TaskStore {
     const now = Date.now()
     task.updatedAt = now
     task.history.push({ at: now, status: 'progress', by, text })
+    truncateHistory(task.history)
     this.stallReminded.delete(id)
     // 心跳：仅当派发方正 recv --wait 等待时投递进展，避免无人读取造成未读堆积。
     this.deps.notify(task.from, `📈 任务 ${id} 进展：${truncate(text)}`, {

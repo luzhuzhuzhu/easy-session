@@ -46,7 +46,7 @@ defineSlots<{ panel(props: { panelId: string }): VNode[] }>()
 
 const { t } = useI18n()
 const injected = inject(COLLAB_DOCK_KEY)
-if (!injected) throw new Error('CollabDock 必须在 useCollabDock 的 provider 内使用')
+if (!injected) throw new Error('[dev] CollabDock must be used inside useCollabDock provider')
 const dock = injected
 
 const draggingPanelId = dock.draggingPanelId

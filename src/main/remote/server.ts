@@ -287,6 +287,21 @@ export class RemoteGatewayServer {
     this.io = io
 
     const tokenFingerprint = fingerprintToken(config.token)
+    // SEC-8：非 loopback 监听 = bearer token 走明文 HTTP 可被局域网嗅探，落服务端日志警示。
+    // （UI 层的强警示与二次确认由 remote-service-handlers/设置页承担。）
+    const hostIsLoopback =
+      config.host === '127.0.0.1' ||
+      config.host === 'localhost' ||
+      config.host === '::1' ||
+      config.host === '[::1]'
+    if (!hostIsLoopback) {
+      this.logger.warn(
+        { host: config.host },
+        '[remote] SECURITY: listening on a non-loopback address over plain HTTP. ' +
+          'The bearer token can be sniffed on the local network. Use a reverse proxy / ' +
+          'Cloudflare Tunnel, or restrict to 127.0.0.1.'
+      )
+    }
     this.logger.info(
       {
         host: config.host,

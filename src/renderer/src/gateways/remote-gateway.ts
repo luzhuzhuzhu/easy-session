@@ -152,7 +152,10 @@ function decorateRemoteError(error: unknown, baseUrl: string): never {
   }
 
   if (typeof status === 'number') {
-    throw new Error(`远程服务当前不可达（${status}）。请检查远程服务、网络连接或反向隧道状态。`)
+    // UX-6：错误码与文案解耦——offline 判定走 REMOTE_UNREACHABLE 码，文案可随意本地化。
+    const err = new Error(`远程服务当前不可达（${status}）。请检查远程服务、网络连接或反向隧道状态。`)
+    ;(err as Error & { code?: string }).code = 'REMOTE_UNREACHABLE'
+    throw err
   }
 
   throw new Error(String(error ?? 'Unknown remote error'))

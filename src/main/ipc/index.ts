@@ -28,7 +28,7 @@ export interface Services {
 }
 
 export function registerAllHandlers(services: Services): void {
-  registerConfigHandlers(services.configService)
+  registerConfigHandlers(services.configService, services.projectManager)
   registerCliHandlers(services.cliManager, services.claudeAdapter, services.codexAdapter, services.openCodeAdapter)
   registerSessionHandlers(services.sessionManager)
   registerProjectHandlers(services.projectManager, services.sessionManager)

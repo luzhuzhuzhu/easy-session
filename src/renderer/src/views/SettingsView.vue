@@ -53,6 +53,8 @@
         @update:language="settingsStore.settings.language = $event; handleSave()"
         @update:session-wake-confirm="settingsStore.settings.sessionWakeConfirm = $event; handleSave()"
         @update:session-exit-notify="settingsStore.settings.sessionExitNotify = $event; handleSave()"
+        :task-notify="settingsStore.settings.taskNotify"
+        @update:task-notify="settingsStore.settings.taskNotify = $event; handleSave()"
         @toggle-sessions-list-position="toggleSessionsListPosition"
         @update:sessions-panel-collapsed="settingsStore.settings.sessionsPanelCollapsed = $event; handleSave()"
         @update:smart-priority-enabled="settingsStore.settings.smartPriorityEnabled = $event; handleSave()"

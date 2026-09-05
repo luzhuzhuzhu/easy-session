@@ -61,6 +61,17 @@
       </select>
     </div>
     <div class="setting-row">
+      <label>{{ $t('settings.taskNotify') }}</label>
+      <select
+        :value="taskNotify"
+        @change="$emit('update:task-notify', ($event.target as HTMLSelectElement).value as 'fail' | 'off' | 'all')"
+      >
+        <option value="fail">{{ $t('settings.taskNotifyFail') }}</option>
+        <option value="all">{{ $t('settings.taskNotifyAll') }}</option>
+        <option value="off">{{ $t('settings.taskNotifyOff') }}</option>
+      </select>
+    </div>
+    <div class="setting-row">
       <label>{{ $t('settings.sessionsListPosition') }}</label>
       <IconButton
         :label="$t('settings.sessionsListPosition')"
@@ -122,6 +133,7 @@ defineProps<{
   language: 'zh-CN' | 'en'
   sessionWakeConfirm: boolean
   sessionExitNotify: 'abnormal' | 'off' | 'all'
+  taskNotify: 'fail' | 'off' | 'all'
   sessionsListPosition: 'left' | 'top'
   sessionsPanelCollapsed: boolean
   smartPriorityEnabled: boolean
@@ -134,6 +146,7 @@ const emit = defineEmits<{
   'update:language': [value: 'zh-CN' | 'en']
   'update:session-wake-confirm': [value: boolean]
   'update:session-exit-notify': [value: 'abnormal' | 'off' | 'all']
+  'update:task-notify': [value: 'fail' | 'off' | 'all']
   'toggle-sessions-list-position': []
   'update:sessions-panel-collapsed': [value: boolean]
   'update:smart-priority-enabled': [value: boolean]

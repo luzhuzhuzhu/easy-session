@@ -1,7 +1,19 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { ConfigService } from '../services/config-service'
+import { ProjectManager } from '../services/project-manager'
 
-export function registerConfigHandlers(configService: ConfigService): void {
+// SEC-6：项目级配置读写必须限定在已注册项目内——否则被攻破的 renderer
+// 可借 config:claude:project:write 向任意路径投放 .claude/settings.json。
+function assertRegisteredProject(projectManager: ProjectManager, projectPath: string): void {
+  if (typeof projectPath !== 'string' || !projectPath.trim()) {
+    throw new Error('参数 projectPath 必须为非空字符串')
+  }
+  if (!projectManager.getProjectByPath(projectPath)) {
+    throw new Error(`REMOTE_PROJECT_NOT_REGISTERED: ${projectPath}`)
+  }
+}
+
+export function registerConfigHandlers(configService: ConfigService, projectManager: ProjectManager): void {
   ipcMain.handle('config:claude:read', () => {
     return configService.getClaudeGlobalConfig()
   })
@@ -11,10 +23,12 @@ export function registerConfigHandlers(configService: ConfigService): void {
   })
 
   ipcMain.handle('config:claude:project:read', (_event, projectPath: string) => {
+    assertRegisteredProject(projectManager, projectPath)
     return configService.getClaudeProjectConfig(projectPath)
   })
 
   ipcMain.handle('config:claude:project:write', (_event, projectPath: string, config: object) => {
+    assertRegisteredProject(projectManager, projectPath)
     return configService.setClaudeProjectConfig(projectPath, config)
   })
 

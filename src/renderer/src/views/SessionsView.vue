@@ -245,6 +245,8 @@
 </template>
 
 <script setup lang="ts">
+// STAB-2：显式组件名供 MainLayout keep-alive include 匹配
+defineOptions({ name: 'SessionsView' })
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -290,7 +292,6 @@ import {
 import { buildProjectRouteLocation } from '@/utils/project-routing'
 import { cliTypeBadgeLetter } from '@shared/cli-types'
 import { buildSessionRestartConfirmCopy } from '@/utils/session-confirm'
-import { onSessionFocusRequest } from '@/api/local-session'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -316,7 +317,6 @@ function toSessionRef(session: Pick<UnifiedSession, 'instanceId' | 'sessionId' |
 
 const filterType = ref('')
 const searchKeyword = ref('')
-let cleanupFocusRequest: (() => void) | null = null
 const projectSessionTreeBuilder = createProjectSessionTreeBuilder()
 const instanceTreeBuilder = createInstanceTreeBuilder()
 const flattenSidebarTree = createSessionSidebarTreeFlattener()
@@ -550,33 +550,11 @@ function applyRouteSessionSelection() {
   }
 }
 
+// STAB-5：workspace reconcile 逻辑已收口到 sessions store 的
+// syncWorkspaceAfterSessionMutation（单一实现）。这里保留薄包装，
+// 供各 composable 的既有注入点复用，避免三处逻辑副本漂移。
 function reconcileWorkspaceSessions() {
-  const validGlobalSessionKeys = sessionsStore.unifiedSessions.map((session) => session.globalSessionKey)
-  const fallbackSessionRef =
-    sessionsStore.activeSessionRef ??
-    (sessionsStore.unifiedSessions[0] ? toSessionRef(sessionsStore.unifiedSessions[0]) : undefined)
-  const preserveInstanceIds = new Set(
-    instancesStore.remoteInstances
-      .filter((instance) => instance.status !== 'online')
-      .map((instance) => instance.id)
-  )
-
-  if (!settingsStore.settings.desktopRemoteMountEnabled) {
-    for (const tab of Object.values(workspaceStore.layout.tabs)) {
-      if (tab.instanceId !== LOCAL_INSTANCE_ID) {
-        preserveInstanceIds.add(tab.instanceId)
-      }
-    }
-  }
-
-  workspaceStore.reconcileSessionRefs(validGlobalSessionKeys, {
-    fallbackSessionRef,
-    preserveInstanceIds: [...preserveInstanceIds]
-  })
-
-  if (workspaceStore.activeSessionRef) {
-    sessionsStore.setActiveSessionRef(workspaceStore.activeSessionRef)
-  }
+  void sessionsStore.syncWorkspaceAfterSessionMutation(sessionsStore.activeSessionRef)
 }
 
 const {
@@ -727,12 +705,8 @@ onMounted(() => {
     sessionsMainAreaResizeObserver.observe(sessionsMainAreaRef.value)
   }
 
-  // 系统通知点击 → 主进程发 focus-request → 定位到对应会话（同 handleSessionClick）。
-  cleanupFocusRequest = onSessionFocusRequest((sessionId) => {
-    const session = sessionsStore.sessions.find((s) => s.id === sessionId)
-    if (!session) return
-    void handleSessionClick(session as SessionListItem)
-  })
+  // UX-3：系统通知点击的 focus-request 统一由 App.vue 全局订阅处理（跳路由 + focus/open
+  // + setActive）。这里曾重复订阅导致同一通知两套 handler 各跑一遍且逻辑已分叉，故移除。
 })
 
 onUnmounted(() => {
@@ -740,8 +714,6 @@ onUnmounted(() => {
   narrowSessionsLayoutQuery = null
   sessionsMainAreaResizeObserver?.disconnect()
   sessionsMainAreaResizeObserver = null
-  cleanupFocusRequest?.()
-  cleanupFocusRequest = null
 })
 const {
   paneZoomPercentById,

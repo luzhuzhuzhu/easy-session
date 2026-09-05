@@ -100,17 +100,17 @@
         </div>
 
         <div class="window-controls">
-          <button class="win-btn" @click="minimize" title="最小化">
+          <button class="win-btn" @click="minimize" :title="$t('topbar.winMinimize')">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </button>
-          <button class="win-btn" @click="toggleMaximize" title="最大化/还原">
+          <button class="win-btn" @click="toggleMaximize" :title="$t('topbar.winMaximize')">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <rect x="2" y="2" width="8" height="8" stroke="currentColor" stroke-width="1.5" rx="1"/>
             </svg>
           </button>
-          <button class="win-btn win-btn-close" @click="closeWindow" title="关闭">
+          <button class="win-btn win-btn-close" @click="closeWindow" :title="$t('topbar.winClose')">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
@@ -121,9 +121,13 @@
 
     <main class="content">
       <ErrorBoundary>
-        <router-view v-slot="{ Component }">
+        <router-view v-slot="{ Component, route: viewRoute }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" />
+            <!-- STAB-2：核心工作区视图 keep-alive——避免切页即销毁重建 xterm 实例
+                 与全量重放终端历史。会话页与协作页保留现场，其余视图照常重建。 -->
+            <keep-alive :include="keepAliveViews">
+              <component :is="Component" :key="viewRoute.name" />
+            </keep-alive>
           </transition>
         </router-view>
       </ErrorBoundary>
@@ -144,6 +148,7 @@ import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import logoSrc from '@/assets/logo-easy-session-light.png'
 import { resolveProjectRouteRef } from '@/utils/project-routing'
+import { NAV_SHORTCUT_DEFS } from '@/composables/shortcut-registry'
 import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
 
 const route = useRoute()
@@ -158,14 +163,23 @@ const confirmDialog = useConfirmDialog()
 
 const collabBadge = computed(() => collabStore.badgeCount)
 
-const navItems = [
-  { path: '/dashboard', icon: 'dashboard', label: 'nav.dashboard' },
-  { path: '/sessions', icon: 'sessions', label: 'nav.sessions' },
-  { path: '/collaboration', icon: 'collaboration', label: 'nav.collaboration' },
-  { path: '/projects', icon: 'projects', label: 'nav.projects' },
-  { path: '/skills', icon: 'skills', label: 'nav.skills' },
-  { path: '/settings', icon: 'settings', label: 'nav.settings' }
-]
+// UX-5：导航顺序以 shortcut-registry 的数字键位顺序为准（Ctrl+1..N），
+// 图标/文案是视图属性故留在此处；新增导航页时同步在注册表加一行即可。
+const NAV_META: Record<string, { icon: string; label: string }> = {
+  '/dashboard': { icon: 'dashboard', label: 'nav.dashboard' },
+  '/sessions': { icon: 'sessions', label: 'nav.sessions' },
+  '/collaboration': { icon: 'collaboration', label: 'nav.collaboration' },
+  '/projects': { icon: 'projects', label: 'nav.projects' },
+  '/skills': { icon: 'skills', label: 'nav.skills' },
+  '/settings': { icon: 'settings', label: 'nav.settings' }
+}
+const navItems = NAV_SHORTCUT_DEFS
+  .filter((def) => /^\d$/.test(def.matchKey) && NAV_META[def.path!])
+  .map((def) => ({ path: def.path!, ...NAV_META[def.path!] }))
+
+// STAB-2：keep-alive 白名单，按组件 name 匹配。这两个视图保存终端现场成本最高，
+// 其余视图（Dashboard/Projects/Skills/Settings）数据轻、重建便宜，保持即时刷新语义。
+const keepAliveViews = ['SessionsView', 'CollaborationView']
 
 const activeSessionCount = computed(() =>
   sessionsStore.unifiedSessions.filter((session) => session.status === 'running').length

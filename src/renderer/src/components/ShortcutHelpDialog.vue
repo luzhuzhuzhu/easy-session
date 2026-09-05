@@ -51,6 +51,7 @@
 import { computed, nextTick, watch, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useShortcutHelp } from '@/composables/useShortcutHelp'
+import { shortcutsByScope } from '@/composables/shortcut-registry'
 import { useOverlayStack } from '@/composables/useOverlayStack'
 import DialogShell from '@/components/ui/DialogShell.vue'
 import IconButton from '@/components/ui/IconButton.vue'
@@ -70,38 +71,17 @@ const shortcutHelp = useShortcutHelp()
 type DialogShellExpose = { focus: () => void }
 const dialogShellRef = ref<DialogShellExpose | null>(null)
 
-const groups = computed<ShortcutGroup[]>(() => [
-  {
-    key: 'navigation',
-    title: t('shortcuts.groups.navigation'),
-    items: [
-      { keys: ['Ctrl', '1'], label: t('shortcuts.items.dashboard') },
-      { keys: ['Ctrl', '2'], label: t('shortcuts.items.sessions') },
-      { keys: ['Ctrl', '3'], label: t('shortcuts.items.collaboration') },
-      { keys: ['Ctrl', '4'], label: t('shortcuts.items.projects') },
-      { keys: ['Ctrl', '5'], label: t('shortcuts.items.skills') },
-      { keys: ['Ctrl', '6'], label: t('shortcuts.items.settings') },
-      { keys: ['Ctrl', ','], label: t('shortcuts.items.settings') }
-    ]
-  },
-  {
-    key: 'workspace',
-    title: t('shortcuts.groups.workspace'),
-    items: [
-      { keys: ['Ctrl', 'N'], label: t('shortcuts.items.newSession') },
-      { keys: ['Ctrl', 'W'], label: t('shortcuts.items.closeTab') },
-      { keys: ['Ctrl', 'Z'], label: t('shortcuts.items.undoPane') }
-    ]
-  },
-  {
-    key: 'help',
-    title: t('shortcuts.groups.help'),
-    items: [
-      { keys: ['Ctrl', '/'], label: t('shortcuts.items.help') },
-      { keys: ['F1'], label: t('shortcuts.items.help') }
-    ]
-  }
-])
+// UX-5：帮助面板直接从 shortcut-registry 渲染——键位/文案与实际行为同源，不再手工对齐。
+const groups = computed<ShortcutGroup[]>(() =>
+  (['navigation', 'workspace', 'help'] as const).map((scope) => ({
+    key: scope,
+    title: t(`shortcuts.groups.${scope}`),
+    items: shortcutsByScope(scope).map((def) => ({
+      keys: def.keys,
+      label: t(def.labelKey)
+    }))
+  }))
+)
 
 watch(
   () => shortcutHelp.visible.value,

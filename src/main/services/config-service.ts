@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { basename, dirname } from 'path'
 import { watch, FSWatcher } from 'fs'
 import {
@@ -7,6 +7,7 @@ import {
   OPENCODE_GLOBAL_CONFIG,
   claudeProjectConfig
 } from './config-paths'
+import { writeFileAtomic } from './atomic-write'
 
 export class ConfigService {
   private watchers = new Map<string, FSWatcher>()
@@ -22,9 +23,9 @@ export class ConfigService {
     }
   }
 
+  // STAB-1：CLI 配置是用户自己的文件，崩溃/断电不能留半成品——统一走 tmp+fsync+rename 原子写。
   async writeJsonFile(filePath: string, data: object): Promise<void> {
-    await mkdir(dirname(filePath), { recursive: true })
-    await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
+    await writeFileAtomic(filePath, JSON.stringify(data, null, 2))
   }
 
   getClaudeGlobalConfig(): Promise<object> {

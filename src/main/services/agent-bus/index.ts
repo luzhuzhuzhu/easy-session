@@ -50,6 +50,13 @@ export class AgentBus {
   // 服务端据此把 es 请求绑定到真实 sessionId，杜绝客户端自报 processId 冒充他人。
   // credential -> processId。凭据从不经由任何 es 命令输出泄露，仅存在于各自 PTY 的 env。
   private agentCredentials = new Map<string, string>()
+  // UX-2：任务事件监听（index.ts 注册 → 系统通知）。
+  private taskEventListeners = new Set<(task: { id: string; title: string; from: string; fromName?: string; to: string; toName?: string }, next: string, text?: string) => void>()
+
+  onTaskEvent(listener: (task: { id: string; title: string; from: string; fromName?: string; to: string; toName?: string }, next: string, text?: string) => void): () => void {
+    this.taskEventListeners.add(listener)
+    return () => this.taskEventListeners.delete(listener)
+  }
 
   constructor(
     private sessionManager: SessionManager,
@@ -64,7 +71,15 @@ export class AgentBus {
     const isIdle = (sessionId: string): boolean =>
       Date.now() - this.gate.getLastOutputAt(sessionId) > IDLE_MS
 
-    this.broker = new AgentBroker(this.bridge, this.gate, token, isIdle, () => this.handleChange())
+    this.broker = new AgentBroker(
+      this.bridge,
+      this.gate,
+      token,
+      isIdle,
+      () => this.handleChange(),
+      // UX-2：任务终态/阻塞事件向上冒泡给 UI 通知层（AgentBus 主类持有监听器）。
+      (task, next, text) => this.taskEventListeners.forEach((fn) => fn(task, next, text))
+    )
     this.server = new AgentBusServer(this.broker, { ...opts, token })
     try {
       await this.server.init()

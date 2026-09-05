@@ -11,6 +11,7 @@ import type {
   AgentBusResponse,
   AgentIdentity,
   AgentTask,
+  AgentTaskStatus,
   NotifyOptions,
   SessionBridge
 } from './types'
@@ -52,14 +53,17 @@ export class AgentBroker {
     private gate: DispatchGate,
     private token: string,
     isIdle: (sessionId: string) => boolean,
-    private onChange: () => void = () => {}
+    private onChange: () => void = () => {},
+    private onTaskEvent?: (task: AgentTask, next: AgentTaskStatus, text?: string) => void
   ) {
     this.taskStore = new TaskStore({
       bridge,
       // 任务事件统一走收件箱：进 mailbox（供 recv/recv --wait），并按需注入纯提醒。
       notify: (sessionId, text, opts) => this.notify(sessionId, text, opts),
       isIdle,
-      onChange: () => this.onChange()
+      onChange: () => this.onChange(),
+      // UX-2：done/failed/blocked/review 等用户关心的转移回调（主进程弹系统通知）。
+      onTaskEvent: (task, next, text) => this.onTaskEvent?.(task, next, text)
     })
   }
 

@@ -445,7 +445,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
+// STAB-2：显式组件名供 MainLayout keep-alive include 匹配
+defineOptions({ name: 'CollaborationView' })
+import { computed, nextTick, onMounted, onUnmounted, onDeactivated, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import TerminalOutput from '@/components/TerminalOutput.vue'
@@ -680,7 +682,11 @@ watch(
 
 watch(
   () => collabStore.snapshot,
-  () => collabStore.markSeen()
+  () => {
+    // UX-4：停留在协作页时不再无条件 markSeen——任何 bus 推送（含发给别人的事件）
+    // 都会刷新水位并清掉 notified 去重集，吞掉本应弹出的系统通知。
+    // 水位统一在离开页面时（onUnmounted / onDeactivated）结算。
+  }
 )
 
 watch(
@@ -1174,6 +1180,12 @@ onMounted(async () => {
   await collabStore.refresh()
   collabStore.markSeen()
   consumePendingFocus()
+})
+
+// STAB-2 keep-alive 后本组件不再 unmount，改用 onDeactivated 结算已读水位；
+// onUnmounted 保留给真正关闭场景（keep-alive include 移除/应用关闭）。
+onDeactivated(() => {
+  collabStore.markSeen()
 })
 
 onUnmounted(() => {

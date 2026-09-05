@@ -5,18 +5,14 @@ import { useShortcutHelp } from '@/composables/useShortcutHelp'
 import { useSessionsStore } from '@/stores/sessions'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useToast } from '@/composables/useToast'
+import { SHORTCUT_REGISTRY } from '@/composables/shortcut-registry'
 
-// Single source of truth for Ctrl+<number> navigation. Order MUST match the
-// visible nav order in MainLayout.vue `navItems`, otherwise the shortcuts drift
-// out of sync with what users see (the collaboration page used to be skipped).
-export const NAV_ROUTES: ReadonlyArray<{ key: string; path: string }> = [
-  { key: '1', path: '/dashboard' },
-  { key: '2', path: '/sessions' },
-  { key: '3', path: '/collaboration' },
-  { key: '4', path: '/projects' },
-  { key: '5', path: '/skills' },
-  { key: '6', path: '/settings' }
-]
+// UX-5：键位行为匹配走 shortcut-registry 单一注册表。
+// NAV_ROUTES/SHORTCUT_LABELS 保留导出（既有引用），但派生自注册表，不再手工维护。
+export const NAV_ROUTES: ReadonlyArray<{ key: string; path: string }> =
+  SHORTCUT_REGISTRY
+    .filter((s) => s.id.startsWith('nav.') && s.path && /^\d$/.test(s.matchKey))
+    .map((s) => ({ key: s.matchKey, path: s.path! }))
 
 const NAV_SHORTCUTS: Record<string, string> = Object.fromEntries(
   NAV_ROUTES.map(({ key, path }) => [key, path])

@@ -61,7 +61,7 @@ export class LocalGateway implements Gateway {
       projectPath = project?.path
     }
     if (!projectPath) {
-      throw new Error('LocalGateway 创建会话时必须提供 projectPath 或 projectId')
+      throw new Error('[dev] LocalGateway: projectPath or projectId is required to create a session')
     }
 
     const session = await createSession({

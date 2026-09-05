@@ -1,7 +1,8 @@
 import { randomUUID } from 'crypto'
-import { access, readFile, writeFile } from 'fs/promises'
+import { access, readFile } from 'fs/promises'
 import { basename, join, normalize, parse, resolve } from 'path'
 import { ProjectStore } from './project-store'
+import { writeFileAtomic } from './atomic-write'
 import type { Project } from './project-types'
 
 export class ProjectManager {
@@ -194,7 +195,8 @@ export class ProjectManager {
     if (!project) return null
 
     const resolved = await this.resolvePromptPath(project.path, cliType)
-    await writeFile(resolved.path, content, 'utf-8')
+    // STAB-1：项目 prompt 文件原子写
+    await writeFileAtomic(resolved.path, content)
     return {
       path: resolved.path,
       content,

@@ -617,6 +617,10 @@ session: {
     inputUnavailablePermission: '终端暂不可输入：当前实例未开放输入权限',
     inputUnavailableProcess: '终端暂不可输入：进程通道尚未就绪',
     inputUnavailableMissing: '终端暂不可输入：会话不存在或已被移除',
+    viewJournal: '查看输出日志',
+    journalEmpty: '没有可回看的日志',
+    journalCopied: '已复制最近 {lines} 行日志到剪贴板',
+    journalReadFail: '读取日志失败',
     zoomPresets: '缩放预设',
     resetZoom: '重置缩放大小'
   },
@@ -1031,6 +1035,10 @@ settings: {
     sessionExitNotifyAbnormal: '仅异常退出时提醒',
     sessionExitNotifyAll: '全部退出都提醒',
     sessionExitNotifyOff: '关闭',
+    taskNotify: '任务事件通知',
+    taskNotifyFail: '失败 / 阻塞时（推荐）',
+    taskNotifyAll: '全部终态（含完成 / 待确认）',
+    taskNotifyOff: '关闭',
     sessionsListPosition: '会话列表位置',
     sessionsListLeft: '左侧列表',
     sessionsListTop: '顶部导航栏',
@@ -1075,6 +1083,9 @@ settings: {
     comingSoon: '即将支持'
   },
   topbar: {
+    winMinimize: '最小化',
+    winMaximize: '最大化/还原',
+    winClose: '关闭',
     activeSessions: '活跃会话',
     claudeOnline: 'Claude 在线',
     claudeOffline: 'Claude 离线',

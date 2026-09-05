@@ -617,6 +617,10 @@ session: {
     inputUnavailablePermission: 'Terminal input unavailable: input is disabled for this instance',
     inputUnavailableProcess: 'Terminal input unavailable: process channel is not ready',
     inputUnavailableMissing: 'Terminal input unavailable: session is missing or has been removed',
+    viewJournal: 'View Output Log',
+    journalEmpty: 'No log available to review',
+    journalCopied: 'Copied last {lines} lines to clipboard',
+    journalReadFail: 'Failed to read output log',
     zoomPresets: 'Zoom Presets',
     resetZoom: 'Reset Zoom Size'
   },
@@ -1031,6 +1035,10 @@ settings: {
     sessionExitNotifyAbnormal: 'Only on abnormal exit',
     sessionExitNotifyAll: 'On every exit',
     sessionExitNotifyOff: 'Off',
+    taskNotify: 'Task Event Notifications',
+    taskNotifyFail: 'On failure / blocked (recommended)',
+    taskNotifyAll: 'All terminal states (incl. done / review)',
+    taskNotifyOff: 'Off',
     sessionsListPosition: 'Session List Position',
     sessionsListLeft: 'Left Panel',
     sessionsListTop: 'Top Bar',
@@ -1075,6 +1083,9 @@ settings: {
     comingSoon: 'Coming Soon'
   },
   topbar: {
+    winMinimize: 'Minimize',
+    winMaximize: 'Maximize/Restore',
+    winClose: 'Close',
     activeSessions: 'Active Sessions',
     claudeOnline: 'Claude Online',
     claudeOffline: 'Claude Offline',

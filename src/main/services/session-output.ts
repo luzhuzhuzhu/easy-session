@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { mkdir, readFile, writeFile, rm } from 'fs/promises'
+import { mkdir, readFile, writeFile, rm, readdir } from 'fs/promises'
 import { join } from 'path'
 import { Protocol } from './protocol'
 import { createLogger } from './logger'
@@ -127,6 +127,31 @@ export class SessionOutputManager {
     const path = this.journalPath(sessionId)
     if (!path) return
     await rm(path, { force: true }).catch(() => undefined)
+  }
+
+  // STAB-7：启动时清理孤儿 journal——会话已不存在（sessions.json 损坏恢复/删除流程中断）
+  // 但 .log 残留在磁盘上。只删除 ids 显式给出的「活会话集合」之外的文件，防误删。
+  async reconcileJournals(aliveSessionIds: Iterable<string>): Promise<number> {
+    if (!this.journalDir) return 0
+    let names: string[]
+    try {
+      names = await readdir(this.journalDir)
+    } catch {
+      return 0
+    }
+    const alive = new Set(aliveSessionIds)
+    let removed = 0
+    for (const name of names) {
+      if (!name.endsWith('.log')) continue
+      const sessionId = name.slice(0, -'.log'.length)
+      if (alive.has(sessionId)) continue
+      await rm(join(this.journalDir, name), { force: true }).catch(() => undefined)
+      removed += 1
+    }
+    if (removed > 0) {
+      log.info(`[journal] reconciled ${removed} orphan journal file(s)`)
+    }
+    return removed
   }
 
   // 读取已停止会话的 journal 尾部（供 es output 等事后取证）。未启用 journal、

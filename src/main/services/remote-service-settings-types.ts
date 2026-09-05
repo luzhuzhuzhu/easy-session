@@ -18,6 +18,8 @@ export interface RemoteServiceSettingsSnapshot extends RemoteServiceConfigRecord
 
 export interface RemoteServiceSettingsUpdate extends RemoteServiceConfigRecord {
   customToken?: string | null
+  /** SEC-8：保存非 loopback 监听时必须由 UI 风险确认后显式传 true，仅用于校验，不落盘。 */
+  insecureNonLoopbackAck?: boolean
 }
 
 export interface RemoteServiceEnvOverrides {

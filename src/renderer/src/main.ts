@@ -14,6 +14,22 @@ app.use(i18n)
 
 setupGlobalErrorHandler(app)
 
+// UX-7：挂载前先按已保存设置校正语言，避免中文用户首帧闪英文。
+// settings:read 失败（老版本/测试环境）保持默认 en，与原行为一致。
+try {
+  void window.electronAPI
+    .invoke('settings:read')
+    .then((data) => {
+      const lang = (data as { language?: string } | null)?.language
+      if (lang === 'zh-CN' || lang === 'en') {
+        i18n.global.locale.value = lang
+      }
+    })
+    .catch(() => undefined)
+} catch {
+  // electronAPI 不存在（测试注入环境）：跳过
+}
+
 app.mount('#app')
 
 // Expose for e2e tests

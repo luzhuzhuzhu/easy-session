@@ -354,6 +354,17 @@ export class CliManager {
     } catch {
       // 进程可能已退出；继续安排兜底收口即可。
     }
+    // STAB-6：Windows ConPTY 的 kill() 不保证孙进程（npm→node→esbuild 等）一并退出，
+    // 用 taskkill /T 按进程树补一刀（进程已死时报错，忽略即可）。
+    const pid = child.pid
+    if (process.platform === 'win32' && pid) {
+      try {
+        const { execFile } = require('child_process') as typeof import('child_process')
+        execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { timeout: 5000 }, () => undefined)
+      } catch {
+        // taskkill 不可用时退回纯 kill 语义
+      }
+    }
     // 单路径清理：kill 只发信号，不删表。正常由 onExit 收口；
     // ConPTY 下 onExit 可能不触发，用兜底定时器保证最终收口（恰好一次）。
     if (!this.killFallbackTimers.has(id)) {

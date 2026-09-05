@@ -37,6 +37,7 @@
     <path v-else-if="name === 'chevron-left'" d="M10 4L6 8l4 4" />
     <path v-else-if="name === 'chevron-down'" d="M4 6l4 4 4-4" />
     <path v-else-if="name === 'chevron-up'" d="M4 10l4-4 4 4" />
+    <path v-else-if="name === 'file-text'" d="M4 2.75h5.5L12.75 6v7.25h-8.5zM9.25 2.75V6h3.5M5.75 8.25h4.5M5.75 10.5h4.5" />
   </svg>
 </template>
 
@@ -68,6 +69,7 @@ defineProps<{
     | 'arrow-down-to-line'
     | 'copy'
     | 'eraser'
+    | 'file-text'
     | 'offline'
     | 'desktop'
     | 'chevron-right'

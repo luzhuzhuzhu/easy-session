@@ -51,7 +51,8 @@ describe('memory rate limit middleware', () => {
   })
 
   it('桶满且全为在force条目时拒绝为新 key 增长但放行，既有限流不受影响', () => {
-    const mw = createMemoryRateLimitMiddleware({ windowMs: 60_000, max: 1, maxEntries: 2 })
+    // ipMax 设大：本用例专注端点桶驱逐语义，隔离全局 IP 桶的干扰
+    const mw = createMemoryRateLimitMiddleware({ windowMs: 60_000, max: 1, maxEntries: 4, ipMax: 10_000 })
     run(mw, 'a', '/x') // count 1 (== max)
     run(mw, 'b', '/y') // count 1 (== max)，桶满
     expect(run(mw, 'a', '/x').statusCode).toBe(429)
@@ -63,5 +64,19 @@ describe('memory rate limit middleware', () => {
 
     // a 仍被限流（未被新 key 挤掉）
     expect(run(mw, 'a', '/x').statusCode).toBe(429)
+  })
+
+  it('SEC-7：per-IP 全局硬顶 —— 总配额不随端点数线性放大', () => {
+    const mw = createMemoryRateLimitMiddleware({ windowMs: 60_000, max: 3, ipMax: 5 })
+    // 同一 IP 轮换端点：每个端点细桶 max=3 都没满，但全局硬顶 5 次后必须 429
+    run(mw, 'atk', '/a')
+    run(mw, 'atk', '/b')
+    run(mw, 'atk', '/c')
+    run(mw, 'atk', '/d')
+    run(mw, 'atk', '/e')
+    expect(run(mw, 'atk', '/f').statusCode).toBe(429)
+    expect(run(mw, 'atk', '/a').statusCode).toBe(429)
+    // 其他 IP 不受影响
+    expect(run(mw, 'other', '/a').nexted).toBe(true)
   })
 })
