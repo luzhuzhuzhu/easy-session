@@ -42,6 +42,25 @@
       @contextmenu="handleContextMenu"
       @wheel.capture="handleWheel"
     ></div>
+    <div v-if="searchVisible" class="terminal-search-bar">
+      <input
+        ref="searchInputRef"
+        v-model="searchQuery"
+        type="text"
+        :placeholder="$t('terminal.searchPlaceholder')"
+        @input="onSearchInput"
+        @keydown.enter.prevent="runSearch($event.shiftKey ? -1 : 1)"
+        @keydown.esc.prevent="closeSearch"
+      />
+      <button type="button" :title="$t('terminal.searchPrev')" @click="runSearch(-1)">↑</button>
+      <button type="button" :title="$t('terminal.searchNext')" @click="runSearch(1)">↓</button>
+      <label class="terminal-search-case">
+        <input v-model="searchMatchCase" type="checkbox" @change="onSearchInput" />
+        <span>{{ $t('terminal.searchCaseSensitive') }}</span>
+      </label>
+      <span v-if="searchResultText" class="terminal-search-result">{{ searchResultText }}</span>
+      <button type="button" :title="$t('terminal.searchClose')" @click="closeSearch">×</button>
+    </div>
     <div v-if="!autoScroll" class="terminal-scroll-state">
       {{ $t('terminal.autoScrollPaused') }}
     </div>
@@ -55,10 +74,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, nextTick, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Terminal, type FontWeight } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 import ToolbarButton from '@/components/ui/ToolbarButton.vue'
 import UiIcon from '@/components/ui/UiIcon.vue'
@@ -95,6 +115,71 @@ const gatewayResolver = getSharedGatewayResolver()
 const containerRef = ref<HTMLElement | null>(null)
 let term: Terminal | null = null
 let fitAddon: FitAddon | null = null
+let searchAddon: SearchAddon | null = null
+
+// UX-8：终端内搜索状态（Ctrl+F 唤起，Esc 关闭）
+const searchVisible = ref(false)
+const searchQuery = ref('')
+const searchMatchCase = ref(false)
+const searchResultText = ref('')
+const searchInputRef = ref<HTMLInputElement | null>(null)
+let searchDecorationsCleanup: (() => void) | null = null
+
+function closeSearch(): void {
+  searchVisible.value = false
+  searchQuery.value = ''
+  searchResultText.value = ''
+  searchDecorationsCleanup?.()
+  searchDecorationsCleanup = null
+  searchAddon?.clearDecorations()
+  term?.focus()
+}
+
+function runSearch(direction: 1 | -1 = 1): void {
+  if (!searchAddon || !term) return
+  const query = searchQuery.value
+  if (!query) {
+    searchResultText.value = ''
+    searchAddon.clearDecorations()
+    return
+  }
+  const options = { caseSensitive: searchMatchCase.value, decorations: { matchOverviewRuler: '#f0ad4e', activeMatchColorOverviewRuler: '#ff8c00' } as never }
+  const fn = direction === 1 ? searchAddon.findNext : searchAddon.findPrevious
+  try {
+    fn.call(searchAddon, query, options)
+    searchResultText.value = ''
+    searchDecorationsCleanup?.()
+    searchDecorationsCleanup = null
+  } catch {
+    searchResultText.value = t('terminal.searchNoResult')
+  }
+}
+
+function onSearchInput(): void {
+  if (!searchAddon || !term) return
+  if (!searchQuery.value) {
+    searchAddon.clearDecorations()
+    searchResultText.value = ''
+    return
+  }
+  try {
+    searchAddon.findNext(searchQuery.value, {
+      caseSensitive: searchMatchCase.value,
+      decorations: { matchOverviewRuler: '#f0ad4e', activeMatchColorOverviewRuler: '#ff8c00' } as never
+    })
+    searchResultText.value = ''
+  } catch {
+    searchResultText.value = t('terminal.searchNoResult')
+  }
+}
+
+async function openSearch(): Promise<void> {
+  if (!term || !searchAddon) return
+  searchVisible.value = true
+  await nextTick()
+  searchInputRef.value?.focus()
+  searchInputRef.value?.select()
+}
 let lastRenderedSeq = 0
 let loadToken = 0
 let subscribeToken = 0
@@ -681,7 +766,18 @@ function initTerminal(): void {
   })
 
   fitAddon = new FitAddon()
+  searchAddon = new SearchAddon()
   term.loadAddon(fitAddon)
+  term.loadAddon(searchAddon)
+  searchAddon.onDidChangeResults((results) => {
+    if (!searchVisible.value) return
+    const { resultIndex, resultCount } = results as { resultIndex: number; resultCount: number }
+    if (resultCount === 0) {
+      searchResultText.value = searchQuery.value ? t('terminal.searchNoResult') : ''
+    } else {
+      searchResultText.value = t('terminal.searchMatches', { index: resultIndex, total: resultCount })
+    }
+  })
   term.open(containerRef.value)
   requestAnimationFrame(() => {
     fitAndSync(true)
@@ -716,6 +812,23 @@ function initTerminal(): void {
       if (!ev.repeat) {
         void pasteFromClipboard()
       }
+      return false
+    }
+
+    // UX-8：Ctrl+F / Esc 唤起与关闭终端内搜索
+    const isCtrlF = ev.ctrlKey && !ev.shiftKey && !ev.altKey && ev.code === 'KeyF'
+    if (isCtrlF) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      if (!ev.repeat) {
+        void openSearch()
+      }
+      return false
+    }
+    if (searchVisible.value && ev.key === 'Escape') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      closeSearch()
       return false
     }
 
@@ -1291,6 +1404,65 @@ onBeforeUnmount(() => {
 .terminal-toolbar:focus-within {
   opacity: 1;
   pointer-events: auto;
+}
+
+// UX-8：终端内搜索条
+.terminal-search-bar {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(4px);
+
+  input[type='text'] {
+    width: 220px;
+    padding: 2px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+
+    &:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.45);
+    }
+  }
+
+  button {
+    padding: 1px 7px;
+    border: none;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    color: inherit;
+    cursor: pointer;
+    font-size: 12px;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+  }
+
+  .terminal-search-case {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .terminal-search-result {
+    font-size: 11px;
+    opacity: 0.85;
+    white-space: nowrap;
+  }
 }
 
 .history-window-hint {
