@@ -12,6 +12,7 @@
     "build:dir": "electron-vite build && electron-builder --win --dir",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint .",
+    "check:colors": "node scripts/check-hardcoded-colors.mjs",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",

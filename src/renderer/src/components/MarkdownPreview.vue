@@ -308,8 +308,7 @@ const html = computed(() => {
   }
 
   :deep(.markdown-callout-important) {
-    // GitHub's "important" purple has no semantic token; kept as-is so it stays
-    // visually distinct from the blue "note" callout.
+    // check-hardcoded-colors-ignore: GitHub important 紫，无语义 token，需与 note 蓝区分
     border-left-color: #a78bfa;
   }
 

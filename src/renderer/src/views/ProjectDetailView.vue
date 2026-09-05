@@ -1053,7 +1053,7 @@ watch(hasRunningSession, () => {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  background: rgba(15, 20, 25, 0.32);
+  background: color-mix(in srgb, var(--text-primary) 32%, transparent);
   border-radius: var(--radius-sm);
   backdrop-filter: blur(1px);
 }

@@ -948,7 +948,7 @@ onBeforeUnmount(() => {
     border-color 140ms ease,
     transform 140ms ease,
     box-shadow 140ms ease;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.05);
+  box-shadow: -2px 0 8px var(--line);
 }
 
 .edge-toggle-anchor:hover .edge-toggle-btn,

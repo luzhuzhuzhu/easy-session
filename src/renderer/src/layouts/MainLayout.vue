@@ -421,7 +421,7 @@ onMounted(() => {
   justify-content: center;
   border-radius: 999px;
   background: var(--status-error);
-  color: #fff;
+  color: var(--text-inverse);
   font-size: var(--font-size-xs);
   font-weight: 700;
   line-height: 1;
@@ -585,7 +585,7 @@ onMounted(() => {
   }
 
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: color-mix(in srgb, var(--text-inverse) 8%, transparent);
     color: var(--text-primary);
 
     svg {
@@ -594,12 +594,12 @@ onMounted(() => {
   }
 
   &:active {
-    background: rgba(255, 255, 255, 0.12);
+    background: color-mix(in srgb, var(--text-inverse) 12%, transparent);
   }
 }
 
 .win-btn-close:hover {
-  background: #e81123;
+  background: #e81123; // check-hardcoded-colors-ignore: Windows 系统关闭钮约定红
   color: white;
 }
 

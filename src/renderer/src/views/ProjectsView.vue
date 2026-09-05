@@ -695,7 +695,7 @@ watch(
   flex-shrink: 0;
 
   &.local {
-    background: rgba(148, 163, 184, 0.14);
+    background: var(--line);
     color: var(--text-secondary);
   }
 }

@@ -288,6 +288,7 @@ function handleSmartPriorityModeChange(event: Event): void {
   height: 18px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border-light) 70%, transparent);
+  // check-hardcoded-colors-ignore: 主题色板快照（预览各主题真实底色，随主题切换不变化）
   background: #111418;
 
   span {
@@ -295,16 +296,17 @@ function handleSmartPriorityModeChange(event: Event): void {
   }
 }
 
+// check-hardcoded-colors-ignore: 主题色板快照（预览各主题真实底色，随主题切换不变化）
 .theme-swatch-chatgpt-dark {
-  background: #0d0d0d;
-  span:first-child { background: #141414; }
-  span:last-child { background: #e8edf3; }
+  background: #0d0d0d; // check-hardcoded-colors-ignore
+  span:first-child { background: #141414; } // check-hardcoded-colors-ignore
+  span:last-child { background: #e8edf3; } // check-hardcoded-colors-ignore
 }
 
 .theme-swatch-gemini-dark {
-  background: #131314;
-  span:first-child { background: #1f3760; }
-  span:last-child { background: #d3e3fd; }
+  background: #131314; // check-hardcoded-colors-ignore
+  span:first-child { background: #1f3760; } // check-hardcoded-colors-ignore
+  span:last-child { background: #d3e3fd; } // check-hardcoded-colors-ignore
 }
 
 @media (max-width: 960px) {

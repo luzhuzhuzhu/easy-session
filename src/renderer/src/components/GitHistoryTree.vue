@@ -688,7 +688,7 @@ onBeforeUnmount(() => {
 
   &.ref-head {
     background: var(--accent-primary);
-    color: #fff;
+    color: var(--text-inverse);
   }
 
   &.ref-branch {

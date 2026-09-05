@@ -10,6 +10,8 @@
   --text-primary: #f4f1ea;
   --text-secondary: #ddd8cf;
   --text-muted: #aaa39a;
+  // 前景用于彩色/品牌底色之上（win 控制钮、hover-card 等固定亮底）
+  --text-inverse: #ffffff;
 
   --accent-primary: #e8edf3;
   --accent-secondary: #f0a064;
@@ -76,6 +78,7 @@
   --text-primary: #e3e3e3;
   --text-secondary: #c4c7c5;
   --text-muted: #9aa0a6;
+  --text-inverse: #ffffff;
 
   --accent-primary: #d3e3fd;
   --accent-secondary: #1f3760;

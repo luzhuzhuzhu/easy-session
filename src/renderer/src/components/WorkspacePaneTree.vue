@@ -1029,7 +1029,7 @@ watch(
   transition: border-color 140ms ease, box-shadow 140ms ease;
 
   &.focused {
-    border-color: #6b7280;
+    border-color: var(--text-muted);
   }
 
   &.drop-active {
