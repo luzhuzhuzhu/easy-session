@@ -62,3 +62,37 @@ jobs:
 
       - name: Unit Tests
         run: npm test
+
+  # FEAT-5：三大平台构建冒烟——只验证 electron-builder 配置在 mac/linux 上可出
+  # --dir 产物（不签名、不发布），证明 node-pty 原生模块与打包配置跨平台可构建。
+  package-smoke:
+    name: Package Smoke (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            args: --mac --dir
+          - os: ubuntu-latest
+            args: --linux --dir
+          - os: windows-latest
+            args: --win --dir
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build bundles
+        run: npm run build
+
+      - name: Package (dir, unsigned)
+        run: npx electron-builder ${{ matrix.args }}
