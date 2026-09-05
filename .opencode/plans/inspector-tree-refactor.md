@@ -1,7 +1,16 @@
 # Inspector Tree Components Refactor Plan
 
 > Created: 2026-03-28
-> Status: Pending Implementation
+> Status: Partially Implemented (2026-09-05)
+>
+> 已落地（对照 Problem Summary）：
+> - Grid 列错位：GitChangesTree 目录/文件行已统一为 `16px 16px minmax(0, 1fr) auto` 四列对齐。
+> - 状态码过大：`tree-status-code` 徽标 16px→14px。
+> - 缩进不一致：SkillsView 缩进基准 10px→12px，与 GitChangesTree/ProjectFilesTree 统一（12 + depth*14）。
+> - 动作按钮突兀：`tree-actions` 已带 `transition: opacity 180ms ease`（原计划遗留项中已解决）。
+>
+> 未落地（评估为后续迭代）：虚拟化滚动、折叠状态统一、深递归防护、搜索过滤、
+> 拖拽 resize 之外的表格化改造。见 docs/TODO-COMPREHENSIVE.md FEAT-8 记录。
 
 ## Problem Summary
 

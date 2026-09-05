@@ -8,7 +8,7 @@
           :key="item.key"
           class="tree-item"
           :class="[item.type, item.cli, { active: item.type === 'skill' && selectedSkill?.id === item.skill?.id }]"
-          :style="{ paddingLeft: (item.depth * 14 + 10) + 'px' }"
+          :style="{ paddingLeft: (item.depth * 14 + 12) + 'px' }"
           @click="item.type === 'skill' ? (selectedSkill = item.skill) : toggleNode(item.key)"
         >
           <span v-if="item.type !== 'skill'" class="tree-caret">{{ collapsed[item.key] ? '▸' : '▾' }}</span>
