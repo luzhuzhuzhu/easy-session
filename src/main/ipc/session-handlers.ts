@@ -143,6 +143,16 @@ export function registerSessionHandlers(
     return sessionManager.outputManager.readJournalTail(id, lines ?? 500)
   })
 
+  // UX-9：跨会话输出全文搜索（内存缓冲 + journal 兜底），附带会话名元数据。
+  ipcMain.handle('session:output:search', (_event, query: string, limitPerSession?: number) => {
+    if (typeof query !== 'string' || !query.trim()) return []
+    const names = new Map<string, { name?: string; type?: string }>()
+    for (const session of sessionManager.listSessions()) {
+      names.set(session.id, { name: session.name, type: session.type })
+    }
+    return sessionManager.outputManager.searchJournals(query, { limitPerSession, sessionNames: names })
+  })
+
   ipcMain.handle('session:resize', (_event, id: string, cols: number, rows: number) => {
     assertString(id, 'id')
     assertPositiveInt(cols, 'cols')

@@ -24,7 +24,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'workspace:getLayout', 'workspace:updateLayout', 'workspace:resetLayout',
   // session
   'session:create', 'session:destroy', 'session:list', 'session:get',
-  'session:input', 'session:write', 'session:output:history', 'session:output:clear', 'session:output:journalTail',
+  'session:input', 'session:write', 'session:output:history', 'session:output:clear', 'session:output:journalTail', 'session:output:search',
   'session:resize', 'session:rename', 'session:updateIcon',
   'session:restart', 'session:start', 'session:pause',
   'session:updateOptions', 'session:sendTo',

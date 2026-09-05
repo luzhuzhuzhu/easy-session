@@ -154,6 +154,76 @@ export class SessionOutputManager {
     return removed
   }
 
+  // UX-9：跨会话输出全文搜索——扫描 journal 目录，返回含关键词的会话与命中行。
+  // 内存缓冲优先（运行中会话），journal 兜底（已退出会话）。每会话最多返回 limit 行。
+  async searchJournals(
+    query: string,
+    options?: { limitPerSession?: number; sessionNames?: Map<string, { name?: string; type?: string }> }
+  ): Promise<
+    Array<{ sessionId: string; name?: string; type?: string; matches: Array<{ line: string; fromMemory: boolean }> }>
+  > {
+    const keyword = query.trim().toLowerCase()
+    if (!keyword) return []
+    const limitPerSession = Math.min(Math.max(options?.limitPerSession ?? 5, 1), 50)
+    const results: Array<{
+      sessionId: string
+      name?: string
+      type?: string
+      matches: Array<{ line: string; fromMemory: boolean }>
+    }> = []
+
+    const sessionIds = new Set<string>()
+    // 内存缓冲中的运行中会话
+    for (const sessionId of this.buffers.keys()) sessionIds.add(sessionId)
+    // journal 目录中的已退出会话
+    if (this.journalDir) {
+      try {
+        for (const name of await readdir(this.journalDir)) {
+          if (name.endsWith('.log')) sessionIds.add(name.slice(0, -'.log'.length))
+        }
+      } catch {
+        /* 目录不存在则只搜内存 */
+      }
+    }
+
+    for (const sessionId of sessionIds) {
+      const meta = options?.sessionNames?.get(sessionId)
+      const matches: Array<{ line: string; fromMemory: boolean }> = []
+
+      // 1) 内存缓冲（运行中或本次启动后回灌的）
+      const state = this.buffers.get(sessionId)
+      if (state) {
+        for (let i = 0; i < state.size && matches.length < limitPerSession; i += 1) {
+          const line = state.lines[(state.start + i) % MAX_BUFFER_LINES]
+          if (line && line.text.toLowerCase().includes(keyword)) {
+            matches.push({ line: line.text.replace(/\n$/, ''), fromMemory: true })
+          }
+        }
+      }
+
+      // 2) journal 文件（退出会话或内存不足 2000 行历史的兜底）
+      const path = this.journalPath(sessionId)
+      if (path && matches.length < limitPerSession) {
+        try {
+          const text = await readFile(path, 'utf8')
+          for (const line of text.split('\n')) {
+            if (matches.length >= limitPerSession) break
+            if (line.toLowerCase().includes(keyword)) {
+              matches.push({ line, fromMemory: false })
+            }
+          }
+        } catch {
+          /* 无 journal，跳过 */
+        }
+      }
+
+      if (matches.length > 0) {
+        results.push({ sessionId, name: meta?.name, type: meta?.type, matches })
+      }
+    }
+    return results
+  }
+
   // 读取已停止会话的 journal 尾部（供 es output 等事后取证）。未启用 journal、
   // 文件不存在或内容为空时返回 null。行为与 restoreJournal 的行数语义一致：取尾部。
   async readJournalTail(sessionId: string, lines: number): Promise<string | null> {

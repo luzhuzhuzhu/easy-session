@@ -191,3 +191,18 @@ export function onSessionFocusRequest(callback: (sessionId: string) => void): ()
 export function getSessionJournalTail(id: string, lines?: number): Promise<string | null> {
   return ipc.invoke<string | null>('session:output:journalTail', id, lines)
 }
+
+// UX-9：跨会话输出全文搜索（运行中会话走内存缓冲，已退出会话走 journal）。
+export interface JournalSearchMatch {
+  line: string
+  fromMemory: boolean
+}
+export interface JournalSearchResult {
+  sessionId: string
+  name?: string
+  type?: string
+  matches: JournalSearchMatch[]
+}
+export function searchSessionOutput(query: string, limitPerSession?: number): Promise<JournalSearchResult[]> {
+  return ipc.invoke<JournalSearchResult[]>('session:output:search', query, limitPerSession)
+}
