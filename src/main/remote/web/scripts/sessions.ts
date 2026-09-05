@@ -8,6 +8,7 @@ export const sessionsScript = `
   const state = {
     sessions: [],
     projects: [],
+    instances: [],
     activeSessionId: '',
     viewportMode: '',
     lastViewportWidth: 0,
@@ -138,6 +139,7 @@ export const sessionsScript = `
     dom.mobileModeLabel = document.getElementById('mobileModeLabel');
     dom.mobileModeHint = document.getElementById('mobileModeHint');
     dom.settingsBaseUrl = document.getElementById('settingsBaseUrl');
+    dom.instanceBar = document.getElementById('instanceBar');
   }
 
   async function initializeRemoteWeb(defaultBaseUrl) {
@@ -1234,7 +1236,27 @@ function bindInputEvents(inputEl, buttonEl) {
 
     renderSessionList(dom.desktopSessionList, filtered);
     renderSessionList(dom.mobileSessionList, filtered);
+    renderInstanceBar();
     updateActiveSessionView();
+  }
+
+  // FEAT-4：实例摘要条。多实例挂载时展示各实例会话归属（只读）；
+  // 单实例时只显示本机一行，不做任何切换控制入口。
+  function renderInstanceBar() {
+    var bar = dom.instanceBar;
+    if (!bar) return;
+    var instances = state.instances || [];
+    bar.innerHTML = '';
+    bar.hidden = instances.length === 0;
+    instances.forEach(function (instance) {
+      var chip = document.createElement('span');
+      chip.className = 'instance-chip' + (instance.type === 'local' ? ' local' : '');
+      chip.title = instance.type === 'local'
+        ? '本机实例（可操作）'
+        : '远程挂载实例（仅浏览）';
+      chip.textContent = (instance.type === 'local' ? '● ' : '○ ') + instance.name + ' · ' + (instance.sessionCount || 0);
+      bar.appendChild(chip);
+    });
   }
 
   async function handleSessionControl(action) {
@@ -1351,11 +1373,16 @@ function bindInputEvents(inputEl, buttonEl) {
   async function refreshData() {
     const responses = await Promise.allSettled([
       api('/api/sessions'),
-      state.capabilities.projectsList ? api('/api/projects') : Promise.resolve([])
+      state.capabilities.projectsList ? api('/api/projects') : Promise.resolve([]),
+      api('/api/instances')
     ]);
 
     const sessions = responses[0].status === 'fulfilled' ? responses[0].value : [];
     const projects = responses[1].status === 'fulfilled' ? responses[1].value : [];
+    // FEAT-4：实例摘要（只读）。接口失败时退回「仅本机」显示，不阻塞会话列表。
+    const instances = responses[2].status === 'fulfilled' && Array.isArray(responses[2].value)
+      ? responses[2].value
+      : [];
     let nextSessions = Array.isArray(sessions) ? sessions.slice() : [];
 
     if (state.passthroughOnly) {
@@ -1370,6 +1397,7 @@ function bindInputEvents(inputEl, buttonEl) {
 
     state.sessions = nextSessions;
     state.projects = Array.isArray(projects) ? projects.slice() : [];
+    state.instances = instances;
 
     if (state.activeSessionId && !state.sessions.some(function (session) { return session.id === state.activeSessionId; })) {
       unsubscribeSession(state.activeSessionId);

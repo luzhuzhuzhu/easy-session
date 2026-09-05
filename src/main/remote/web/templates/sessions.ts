@@ -59,6 +59,8 @@ export function sessionsTemplate(passthroughOnly: boolean): string {
             <input id="desktopSearchInput" class="input" placeholder="搜索会话..." />
           </div>
 
+          <div id="instanceBar" class="instance-bar" hidden></div>
+
           <div id="desktopSessionList" class="session-list"></div>
         </aside>
 

@@ -121,6 +121,32 @@ export const layouts = `
     font-size: 13px;
   }
 
+  /* FEAT-4：实例摘要条（只读） */
+  .instance-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0 10px 8px;
+    flex-shrink: 0;
+  }
+
+  .instance-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--surface-2);
+  }
+
+  .instance-chip.local {
+    color: var(--accent-primary);
+    border-color: color-mix(in srgb, var(--accent-primary) 40%, var(--line));
+  }
+
   .session-list {
     padding: 6px 8px;
     display: flex;

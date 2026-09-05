@@ -72,6 +72,16 @@ export interface RemoteRouteRegistrationOptions {
   machineName: string
 }
 
+// FEAT-4：Web 端 instance 感知——本机作为唯一可操作实例，已挂载的远程实例
+// 仅提供只读摘要（名称/状态/会话数），供 Web 顶栏展示归属；不开跨实例控制。
+export interface RemoteInstanceSummary {
+  id: string
+  name: string
+  type: 'local' | 'remote'
+  status: string
+  sessionCount: number
+}
+
 export interface RemoteCapabilitiesResponse {
   passthroughOnly: boolean
   serverVersion: string

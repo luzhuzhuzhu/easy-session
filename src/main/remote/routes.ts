@@ -11,6 +11,7 @@ import type {
   RemoteProjectPromptBody,
   RemoteRouteRegistrationOptions,
   RemoteServerInfoResponse,
+  RemoteInstanceSummary,
   RemoteProjectUpdateBody,
   RemoteSessionCreateBody,
   RemoteSessionDto,
@@ -424,6 +425,24 @@ export function registerRemoteRoutes(
         passthroughOnly
       }
       sendSuccess(res, getRequestId(req), response)
+    })
+  )
+
+  // FEAT-4：实例列表（只读摘要）。本机实例 always 可见；远程挂载实例仅回名称/状态，
+  // 不提供跨实例控制入口——Web 端保持「单机操作、多机可视」的安全边界。
+  app.get(
+    '/api/instances',
+    withHandler(async (req, res) => {
+      const instances: RemoteInstanceSummary[] = [
+        {
+          id: 'local',
+          name: serverName,
+          type: 'local',
+          status: 'online',
+          sessionCount: deps.sessionManager.listSessions().length
+        }
+      ]
+      sendSuccess(res, getRequestId(req), instances)
     })
   )
 
