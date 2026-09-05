@@ -90,6 +90,10 @@ function handleUnsubscribe(socket: Socket, payload: SessionSubscribePayload, ack
 
 // 授权前置：socket 必须先 subscribe（join 房间）才能对该会话做输入/写入/resize，
 // 避免「一旦登录即可向任意运行中会话注入命令」。
+// SEC-4 范围说明：RemoteDependencies 仅装配本地 sessionManager/projectManager/outputManager
+// （见 server.ts），Web 端按构造即只能枚举/订阅本机实例的会话，不存在跨实例订阅面；
+// 且远程登录持单一访问令牌（机器所有者级别），subscribe 即为实例级授权语义。
+// 若未来暴露跨实例能力，必须先在此处增加实例级授权开关。
 function ensureJoined(socket: Socket, sessionId: string, ack?: (result: SocketAck) => void): boolean {
   if (socket.rooms.has(sessionRoom(sessionId))) return true
   ackErr(ack, `Not subscribed to session: ${sessionId}`)
