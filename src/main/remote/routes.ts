@@ -640,6 +640,21 @@ export function registerRemoteRoutes(
     })
   )
 
+  // UX-10：已退出会话的 journal 尾部（只读，不受 passthroughOnly 限制——
+  // journal 是事后取证数据，不含可执行能力）。
+  app.get(
+    '/api/sessions/:id/journal',
+    withHandler(async (req, res) => {
+      const id = getRouteParam(req, 'id')
+      const lines = parseHistoryLines(req)
+      const text = await deps.outputManager.readJournalTail(id, lines ?? 500)
+      if (text === null) {
+        throw new HttpError(404, 'JOURNAL_NOT_FOUND', `No journal for session: ${id}`)
+      }
+      sendSuccess(res, getRequestId(req), { sessionId: id, text })
+    })
+  )
+
   app.get(
     '/api/sessions/:id/output',
     withHandler(async (req, res) => {

@@ -114,6 +114,7 @@ export const sessionsScript = `
     dom.globalNotice = document.getElementById('globalNotice');
     dom.inlineNotice = document.getElementById('inlineNotice');
     dom.refreshBtn = document.getElementById('refreshBtn');
+    dom.createSessionBtn = document.getElementById('createSessionBtn');
     dom.mobileRefreshBtn = document.getElementById('mobileRefreshBtn');
     dom.logoutBtn = document.getElementById('logoutBtn');
     dom.mobileLogoutBtn = document.getElementById('mobileLogoutBtn');
@@ -156,6 +157,46 @@ export const sessionsScript = `
   }
 
   function bindUi() {
+    // UX-10：新建会话（仅生命周期开放时渲染按钮）。项目 + CLI 类型两步选择。
+    if (dom.createSessionBtn) {
+      dom.createSessionBtn.addEventListener('click', function () {
+        if (!state.capabilities || !state.capabilities.sessionCreate) {
+          setInlineNotice('当前服务端未开放会话创建。', 'error');
+          return;
+        }
+        const projects = state.projects || [];
+        if (!projects.length) {
+          setInlineNotice('服务端没有已注册的项目，请先在桌面端添加。', 'error');
+          return;
+        }
+        const projectLines = projects
+          .map(function (project, index) { return index + 1 + '. ' + project.name; })
+          .join('\\n');
+        const pick = window.prompt('选择项目（输入序号）：\\n' + projectLines, '1');
+        if (pick === null) return;
+        const projectIndex = parseInt(pick, 10) - 1;
+        const project = projects[projectIndex];
+        if (!project) {
+          setInlineNotice('序号无效。', 'error');
+          return;
+        }
+        const type = (window.prompt('CLI 类型（claude / codex / opencode）：', 'claude') || '').trim().toLowerCase();
+        if (type !== 'claude' && type !== 'codex' && type !== 'opencode') {
+          setInlineNotice('类型无效。', 'error');
+          return;
+        }
+        void safeAction('创建会话', async function () {
+          await api('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: type, projectId: project.id })
+          });
+          await refreshData();
+          setInlineNotice('会话已创建。', 'ok');
+        });
+      });
+    }
+
     dom.refreshBtn.addEventListener('click', function () {
       void safeAction('刷新', async function () {
         await refreshData();
@@ -1501,6 +1542,36 @@ function bindInputEvents(inputEl, buttonEl) {
       state.idleTimeoutPending = false;
     });
 
+    // UX-10：重连成功后自动回拉会话列表与当前会话历史，不再依赖手动刷新。
+    socket.on('connect', function () {
+      if (state.socketReconnectRefreshed) {
+        void refreshData().catch(function () {});
+        const active = getActiveSession();
+        if (active && state.subscribedSessionId === active.id) {
+          // 强制重订阅：服务端会回放最近历史（等价断线期间的输出回拉）
+          subscribeToSession(active.id, true);
+        }
+      }
+      state.socketReconnectRefreshed = true;
+    });
+
+    // UX-10：后台会话状态变化的页内提醒（移动端无系统通知，用全局 notice 提示）。
+    const statusLabels = { running: '运行中', stopped: '已停止', idle: '空闲', error: '异常' };
+    socket.on('session:status', function (event) {
+      const target = state.sessions.find(function (session) {
+        return session.id === event.sessionId;
+      });
+
+      if (target) target.status = event.status;
+      const active = getActiveSession();
+      const isActive = active && active.id === event.sessionId;
+      if (!isActive && event.status === 'stopped') {
+        const label = target && target.name ? target.name : event.sessionId;
+        setGlobalNotice('会话「' + label + '」已退出。', 'warning');
+      }
+      renderSessions();
+    });
+
     socket.on('connect_error', function (error) {
       const message = error && error.message ? error.message : 'unknown';
       state.lastSocketError = message;
@@ -1532,14 +1603,6 @@ function bindInputEvents(inputEl, buttonEl) {
 
     socket.on('session:output', writeOutput);
 
-    socket.on('session:status', function (event) {
-      const target = state.sessions.find(function (session) {
-        return session.id === event.sessionId;
-      });
-
-      if (target) target.status = event.status;
-      renderSessions();
-    });
   }
 
   function emitTerminalInput(raw, options) {
