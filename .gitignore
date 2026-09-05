@@ -48,6 +48,8 @@ AGENTS.md
 
 # Temp / debug artifacts
 .tmp-tests/
+.tmp-*/
+.tmp-es-smoke/
 nul
 err.txt
 

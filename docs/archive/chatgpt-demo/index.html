@@ -1,0 +1,1471 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatGPT Demo · EasySession</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+    />
+    <style>
+      /* ============ 设计令牌 ============ */
+      :root {
+        --radius-sm: 6px;
+        --radius-md: 10px;
+        --radius-lg: 16px;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+        --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+        --t-fast: 120ms;
+        --t-base: 200ms;
+        --t-slow: 360ms;
+        --ease: cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      [data-theme="dark"] {
+        --bg: #0d0d0d;
+        --bg-elev: #1f1f1f;
+        --bg-elev-2: #2a2a2a;
+        --bg-hover: #2d2d2d;
+        --border: #3a3a3a;
+        --text: #ececec;
+        --text-2: #b4b4b4;
+        --text-3: #8e8e8e;
+        --accent: #10a37f;
+        --accent-hover: #1a7f64;
+        --user-bubble: #2a2a2a;
+        --assistant-bubble: transparent;
+        --code-bg: #0d0d0d;
+        --scrollbar: #3a3a3a;
+      }
+
+      [data-theme="light"] {
+        --bg: #ffffff;
+        --bg-elev: #f7f7f8;
+        --bg-elev-2: #ececec;
+        --bg-hover: #e8e8e8;
+        --border: #d9d9d9;
+        --text: #1a1a1a;
+        --text-2: #5a5a5a;
+        --text-3: #8a8a8a;
+        --accent: #10a37f;
+        --accent-hover: #0d8a6a;
+        --user-bubble: #f4f4f4;
+        --assistant-bubble: transparent;
+        --code-bg: #f6f6f6;
+        --scrollbar: #c8c8c8;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-size: 15px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        transition:
+          background var(--t-base) var(--ease),
+          color var(--t-base) var(--ease);
+      }
+
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--scrollbar);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--text-3);
+      }
+
+      /* ============ 布局 ============ */
+      .app {
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        height: 100vh;
+      }
+
+      .app.sidebar-collapsed {
+        grid-template-columns: 0 1fr;
+      }
+      .app.sidebar-collapsed .sidebar {
+        transform: translateX(-100%);
+        pointer-events: none;
+      }
+
+      /* ============ 侧栏 ============ */
+      .sidebar {
+        background: var(--bg-elev);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        transition: transform var(--t-slow) var(--ease);
+        overflow: hidden;
+      }
+
+      .sidebar-header {
+        padding: 12px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 4px;
+        font-weight: 600;
+        font-size: 14px;
+        letter-spacing: 0.2px;
+      }
+      .brand-mark {
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-sm);
+        background: linear-gradient(135deg, var(--accent), #5eead4);
+        display: grid;
+        place-items: center;
+        color: white;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .btn-new {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 12px;
+        background: var(--bg-elev-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        color: var(--text);
+        font-size: 13px;
+        cursor: pointer;
+        transition: all var(--t-fast) var(--ease);
+      }
+      .btn-new:hover {
+        background: var(--bg-hover);
+        border-color: var(--text-3);
+      }
+      .btn-new svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .history {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px;
+      }
+
+      .history-section {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-3);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        padding: 12px 10px 6px;
+      }
+
+      .history-item {
+        padding: 9px 12px;
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--text-2);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all var(--t-fast) var(--ease);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .history-item:hover {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
+      .history-item.active {
+        background: var(--bg-elev-2);
+        color: var(--text);
+      }
+      .history-item svg {
+        flex-shrink: 0;
+        width: 14px;
+        height: 14px;
+        opacity: 0.7;
+      }
+
+      .sidebar-footer {
+        padding: 12px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .user-chip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: background var(--t-fast) var(--ease);
+      }
+      .user-chip:hover {
+        background: var(--bg-hover);
+      }
+      .avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #f59e0b, #ef4444);
+        display: grid;
+        place-items: center;
+        color: white;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .user-name {
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .user-plan {
+        font-size: 11px;
+        color: var(--text-3);
+      }
+
+      /* ============ 主区 ============ */
+      .main {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        position: relative;
+        background: var(--bg);
+      }
+
+      .topbar {
+        height: 56px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .icon-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-md);
+        border: none;
+        background: transparent;
+        color: var(--text-2);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        transition: all var(--t-fast) var(--ease);
+      }
+      .icon-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
+      .icon-btn svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .model-pill {
+        margin: 0 auto;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        font-size: 13px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        transition: all var(--t-fast) var(--ease);
+      }
+      .model-pill:hover {
+        background: var(--bg-hover);
+      }
+      .model-pill .dot {
+        width: 6px;
+        height: 6px;
+        background: var(--accent);
+        border-radius: 50%;
+        box-shadow: 0 0 8px var(--accent);
+      }
+
+      /* ============ 聊天区 ============ */
+      .messages {
+        flex: 1;
+        overflow-y: auto;
+        scroll-behavior: smooth;
+      }
+
+      .welcome {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        gap: 32px;
+        animation: fadeUp 0.6s var(--ease);
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .welcome h1 {
+        font-size: 32px;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+        background: linear-gradient(135deg, var(--accent), #5eead4);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .welcome p {
+        color: var(--text-2);
+        font-size: 14px;
+      }
+
+      .suggestions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        max-width: 760px;
+        width: 100%;
+      }
+
+      .suggestion {
+        padding: 14px 16px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        background: var(--bg-elev);
+        cursor: pointer;
+        text-align: left;
+        font-size: 13px;
+        color: var(--text-2);
+        line-height: 1.5;
+        transition: all var(--t-fast) var(--ease);
+      }
+      .suggestion:hover {
+        background: var(--bg-hover);
+        border-color: var(--text-3);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+      }
+      .suggestion strong {
+        display: block;
+        color: var(--text);
+        margin-bottom: 4px;
+        font-size: 13px;
+      }
+
+      /* ============ 消息气泡 ============ */
+      .message {
+        padding: 24px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .message:last-child {
+        border-bottom: none;
+      }
+
+      .message-inner {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 0 24px;
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+      }
+
+      .avatar-lg {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        font-weight: 600;
+        color: white;
+      }
+      .avatar-lg.user {
+        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      }
+      .avatar-lg.assistant {
+        background: linear-gradient(135deg, var(--accent), #5eead4);
+      }
+
+      .bubble {
+        flex: 1;
+        min-width: 0;
+        padding-top: 4px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+
+      .bubble .name {
+        font-weight: 600;
+        font-size: 13px;
+        margin-bottom: 4px;
+        color: var(--text);
+      }
+
+      .bubble .content {
+        font-size: 15px;
+        color: var(--text);
+        line-height: 1.7;
+      }
+
+      .bubble .content > *:first-child {
+        margin-top: 0;
+      }
+      .bubble .content > *:last-child {
+        margin-bottom: 0;
+      }
+      .bubble .content p {
+        margin: 8px 0;
+      }
+      .bubble .content h1,
+      .bubble .content h2,
+      .bubble .content h3 {
+        margin: 16px 0 8px;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+      .bubble .content h1 {
+        font-size: 22px;
+      }
+      .bubble .content h2 {
+        font-size: 19px;
+      }
+      .bubble .content h3 {
+        font-size: 17px;
+      }
+      .bubble .content ul,
+      .bubble .content ol {
+        margin: 8px 0;
+        padding-left: 24px;
+      }
+      .bubble .content li {
+        margin: 4px 0;
+      }
+      .bubble .content a {
+        color: var(--accent);
+        text-decoration: underline;
+      }
+      .bubble .content blockquote {
+        border-left: 3px solid var(--border);
+        padding-left: 14px;
+        margin: 10px 0;
+        color: var(--text-2);
+      }
+      .bubble .content table {
+        border-collapse: collapse;
+        margin: 12px 0;
+        width: 100%;
+        font-size: 14px;
+      }
+      .bubble .content th,
+      .bubble .content td {
+        border: 1px solid var(--border);
+        padding: 8px 12px;
+        text-align: left;
+      }
+      .bubble .content th {
+        background: var(--bg-elev);
+        font-weight: 600;
+      }
+
+      .bubble pre {
+        margin: 12px 0;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        position: relative;
+      }
+      .bubble pre .lang {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        font-size: 11px;
+        color: var(--text-3);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-family: ui-monospace, monospace;
+      }
+      .bubble pre code {
+        display: block;
+        padding: 14px 16px;
+        overflow-x: auto;
+        font-size: 13px;
+        line-height: 1.55;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        background: transparent !important;
+      }
+
+      .bubble :not(pre) > code {
+        background: var(--bg-elev-2);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 0.88em;
+        color: #ec5f5f;
+      }
+      [data-theme="dark"] .bubble :not(pre) > code {
+        color: #f78da7;
+      }
+
+      .copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 60px;
+        background: var(--bg-elev-2);
+        border: 1px solid var(--border);
+        color: var(--text-2);
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity var(--t-fast) var(--ease);
+      }
+      .bubble pre:hover .copy-btn {
+        opacity: 1;
+      }
+      .copy-btn:hover {
+        background: var(--bg-hover);
+      }
+
+      /* ============ 打字光标 ============ */
+      .cursor {
+        display: inline-block;
+        width: 8px;
+        height: 16px;
+        background: var(--text);
+        vertical-align: text-bottom;
+        margin-left: 2px;
+        animation: blink 1s step-end infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      /* ============ 输入区 ============ */
+      .composer {
+        flex-shrink: 0;
+        padding: 16px 24px 24px;
+        background: linear-gradient(
+          to top,
+          var(--bg) 70%,
+          transparent
+        );
+      }
+
+      .composer-inner {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+
+      .input-wrap {
+        position: relative;
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        transition: all var(--t-fast) var(--ease);
+      }
+      .input-wrap:focus-within {
+        border-color: var(--text-3);
+        box-shadow: var(--shadow-md);
+      }
+
+      .input-wrap textarea {
+        width: 100%;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 15px;
+        line-height: 1.5;
+        resize: none;
+        padding: 14px 100px 14px 16px;
+        max-height: 200px;
+        min-height: 24px;
+      }
+
+      .input-wrap textarea::placeholder {
+        color: var(--text-3);
+      }
+
+      .input-tools {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        display: flex;
+        gap: 4px;
+        align-items: center;
+      }
+
+      .send-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-md);
+        background: var(--accent);
+        color: white;
+        border: none;
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+        transition: all var(--t-fast) var(--ease);
+      }
+      .send-btn:hover:not(:disabled) {
+        background: var(--accent-hover);
+        transform: scale(1.05);
+      }
+      .send-btn:disabled {
+        background: var(--bg-elev-2);
+        color: var(--text-3);
+        cursor: not-allowed;
+      }
+      .send-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .hint {
+        text-align: center;
+        font-size: 11px;
+        color: var(--text-3);
+        margin-top: 8px;
+      }
+
+      /* ============ 思考指示器 ============ */
+      .thinking {
+        display: inline-flex;
+        gap: 4px;
+        padding: 4px 0;
+      }
+      .thinking span {
+        width: 6px;
+        height: 6px;
+        background: var(--text-3);
+        border-radius: 50%;
+        animation: bounce 1.4s infinite ease-in-out;
+      }
+      .thinking span:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .thinking span:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      @keyframes bounce {
+        0%,
+        80%,
+        100% {
+          transform: scale(0.6);
+          opacity: 0.4;
+        }
+        40% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      /* ============ 工具栏（消息下方） ============ */
+      .msg-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 12px;
+        opacity: 0;
+        transition: opacity var(--t-fast) var(--ease);
+      }
+      .message:hover .msg-actions {
+        opacity: 1;
+      }
+      .msg-action {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-2);
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: all var(--t-fast) var(--ease);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .msg-action:hover {
+        background: var(--bg-hover);
+        color: var(--text);
+      }
+      .msg-action svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* ============ 移动端 ============ */
+      @media (max-width: 768px) {
+        .app {
+          grid-template-columns: 0 1fr;
+        }
+        .sidebar {
+          position: fixed;
+          inset: 0 auto 0 0;
+          width: 260px;
+          z-index: 10;
+          transform: translateX(-100%);
+          box-shadow: var(--shadow-lg);
+        }
+        .sidebar.mobile-open {
+          transform: translateX(0);
+        }
+        .mobile-backdrop {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 9;
+        }
+        .mobile-backdrop.show {
+          display: block;
+        }
+        .message-inner,
+        .composer {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .welcome h1 {
+          font-size: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app" id="app">
+      <!-- 侧栏 -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <div class="brand">
+            <div class="brand-mark">E</div>
+            <span>EasySession Demo</span>
+          </div>
+          <button class="btn-new" id="btnNew">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14" stroke-linecap="round" />
+            </svg>
+            开启新对话
+          </button>
+        </div>
+
+        <nav class="history" id="history">
+          <div class="history-section">今天</div>
+          <div class="history-item active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            当前对话
+          </div>
+          <div class="history-section">昨天</div>
+          <div class="history-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            解释一下 QuickSort
+          </div>
+          <div class="history-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            写一首关于秋天的诗
+          </div>
+          <div class="history-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Rust 生命周期怎么学
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="user-chip">
+            <div class="avatar">L</div>
+            <div>
+              <div class="user-name">Linglin</div>
+              <div class="user-plan">Free Plan</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div class="mobile-backdrop" id="mobileBackdrop"></div>
+
+      <!-- 主区 -->
+      <main class="main">
+        <header class="topbar">
+          <button class="icon-btn" id="btnToggle" title="侧栏">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12h18M3 6h18M3 18h18" stroke-linecap="round" />
+            </svg>
+          </button>
+          <button class="model-pill">
+            <span class="dot"></span>
+            GPT-4o Demo
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;">
+              <path d="M6 9l6 6 6-6" stroke-linecap="round" />
+            </svg>
+          </button>
+          <button class="icon-btn" id="btnTheme" title="切换主题">
+            <svg id="iconTheme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke-linecap="round" />
+            </svg>
+          </button>
+        </header>
+
+        <section class="messages" id="messages">
+          <div class="welcome" id="welcome">
+            <h1>嗨，今天想做点什么？</h1>
+            <p>这是一个纯前端 ChatGPT 风格 demo · 数据都是本地 mock</p>
+            <div class="suggestions">
+              <button class="suggestion" data-prompt="用 Python 写一个快速排序，并加上注释">
+                <strong>💡 写代码</strong>
+                用 Python 写一个快速排序，并加上注释
+              </button>
+              <button class="suggestion" data-prompt="用 Markdown 解释一下 Transformer 架构的核心思想">
+                <strong>📚 解释概念</strong>
+                用 Markdown 解释一下 Transformer 架构的核心思想
+              </button>
+              <button class="suggestion" data-prompt="写一首七言绝句，主题是江南春雨">
+                <strong>✍️ 创作</strong>
+                写一首七言绝句，主题是江南春雨
+              </button>
+              <button class="suggestion" data-prompt="给我列一个学习 Rust 的 4 周计划，包含每日的关键任务">
+                <strong>📅 制定计划</strong>
+                给我列一个学习 Rust 的 4 周计划
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <footer class="composer">
+          <div class="composer-inner">
+            <div class="input-wrap">
+              <textarea
+                id="input"
+                rows="1"
+                placeholder="发送消息给 EasySession..."
+                autocomplete="off"
+              ></textarea>
+              <div class="input-tools">
+                <button class="send-btn" id="btnSend" disabled title="发送 (Enter)">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 12l18-9-9 18-2-7-7-2z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="hint">按 Enter 发送 · Shift+Enter 换行 · 这是 demo，所有回复都是模拟的</div>
+          </div>
+        </footer>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/typescript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/json.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/rust.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/css.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/xml.min.js"></script>
+
+    <script>
+      // ================== 主题切换 ==================
+      const btnTheme = document.getElementById('btnTheme');
+      const iconTheme = document.getElementById('iconTheme');
+      const savedTheme = localStorage.getItem('es-demo-theme') || 'dark';
+      setTheme(savedTheme);
+
+      btnTheme.addEventListener('click', () => {
+        const cur = document.documentElement.getAttribute('data-theme');
+        setTheme(cur === 'dark' ? 'light' : 'dark');
+      });
+
+      function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('es-demo-theme', theme);
+        iconTheme.innerHTML =
+          theme === 'dark'
+            ? '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" stroke-linecap="round" />'
+            : '<circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke-linecap="round" />';
+      }
+
+      // ================== 侧栏 ==================
+      const app = document.getElementById('app');
+      const sidebar = document.getElementById('sidebar');
+      const btnToggle = document.getElementById('btnToggle');
+      const mobileBackdrop = document.getElementById('mobileBackdrop');
+
+      btnToggle.addEventListener('click', () => {
+        if (window.innerWidth <= 768) {
+          sidebar.classList.toggle('mobile-open');
+          mobileBackdrop.classList.toggle('show');
+        } else {
+          app.classList.toggle('sidebar-collapsed');
+        }
+      });
+      mobileBackdrop.addEventListener('click', () => {
+        sidebar.classList.remove('mobile-open');
+        mobileBackdrop.classList.remove('show');
+      });
+
+      // ================== marked 配置 ==================
+      marked.setOptions({
+        breaks: true,
+        gfm: true,
+        highlight: function (code, lang) {
+          try {
+            if (lang && hljs.getLanguage(lang)) {
+              return hljs.highlight(code, { language: lang }).value;
+            }
+            return hljs.highlightAuto(code).value;
+          } catch (e) {
+            return code;
+          }
+        },
+      });
+
+      // ================== 输入框 ==================
+      const input = document.getElementById('input');
+      const btnSend = document.getElementById('btnSend');
+
+      function autoResize() {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+      }
+      input.addEventListener('input', () => {
+        autoResize();
+        btnSend.disabled = input.value.trim() === '';
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          if (!btnSend.disabled) sendMessage();
+        }
+      });
+
+      btnSend.addEventListener('click', sendMessage);
+
+      document.querySelectorAll('.suggestion').forEach((el) => {
+        el.addEventListener('click', () => {
+          input.value = el.dataset.prompt;
+          autoResize();
+          btnSend.disabled = false;
+          input.focus();
+        });
+      });
+
+      // ================== 消息区 ==================
+      const messagesEl = document.getElementById('messages');
+      const welcomeEl = document.getElementById('welcome');
+
+      function hideWelcome() {
+        if (welcomeEl && welcomeEl.parentNode) {
+          welcomeEl.remove();
+        }
+      }
+
+      function createMessage(role, text) {
+        const msg = document.createElement('div');
+        msg.className = `message ${role}`;
+        msg.innerHTML = `
+          <div class="message-inner">
+            <div class="avatar-lg ${role}">${role === 'user' ? 'U' : 'AI'}</div>
+            <div class="bubble">
+              <div class="name">${role === 'user' ? '你' : 'EasySession'}</div>
+              <div class="content">${text || ''}</div>
+            </div>
+          </div>
+        `;
+        messagesEl.appendChild(msg);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return msg.querySelector('.content');
+      }
+
+      function appendActions(target, role, fullText) {
+        const actions = document.createElement('div');
+        actions.className = 'msg-actions';
+        actions.innerHTML = `
+          <button class="msg-action" data-act="copy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            复制
+          </button>
+          ${
+            role === 'assistant'
+              ? `<button class="msg-action" data-act="regen">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 4v6h-6M1 20v-6h6" stroke-linecap="round" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke-linecap="round" />
+                  </svg>
+                  重新生成
+                </button>
+                <button class="msg-action" data-act="like">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9A2 2 0 0 0 19.66 9zM7 22H3a1 1 0 0 1-1-1V12a1 1 0 0 1 1-1h4" stroke-linecap="round" />
+                  </svg>
+                  点赞
+                </button>`
+              : ''
+          }
+        `;
+        actions.querySelectorAll('.msg-action').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const act = btn.dataset.act;
+            if (act === 'copy') {
+              navigator.clipboard.writeText(fullText).then(() => {
+                const old = btn.innerHTML;
+                btn.innerHTML = '✓ 已复制';
+                setTimeout(() => (btn.innerHTML = old), 1200);
+              });
+            } else if (act === 'regen') {
+              // 简单模拟：重新触发一次回复
+              const userMsg = target.closest('.message').previousElementSibling;
+              if (userMsg && userMsg.classList.contains('user')) {
+                target.closest('.message').remove();
+                mockReply(userMsg.querySelector('.content').textContent);
+              }
+            }
+          });
+        });
+        target.querySelector('.bubble').appendChild(actions);
+      }
+
+      // ================== 发送消息 ==================
+      function sendMessage() {
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        autoResize();
+        btnSend.disabled = true;
+        hideWelcome();
+        createMessage('user', escapeHtml(text));
+        mockReply(text);
+      }
+
+      function escapeHtml(s) {
+        return s
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      // ================== 打字机 ==================
+      function typewriter(contentEl, fullText, onDone) {
+        const chunkSize = 4;
+        const intervalMs = 18;
+        let i = 0;
+        let buffer = '';
+        const cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        contentEl.appendChild(cursor);
+
+        const tick = () => {
+          if (i >= fullText.length) {
+            contentEl.innerHTML = DOMPurify.sanitize(marked.parse(fullText));
+            bindCodeCopy();
+            if (onDone) onDone(fullText);
+            return;
+          }
+          buffer = fullText.slice(0, i + chunkSize);
+          i += chunkSize;
+          contentEl.innerHTML = DOMPurify.sanitize(marked.parse(buffer));
+          contentEl.appendChild(cursor);
+          bindCodeCopy();
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+          setTimeout(tick, intervalMs);
+        };
+        tick();
+      }
+
+      // ================== 代码块复制 ==================
+      function bindCodeCopy() {
+        document.querySelectorAll('.bubble pre').forEach((pre) => {
+          if (pre.querySelector('.copy-btn')) return;
+          // lang label
+          const code = pre.querySelector('code');
+          if (code && code.className) {
+            const m = code.className.match(/language-(\w+)/);
+            if (m) {
+              const lang = document.createElement('span');
+              lang.className = 'lang';
+              lang.textContent = m[1];
+              pre.appendChild(lang);
+            }
+          }
+          const btn = document.createElement('button');
+          btn.className = 'copy-btn';
+          btn.textContent = '复制';
+          btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(code.innerText).then(() => {
+              btn.textContent = '✓ 已复制';
+              setTimeout(() => (btn.textContent = '复制'), 1200);
+            });
+          });
+          pre.appendChild(btn);
+        });
+      }
+
+      // ================== Mock 回复库 ==================
+      const replies = [
+        {
+          test: /(你好|hi|hello|嗨)/i,
+          text: `# 你好呀！👋
+
+我是 **EasySession Demo**，一个纯前端的类 GPT 聊天界面示例。
+
+我可以演示以下能力：
+
+- **Markdown 渲染** —— 标题、列表、引用、表格
+- **代码高亮** —— 支持 JS / TS / Python / Rust / JSON / Bash / CSS / HTML
+- **流式打字机效果** —— 你看到的文字是一个字一个字"打"出来的
+- **暗 / 亮主题切换** —— 右上角小图标试试
+
+试试问我：
+
+> "用 Python 写一个二分查找"
+> "解释一下事件循环"
+> "给我写一首关于程序员的诗"
+
+或者直接点击下面的提示卡片 👇`,
+        },
+        {
+          test: /(快排|quick.?sort)/i,
+          text: `# 快速排序 (Quick Sort)
+
+快速排序是一种 **分治算法**，平均时间复杂度 \`O(n log n)\`。
+
+## 核心思路
+
+1. 选一个基准值（pivot）
+2. 把数组分成两部分：小于 pivot 的放左边，大于的放右边
+3. 递归地对左右两部分排序
+
+## Python 实现
+
+\`\`\`python
+def quicksort(arr):
+    """原地快速排序"""
+    if len(arr) <= 1:
+        return arr
+    pivot = arr[len(arr) // 2]
+    left = [x for x in arr if x < pivot]
+    mid = [x for x in arr if x == pivot]
+    right = [x for x in arr if x > pivot]
+    return quicksort(left) + mid + quicksort(right)
+
+
+# 测试
+print(quicksort([3, 6, 8, 10, 1, 2, 1, 9, 5]))
+# => [1, 1, 2, 3, 5, 6, 8, 9, 10]
+\`\`\`
+
+## 复杂度分析
+
+| 情况     | 时间复杂度   | 空间复杂度 |
+| -------- | ------------ | ---------- |
+| 最好     | \`O(n log n)\` | \`O(log n)\` |
+| 平均     | \`O(n log n)\` | \`O(log n)\` |
+| 最坏     | \`O(n²)\`     | \`O(n)\`    |
+
+> ⚠️ 最坏情况发生在 pivot 总是选到最大或最小元素时，可以用"三数取中"或随机化避免。
+
+需要我讲讲 **归并排序** 或者 **堆排序** 的对比吗？`,
+        },
+        {
+          test: /(二.?分|binary.?search)/i,
+          text: `# 二分查找 (Binary Search)
+
+二分查找要求数组 **已排序**，通过每次把搜索区间减半来定位目标。
+
+## 核心代码
+
+\`\`\`typescript
+function binarySearch(nums: number[], target: number): number {
+  let left = 0;
+  let right = nums.length - 1;
+
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    if (nums[mid] === target) return mid;
+    if (nums[mid] < target) left = mid + 1;
+    else right = mid - 1;
+  }
+  return -1;
+}
+\`\`\`
+
+## 为什么是 \`O(log n)\`？
+
+每次循环区间缩小一半，n → n/2 → n/4 → ... → 1，最多 \`log₂n\` 步。
+
+| n        | 步数 |\`\`\`bash
+echo "n=1000000 时仅需约 20 步"
+\`\`\`
+
+\`\`\`bash
+$ echo "scale = 0; l(1000000)/l(2)" | bc -l
+19
+\`\`\``,
+        },
+        {
+          test: /(transformer|注意力|attention)/i,
+          text: `# Transformer 架构核心思想
+
+Transformer 是 2017 年论文 *"Attention Is All You Need"* 提出的架构，是 **GPT**、**BERT**、**T5** 等模型的基础。
+
+## 三大核心组件
+
+### 1. 自注意力机制 (Self-Attention)
+
+让序列中的每个位置都能"看到"其他所有位置：
+
+\`\`\`
+Attention(Q, K, V) = softmax(Q · Kᵀ / √d_k) · V
+\`\`\`
+
+> Q、K、V 都来自同一个输入，分别代表 Query / Key / Value。
+
+### 2. 多头注意力 (Multi-Head)
+
+把注意力分成多个"头"并行计算，最后拼接：
+
+| 头数 | 维度 | 含义 |
+| ---- | ---- | ---- |
+| h=8  | 64   | 不同子空间关注不同语义关系 |
+| h=16 | 64   | 谷歌原版 |
+
+### 3. 位置编码 (Positional Encoding)
+
+由于注意力是 **置换不变** 的，必须显式注入位置信息：
+
+\`\`\`python
+def positional_encoding(pos, d_model):
+    pe = np.zeros(d_model)
+    for i in range(0, d_model, 2):
+        pe[i] = np.sin(pos / 10000 ** (2*i / d_model))
+        pe[i+1] = np.cos(pos / 10000 ** (2*i / d_model))
+    return pe
+\`\`\`
+
+## 整体架构
+
+\`\`\`
+输入 → 嵌入 + 位置编码
+     → N × [多头自注意力 → 残差 + LayerNorm → FFN → 残差 + LayerNorm]
+     → 输出
+\`\`\`
+
+需要我深入讲讲 **KV Cache** 优化或者 **Flash Attention** 吗？`,
+        },
+        {
+          test: /(rust|生命周期|lifetime)/i,
+          text: `# Rust 生命周期学习路线
+
+## 4 周计划
+
+### 📅 第 1 周：所有权基础
+- Day 1-2: 变量绑定、Move 语义
+- Day 3-4: 借用 (\`&\`) 与可变借用 (\`&mut\`)
+- Day 5-7: 切片 (\`&str\`) 与所有权练习
+
+### 📅 第 2 周：生命周期
+- Day 8-9: 为什么需要生命周期标注
+- Day 10-11: 函数签名中的生命周期
+- Day 12-14: 结构体中的生命周期 + 生命周期省略规则
+
+### 📅 第 3 周：智能指针与并发
+- Day 15-16: \`Box<T>\`、\`Rc<T>\`
+- Day 17-18: \`RefCell<T>\` 与内部可变性
+- Day 19-21: \`Arc<Mutex<T>>\` 多线程共享
+
+### 📅 第 4 周：实战项目
+- Day 22-24: 写一个 \`grep\` 克隆版
+- Day 25-26: 多线程 Web 服务器
+- Day 27-28: 重构之前的代码，刻意练习所有权设计
+
+## 一段经典代码
+
+\`\`\`rust
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+
+fn main() {
+    let a = String::from("hello");
+    let result;
+    {
+        let b = String::from("world!");
+        result = longest(&a, &b);
+        println!("{}", result); // 正常
+    }
+    // println!("{}", result); // ❌ b 已经 drop
+}
+\`\`\`
+
+> 💡 关键点：生命周期标注是给 **编译器** 看的，不会改变运行时行为。`,
+        },
+        {
+          test: /(诗|绝句|词|春天|秋天|雨)/,
+          text: `# 江南春雨
+
+> 江南春雨润如酥，
+> 远岫含烟柳半舒。
+> 一叶扁舟归渡晚，
+> 满城新绿入诗书。
+
+---
+
+## 创作说明
+
+| 要素     | 内容 |
+| -------- | ---- |
+| 题材     | 江南春雨 |
+| 体裁     | 七言绝句 |
+| 平仄     | 仄仄平平仄仄平 |
+| 押韵     | 酥、舒、书 |
+
+## 一首现代诗 🌧️
+
+\`\`\`
+我听见雨
+落在青石板上
+落在屋檐的瓦当
+落在她撑起的那把油纸伞上
+
+雨声很轻
+轻得像一句还没说出口的话
+\`\`\`
+
+需要我再写 **现代诗**、**词** 或者 **英文诗** 吗？`,
+        },
+        {
+          test: /.*/, // 默认兜底
+          text: `收到你的问题 ✨
+
+这是 EasySession Demo 的一个 **mock 回复**。我会在你的 prompt 里搜关键词匹配对应的演示回答，比如：
+
+- 包含 **快排 / QuickSort** → 演示 Python 代码块 + 复杂度表格
+- 包含 **二分 / Binary Search** → 演示 TypeScript 代码块 + bash 输出
+- 包含 **Transformer / 注意力** → 演示多语言混排 + 数学公式
+- 包含 **Rust / 生命周期** → 演示 4 周计划表 + Rust 代码
+- 包含 **诗 / 春天 / 雨** → 演示古诗 + 现代诗 + 表格
+- 包含 **你好 / hi** → 演示自我介绍 + 能力清单
+
+试试上面的关键词，或者直接说 "再来一首诗"、"再写段代码" 触发不同分支 👇`,
+        },
+      ];
+
+      function pickReply(prompt) {
+        for (const r of replies) {
+          if (r.test.test(prompt)) return r.text;
+        }
+        return replies[replies.length - 1].text;
+      }
+
+      // ================== 流式回复 ==================
+      function mockReply(prompt) {
+        const contentEl = createMessage('assistant', '');
+        const reply = pickReply(prompt);
+        const thinkingDelay = 400 + Math.random() * 600;
+
+        // 先显示"正在思考"动画
+        const thinking = document.createElement('span');
+        thinking.className = 'thinking';
+        thinking.innerHTML = '<span></span><span></span><span></span>';
+        contentEl.appendChild(thinking);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+
+        setTimeout(() => {
+          thinking.remove();
+          typewriter(contentEl, reply, (fullText) => {
+            appendActions(contentEl.closest('.message'), 'assistant', fullText);
+          });
+        }, thinkingDelay);
+      }
+
+      // ================== 新对话 ==================
+      document.getElementById('btnNew').addEventListener('click', () => {
+        messagesEl.innerHTML = '';
+        const w = document.createElement('div');
+        w.className = 'welcome';
+        w.id = 'welcome';
+        w.innerHTML = `
+          <h1>嗨，今天想做点什么？</h1>
+          <p>新对话已开启</p>
+        `;
+        messagesEl.appendChild(w);
+        input.value = '';
+        autoResize();
+        btnSend.disabled = true;
+      });
+
+      // ================== 初始化 ==================
+      input.focus();
+    </script>
+  </body>
+</html>
