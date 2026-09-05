@@ -34,6 +34,7 @@ export interface CreateSessionParams {
   options?: Record<string, unknown>
   parentId?: string
   startPaused?: boolean
+  collabMode?: 'terminal-readonly' | 'terminal-nudge' | 'terminal-inject'
 }
 
 export interface SessionFilter {

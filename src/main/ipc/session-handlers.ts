@@ -57,7 +57,9 @@ const baseSessionFields = {
   icon: z.string().optional(),
   projectPath: z.string().min(1, 'projectPath 不能为空'),
   parentId: z.string().optional(),
-  startPaused: z.boolean().optional()
+  startPaused: z.boolean().optional(),
+  // UX-11：新建 terminal 会话时的协作注入模式预置
+  collabMode: z.enum(['terminal-readonly', 'terminal-nudge', 'terminal-inject']).optional()
 }
 
 const createSessionSchema = z.discriminatedUnion('type', [
@@ -80,7 +82,8 @@ function assertPositiveInt(value: unknown, name: string): asserts value is numbe
 }
 
 export function registerSessionHandlers(
-  sessionManager: SessionManager
+  sessionManager: SessionManager,
+  agentBus?: { presetCollabMode(sessionId: string, mode: string): void }
 ): void {
   ipcMain.handle('session:create', (_event, params: CreateSessionParams) => {
     const result = createSessionSchema.safeParse(params)
@@ -91,7 +94,13 @@ export function registerSessionHandlers(
       throw new Error(`参数 params 校验失败：${detail}`)
     }
     // 校验通过后传原始 params（zod 仅作准入门，不改写形状）。
-    return sessionManager.createSession(params)
+    const session = sessionManager.createSession(params)
+    // UX-11：新建时预置协作模式（terminal-readonly/terminal-nudge/terminal-inject）。
+    const presetMode = (params as { collabMode?: unknown }).collabMode
+    if (session && agentBus && typeof presetMode === 'string') {
+      agentBus.presetCollabMode(session.id, presetMode)
+    }
+    return session
   })
 
   ipcMain.handle('session:destroy', (_event, id: string) => {

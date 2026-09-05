@@ -169,7 +169,8 @@ registerAllHandlers({
   sessionManager,
   projectManager,
   skillManager,
-  workspaceLayoutManager
+  workspaceLayoutManager,
+  agentBus
 })
 
 // 设置页改通知偏好 → settings:write → 同步给 exit notifier（无需重启应用）。

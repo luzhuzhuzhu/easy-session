@@ -25,12 +25,13 @@ export interface Services {
   projectManager: ProjectManager
   skillManager: SkillManager
   workspaceLayoutManager: WorkspaceLayoutManager
+  agentBus?: { presetCollabMode(sessionId: string, mode: string): void }
 }
 
 export function registerAllHandlers(services: Services): void {
   registerConfigHandlers(services.configService, services.projectManager)
   registerCliHandlers(services.cliManager, services.claudeAdapter, services.codexAdapter, services.openCodeAdapter)
-  registerSessionHandlers(services.sessionManager)
+  registerSessionHandlers(services.sessionManager, services.agentBus)
   registerProjectHandlers(services.projectManager, services.sessionManager)
   registerSkillHandlers(services.skillManager, services.projectManager)
   registerSettingsHandlers()

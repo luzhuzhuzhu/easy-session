@@ -71,7 +71,8 @@ export class LocalGateway implements Gateway {
       icon: params.icon,
       options: params.options,
       parentId: params.parentId,
-      startPaused: params.startPaused
+      startPaused: params.startPaused,
+      collabMode: (params as { collabMode?: 'terminal-readonly' | 'terminal-nudge' | 'terminal-inject' }).collabMode
     })
     return toUnifiedSession(session)
   }

@@ -157,6 +157,19 @@
     <!-- terminal：shell 选择 + 启动命令 -->
     <section v-if="cliType === 'terminal'" class="opts-section">
       <div class="opts-section-head">
+        <span class="opts-section-title">{{ $t('session.dialog.collabMode') }}</span>
+      </div>
+      <!-- UX-11：新建 terminal 会话时直选协作模式，免去进协作面板二次设置 -->
+      <select v-model="collabMode" class="form-input">
+        <option value="terminal-readonly">{{ $t('session.dialog.collabModeReadonly') }}</option>
+        <option value="terminal-nudge">{{ $t('session.dialog.collabModeNudge') }}</option>
+        <option value="terminal-inject">{{ $t('session.dialog.collabModeInject') }}</option>
+      </select>
+      <span class="setting-hint">{{ $t('session.dialog.collabModeHint') }}</span>
+    </section>
+
+    <section v-if="cliType === 'terminal'" class="opts-section">
+      <div class="opts-section-head">
         <span class="opts-section-title">{{ $t('session.dialog.terminalShell') }}</span>
       </div>
       <select v-model="shellChoice" class="form-input">
@@ -453,6 +466,8 @@ const detectedShells = ref<DetectedShell[]>([])
 const shellChoice = ref('')
 const customShellPath = ref('')
 const startupCommandsText = ref('')
+// UX-11：新会话协作注入模式（仅 terminal 类型有意义）
+const collabMode = ref<'terminal-readonly' | 'terminal-nudge' | 'terminal-inject'>('terminal-readonly')
 
 // 终端外观（所有类型通用）：空值表示跟随全局设置
 const appearanceFontFamily = ref('')
@@ -915,7 +930,11 @@ function hasOpencodeConflict(): boolean {
   return props.cliType === 'opencode' && !!opencodeOptions.sessionId && opencodeOptions.continueLast
 }
 
-defineExpose({ buildOptions, hasOpencodeConflict })
+function getCollabMode(): string {
+  return collabMode.value
+}
+
+defineExpose({ buildOptions, hasOpencodeConflict, getCollabMode })
 </script>
 
 <style scoped lang="scss">

@@ -393,6 +393,16 @@ export class AgentBus {
     return configured && configured.startsWith('terminal-') ? configured : 'terminal-readonly'
   }
 
+  // UX-11：创建会话时预置协作模式（新建表单直选「仅提醒/完整注入」，
+  // 免去之后再进协作面板设置）。bus 未就绪时静默跳过，默认语义不变。
+  presetCollabMode(sessionId: string, mode: AgentCollabMode): void {
+    const session = this.sessionManager.getSession(sessionId)
+    if (!session || !isCollabMode(mode)) return
+    const normalized = session.type === 'terminal' ? mode : 'known-agent'
+    this.collabModes.set(sessionId, normalized)
+    this.handleChange()
+  }
+
   private isModeInjectable(mode: AgentCollabMode): boolean {
     return mode === 'known-agent' || mode === 'terminal-nudge' || mode === 'terminal-inject'
   }

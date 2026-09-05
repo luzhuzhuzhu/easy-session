@@ -369,7 +369,11 @@ async function handleSubmit() {
         projectId: props.targetProjectId || undefined,
         projectPath: resolvedProjectPath || undefined,
         options: Object.keys(options).length > 0 ? options : undefined,
-        startPaused: props.startPaused
+        startPaused: props.startPaused,
+        // UX-11：terminal 会话协作注入模式随创建一并预置
+        ...(form.value.type === 'terminal'
+          ? { collabMode: optionsFormRef.value?.getCollabMode() }
+          : {})
       },
       { activate: props.activateOnCreate }
     )
