@@ -2,6 +2,9 @@ import { CliManager } from '../services/cli-manager'
 import { ClaudeAdapter } from '../services/claude-adapter'
 import { CodexAdapter } from '../services/codex-adapter'
 import { OpenCodeAdapter } from '../services/opencode-adapter'
+import { PiAdapter, OmpAdapter } from '../services/pi-family-adapter'
+import { GrokAdapter } from '../services/grok-adapter'
+import { HermesAdapter } from '../services/hermes-adapter'
 import { ConfigService } from '../services/config-service'
 import { SessionManager } from '../services/session-manager'
 import { ProjectManager } from '../services/project-manager'
@@ -20,6 +23,10 @@ export interface Services {
   claudeAdapter: ClaudeAdapter
   codexAdapter: CodexAdapter
   openCodeAdapter: OpenCodeAdapter
+  piAdapter?: PiAdapter
+  ompAdapter?: OmpAdapter
+  grokAdapter?: GrokAdapter
+  hermesAdapter?: HermesAdapter
   configService: ConfigService
   sessionManager: SessionManager
   projectManager: ProjectManager
@@ -30,8 +37,13 @@ export interface Services {
 
 export function registerAllHandlers(services: Services): void {
   registerConfigHandlers(services.configService, services.projectManager)
-  registerCliHandlers(services.cliManager, services.claudeAdapter, services.codexAdapter, services.openCodeAdapter)
-  registerSessionHandlers(services.sessionManager, services.agentBus)
+  registerCliHandlers(services.cliManager, services.claudeAdapter, services.codexAdapter, services.openCodeAdapter, {
+    pi: services.piAdapter,
+    omp: services.ompAdapter,
+    grok: services.grokAdapter,
+    hermes: services.hermesAdapter
+  })
+  registerSessionHandlers(services.sessionManager, services.agentBus, services.openCodeAdapter)
   registerProjectHandlers(services.projectManager, services.sessionManager)
   registerSkillHandlers(services.skillManager, services.projectManager)
   registerSettingsHandlers()

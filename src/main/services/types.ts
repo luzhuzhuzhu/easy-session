@@ -78,3 +78,37 @@ export interface GeminiSessionOptions {
   approvalMode?: 'default' | 'auto_edit' | 'yolo'
   customArgs?: CustomCliArgument[]
 }
+
+// 通用「pi 系」CLI（pi / omp 同源）launch options：
+// resume 走 --session <path|id 前缀>（omp 为 -r/--resume，见 adapter 差异），
+// pi -p/--print 是非交互模式，会话管理型桌面托管默认不开。
+export interface PiSessionOptions {
+  model?: string
+  thinking?: string
+  approvalMode?: 'always-ask' | 'write' | 'yolo'
+  resumeId?: string
+  continueLast?: boolean
+  customArgs?: CustomCliArgument[]
+}
+
+export type OmpSessionOptions = PiSessionOptions
+
+// Grok Build（x.ai 官方 grok CLI）：-r/--resume <id>、-m/--model、
+// --permission-mode default|acceptEdits|auto|dontAsk|bypassPermissions|plan。
+export interface GrokSessionOptions {
+  model?: string
+  permissionMode?: 'default' | 'acceptEdits' | 'auto' | 'dontAsk' | 'bypassPermissions' | 'plan'
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+  resumeId?: string
+  continueLast?: boolean
+  customArgs?: CustomCliArgument[]
+}
+
+// Hermes Agent（NousResearch）：--resume <id>|latest、-c/--continue、
+// --model "provider/model"、会话存储在 ~/.hermes/state.db。
+export interface HermesSessionOptions {
+  model?: string
+  resumeId?: string
+  continueLast?: boolean
+  customArgs?: CustomCliArgument[]
+}

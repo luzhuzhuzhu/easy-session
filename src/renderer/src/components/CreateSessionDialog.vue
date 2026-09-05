@@ -114,7 +114,7 @@
 
       <!-- v-show 而非 v-if：折叠面板时保留表单状态，提交时参数不丢失 -->
       <div v-show="showAdvancedOptions" class="advanced-fields">
-        <SessionOptionsForm ref="optionsFormRef" :cli-type="form.type" />
+        <SessionOptionsForm ref="optionsFormRef" :cli-type="form.type" :project-path="form.projectPath" />
       </div>
     </section>
 
@@ -193,7 +193,7 @@ useOverlayStack({
   onEscape: () => emit('cancel')
 })
 
-type SessionType = 'claude' | 'codex' | 'opencode' | 'terminal' | 'gemini'
+type SessionType = 'claude' | 'codex' | 'opencode' | 'terminal' | 'gemini' | 'pi' | 'omp' | 'grok' | 'hermes'
 type CliStatus = 'checking' | 'available' | 'unavailable' | 'remote'
 
 const form = ref({ name: '', icon: '', type: 'claude' as SessionType, projectPath: '' })

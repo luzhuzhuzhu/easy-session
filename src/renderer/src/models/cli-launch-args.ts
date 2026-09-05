@@ -66,10 +66,53 @@ export const GEMINI_BUILTIN_ARGS: BuiltinArgDescriptor[] = [
   }
 ]
 
+// pi 系（badlogic/pi-mono 的 pi / oh-my-pi 的 omp）：--model 模糊匹配、
+// --thinking 档位、--approval-mode always-ask|write|yolo。
+export const PI_BUILTIN_ARGS: BuiltinArgDescriptor[] = [
+  { flag: '--model', control: 'text', placeholder: 'anthropic/claude-sonnet-4', help: 'piModel' },
+  {
+    flag: '--thinking',
+    control: 'select',
+    options: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'],
+    help: 'piThinking'
+  },
+  {
+    flag: '--approval-mode',
+    control: 'select',
+    options: ['always-ask', 'write', 'yolo'],
+    help: 'piApprovalMode'
+  }
+]
+
+// Grok Build（x.ai grok CLI）：--model、--permission-mode、--effort。
+export const GROK_BUILTIN_ARGS: BuiltinArgDescriptor[] = [
+  { flag: '--model', control: 'text', placeholder: 'grok-4', help: 'grokModel' },
+  {
+    flag: '--permission-mode',
+    control: 'select',
+    options: ['default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions', 'plan'],
+    help: 'grokPermissionMode'
+  },
+  {
+    flag: '--effort',
+    control: 'select',
+    options: ['low', 'medium', 'high', 'xhigh', 'max'],
+    help: 'grokEffort'
+  }
+]
+
+// Hermes Agent（NousResearch）：--model "provider/model"。
+export const HERMES_BUILTIN_ARGS: BuiltinArgDescriptor[] = [
+  { flag: '--model', control: 'text', placeholder: 'anthropic/claude-sonnet-4', help: 'hermesModel' }
+]
+
 export function getBuiltinArgDescriptors(cliType: string): BuiltinArgDescriptor[] {
   if (cliType === 'claude') return CLAUDE_BUILTIN_ARGS
   if (cliType === 'codex') return CODEX_BUILTIN_ARGS
   if (cliType === 'gemini') return GEMINI_BUILTIN_ARGS
+  if (cliType === 'pi' || cliType === 'omp') return PI_BUILTIN_ARGS
+  if (cliType === 'grok') return GROK_BUILTIN_ARGS
+  if (cliType === 'hermes') return HERMES_BUILTIN_ARGS
   return []
 }
 

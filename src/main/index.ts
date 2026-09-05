@@ -17,6 +17,10 @@ import { OpenCodeSessionLifecycle } from './services/opencode-session-lifecycle'
 import { TerminalSessionLifecycle } from './services/terminal-session-lifecycle'
 import { GeminiAdapter } from './services/gemini-adapter'
 import { GeminiSessionLifecycle } from './services/gemini-session-lifecycle'
+import { PiAdapter, OmpAdapter } from './services/pi-family-adapter'
+import { GrokAdapter } from './services/grok-adapter'
+import { HermesAdapter } from './services/hermes-adapter'
+import { GenericIdSessionLifecycle } from './services/generic-id-session-lifecycle'
 import { ProjectManager } from './services/project-manager'
 import { SkillManager } from './services/skill-manager'
 import { DataStore } from './services/data-store'
@@ -102,6 +106,14 @@ const opencodeLifecycle = new OpenCodeSessionLifecycle(openCodeAdapter, outputMa
 const terminalLifecycle = new TerminalSessionLifecycle(terminalAdapter, outputManager)
 const geminiAdapter = new GeminiAdapter(cliManager)
 const geminiLifecycle = new GeminiSessionLifecycle(geminiAdapter, outputManager)
+const piAdapter = new PiAdapter(cliManager)
+const ompAdapter = new OmpAdapter(cliManager)
+const grokAdapter = new GrokAdapter(cliManager)
+const hermesAdapter = new HermesAdapter(cliManager)
+const piLifecycle = new GenericIdSessionLifecycle(piAdapter, outputManager, 'pi', 'pi')
+const ompLifecycle = new GenericIdSessionLifecycle(ompAdapter, outputManager, 'omp', 'omp')
+const grokLifecycle = new GenericIdSessionLifecycle(grokAdapter, outputManager, 'grok', 'grok')
+const hermesLifecycle = new GenericIdSessionLifecycle(hermesAdapter, outputManager, 'hermes', 'hermes')
 const sessionManager = new SessionManager(
   cliManager,
   claudeLifecycle,
@@ -109,7 +121,11 @@ const sessionManager = new SessionManager(
   outputManager,
   opencodeLifecycle,
   terminalLifecycle,
-  geminiLifecycle
+  geminiLifecycle,
+  piLifecycle,
+  ompLifecycle,
+  grokLifecycle,
+  hermesLifecycle
 )
 const projectManager = new ProjectManager()
 const skillManager = new SkillManager(sessionManager)
@@ -172,6 +188,10 @@ registerAllHandlers({
   claudeAdapter,
   codexAdapter,
   openCodeAdapter,
+  piAdapter,
+  ompAdapter,
+  grokAdapter,
+  hermesAdapter,
   configService,
   sessionManager,
   projectManager,
@@ -773,6 +793,11 @@ app.whenReady().then(async () => {
         cliManager.setAgentBusEnvProvider((pid) => agentBus.getEnvBundle(pid))
         if (agentBus.isReady()) {
           claudeAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
+          geminiAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
+          piAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
+          ompAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
+          grokAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
+          hermesAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
         } else {
           // 未就绪时不挂 es 系统提示（避免 claude 误以为有 es 可用）；协作面板会显示不可用横幅。
           log.error({ err: agentBus.getStartError() }, '[init] agent bus 未就绪，终端间协作不可用')

@@ -58,6 +58,45 @@ export const geminiOptionsSchema = z
   })
   .passthrough()
 
+// pi / omp（oh-my-pi）共享同一形状：resumeId 对应 pi --session <id 前缀> /
+// omp -r/--resume <id 前缀>；thinking 为档位枚举。
+export const piOptionsSchema = z
+  .object({
+    model: z.string().optional(),
+    thinking: z.string().optional(),
+    approvalMode: z.enum(['always-ask', 'write', 'yolo']).optional(),
+    resumeId: z.string().optional(),
+    continueLast: z.boolean().optional(),
+    customArgs: z.array(customCliArgSchema).optional()
+  })
+  .passthrough()
+
+export const ompOptionsSchema = piOptionsSchema
+
+// Grok Build（x.ai grok CLI）。
+export const grokOptionsSchema = z
+  .object({
+    model: z.string().optional(),
+    permissionMode: z
+      .enum(['default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions', 'plan'])
+      .optional(),
+    effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+    resumeId: z.string().optional(),
+    continueLast: z.boolean().optional(),
+    customArgs: z.array(customCliArgSchema).optional()
+  })
+  .passthrough()
+
+// Hermes Agent（NousResearch）。
+export const hermesOptionsSchema = z
+  .object({
+    model: z.string().optional(),
+    resumeId: z.string().optional(),
+    continueLast: z.boolean().optional(),
+    customArgs: z.array(customCliArgSchema).optional()
+  })
+  .passthrough()
+
 export interface CliRegistryEntry {
   id: string
   /** settings 中该 CLI 的自定义可执行路径键（无则用 PATH 探测） */
@@ -71,7 +110,11 @@ export const CLI_REGISTRY: CliRegistryEntry[] = [
   { id: 'codex', settingsPathKey: 'codexPath', optionsSchema: codexOptionsSchema },
   { id: 'opencode', settingsPathKey: 'opencodePath', optionsSchema: opencodeOptionsSchema },
   { id: 'terminal', optionsSchema: terminalOptionsSchema },
-  { id: 'gemini', settingsPathKey: 'geminiPath', optionsSchema: geminiOptionsSchema }
+  { id: 'gemini', settingsPathKey: 'geminiPath', optionsSchema: geminiOptionsSchema },
+  { id: 'pi', settingsPathKey: 'piPath', optionsSchema: piOptionsSchema },
+  { id: 'omp', settingsPathKey: 'ompPath', optionsSchema: ompOptionsSchema },
+  { id: 'grok', settingsPathKey: 'grokPath', optionsSchema: grokOptionsSchema },
+  { id: 'hermes', settingsPathKey: 'hermesPath', optionsSchema: hermesOptionsSchema }
 ]
 
 // 可 PATH 探测的 CLI（terminal 不参与 cli:check）。

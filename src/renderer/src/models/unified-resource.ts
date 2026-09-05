@@ -87,20 +87,57 @@ export interface UnifiedSession {
   claudeSessionId?: string | null
   codexSessionId?: string | null
   opencodeSessionId?: string | null
+  geminiSessionId?: string | null
+  piSessionId?: string | null
+  ompSessionId?: string | null
+  grokSessionId?: string | null
+  hermesSessionId?: string | null
   /** FEAT-1：按 CLI 类型归一后的原生会话 ID（resume 用）。null = 尚未发现/不支持。 */
   nativeSessionId?: string | null
   source: ResourceSource
 }
 
-const CLI_TO_NATIVE_FIELD: Partial<Record<Session['type'], 'claudeSessionId' | 'codexSessionId' | 'opencodeSessionId'>> = {
+const CLI_TO_NATIVE_FIELD: Partial<
+  Record<
+    Session['type'],
+    | 'claudeSessionId'
+    | 'codexSessionId'
+    | 'opencodeSessionId'
+    | 'geminiSessionId'
+    | 'piSessionId'
+    | 'ompSessionId'
+    | 'grokSessionId'
+    | 'hermesSessionId'
+  >
+> = {
   claude: 'claudeSessionId',
   codex: 'codexSessionId',
-  opencode: 'opencodeSessionId'
+  opencode: 'opencodeSessionId',
+  gemini: 'geminiSessionId',
+  pi: 'piSessionId',
+  omp: 'ompSessionId',
+  grok: 'grokSessionId',
+  hermes: 'hermesSessionId'
 }
 
-// FEAT-1：把旧平铺字段（claudeSessionId/codexSessionId/opencodeSessionId）
+// FEAT-1：把旧平铺字段（claudeSessionId/codexSessionId/opencodeSessionId…）
 // 归一为 nativeSessionId。读取处统一走 helper，新增 CLI 只改 CLI_TO_NATIVE_FIELD。
-export function readNativeSessionId(session: Pick<UnifiedSession, 'type' | 'claudeSessionId' | 'codexSessionId' | 'opencodeSessionId'>): string | null {
+type NativeIdBag = Partial<
+  Record<
+    | 'claudeSessionId'
+    | 'codexSessionId'
+    | 'opencodeSessionId'
+    | 'geminiSessionId'
+    | 'piSessionId'
+    | 'ompSessionId'
+    | 'grokSessionId'
+    | 'hermesSessionId',
+    string | null
+  >
+>
+export function readNativeSessionId(
+  session: Pick<UnifiedSession, 'type'> & NativeIdBag
+): string | null {
   const field = CLI_TO_NATIVE_FIELD[session.type]
   if (!field) return null
   return (session[field] as string | null | undefined) ?? null
@@ -219,6 +256,11 @@ export function toUnifiedSession(
     claudeSessionId: session.claudeSessionId,
     codexSessionId: session.codexSessionId,
     opencodeSessionId: session.opencodeSessionId,
+    geminiSessionId: session.geminiSessionId,
+    piSessionId: session.piSessionId,
+    ompSessionId: session.ompSessionId,
+    grokSessionId: session.grokSessionId,
+    hermesSessionId: session.hermesSessionId,
     nativeSessionId: readNativeSessionId(session),
     source
   }

@@ -5,6 +5,18 @@ import { CLI_TYPE_DISPLAY_NAMES, CLI_TYPE_NAME_PATTERN } from '../../shared/cli-
 
 const log = createLogger('session-manager')
 
+// 各 CLI 的原生会话 ID 字段名（session:setNativeId 的写入目标）。
+const NATIVE_ID_FIELDS: Partial<Record<CliType, string>> = {
+  claude: 'claudeSessionId',
+  codex: 'codexSessionId',
+  opencode: 'opencodeSessionId',
+  gemini: 'geminiSessionId',
+  pi: 'piSessionId',
+  omp: 'ompSessionId',
+  grok: 'grokSessionId',
+  hermes: 'hermesSessionId'
+}
+
 // 渲染层广播抽象：把 SessionManager 与 BrowserWindow 解耦，便于脱离 Electron 单测（注入桩）。
 export interface SessionBroadcaster {
   broadcast(channel: string, payload?: unknown): void
@@ -68,6 +80,11 @@ export class SessionManager {
     private terminalLifecycle?: TerminalSessionLifecycle,
     // FEAT-3：Gemini lifecycle（可选注入；缺省 noop 与 terminal 同策略）。
     private geminiLifecycle?: ISessionLifecycle,
+    // 新 CLI（pi/omp/grok/hermes）通用 ID 型 lifecycle（可选注入）。
+    private piLifecycle?: ISessionLifecycle,
+    private ompLifecycle?: ISessionLifecycle,
+    private grokLifecycle?: ISessionLifecycle,
+    private hermesLifecycle?: ISessionLifecycle,
     // 可注入广播器（默认走 BrowserWindow）：测试可传桩，无需依赖 Electron。
     broadcaster?: SessionBroadcaster
   ) {
@@ -92,7 +109,11 @@ export class SessionManager {
       codex: codexLifecycle,
       opencode: this.opencodeLifecycle || createNoopLifecycle('OpenCode'),
       terminal: this.terminalLifecycle || createNoopLifecycle('Terminal'),
-      gemini: this.geminiLifecycle || createNoopLifecycle('Gemini')
+      gemini: this.geminiLifecycle || createNoopLifecycle('Gemini'),
+      pi: this.piLifecycle || createNoopLifecycle('Pi'),
+      omp: this.ompLifecycle || createNoopLifecycle('OMP'),
+      grok: this.grokLifecycle || createNoopLifecycle('Grok'),
+      hermes: this.hermesLifecycle || createNoopLifecycle('Hermes')
     }
     claudeLifecycle.setPersistCallback(() => this.persist())
     codexLifecycle.setPersistCallback(() => this.persist())
@@ -457,6 +478,22 @@ export class SessionManager {
 
     // 跨越联合类型的边界赋值：options 形状由调用方（会话设置表单）按会话类型构建
     ;(session as { options: Session['options'] }).options = options
+    this.persist()
+    return session
+  }
+
+  // 用户自定义绑定/修改原生 resume ID（会话设置对话框「恢复会话 ID」）。
+  // 清空（null）解除绑定：下次启动走全新会话。运行中的进程不受影响，重启后生效。
+  setNativeSessionId(id: string, cliType: CliType, value: string | null): Session | null {
+    const session = this.sessions.get(id)
+    if (!session || session.type !== cliType) return null
+    const trimmed = typeof value === 'string' ? value.trim() : ''
+    const field = NATIVE_ID_FIELDS[cliType]
+    if (!field) return null
+    ;(session as unknown as Record<string, unknown>)[field] = trimmed || null
+    // 手动绑定/解除都视为一次新的用户意图：清掉 resume 失效守卫与自动重启标记
+    delete (session as { invalidSessionId?: boolean }).invalidSessionId
+    delete (session as { noAutoRestart?: boolean }).noAutoRestart
     this.persist()
     return session
   }

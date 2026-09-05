@@ -24,6 +24,11 @@ export interface Session {
   claudeSessionId?: string | null
   codexSessionId?: string | null
   opencodeSessionId?: string | null
+  geminiSessionId?: string | null
+  piSessionId?: string | null
+  ompSessionId?: string | null
+  grokSessionId?: string | null
+  hermesSessionId?: string | null
 }
 
 export interface CreateSessionParams {
@@ -154,6 +159,23 @@ export function pauseSession(id: string): Promise<Session> {
 
 export function updateSessionOptions(id: string, options: Record<string, unknown>): Promise<Session | null> {
   return ipc.invoke<Session | null>('session:updateOptions', id, options)
+}
+
+// 自定义绑定/修改会话的原生 resume ID；value 为空串/null 解除绑定。
+// 运行中的进程不受影响，重启后生效。
+export function setSessionNativeId(id: string, cliType: Session['type'], value: string | null): Promise<Session | null> {
+  return ipc.invoke<Session | null>('session:setNativeId', id, cliType, value)
+}
+
+// 会话候选列表（resume ID 选择器数据源）。目前仅 opencode 有发现能力，
+// 其他 CLI 返回空数组（UI 回退为手动输入）。
+export interface NativeSessionCandidate {
+  id: string
+  title: string
+  updated: number
+}
+export function getNativeIdCandidates(cliType: Session['type'], projectPath?: string): Promise<NativeSessionCandidate[]> {
+  return ipc.invoke<NativeSessionCandidate[]>('session:nativeIdCandidates', cliType, projectPath)
 }
 
 export interface DetectedShell {

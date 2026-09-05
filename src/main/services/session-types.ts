@@ -4,6 +4,9 @@ import type {
   CodexSessionOptions,
   OpenCodeSessionOptions,
   GeminiSessionOptions,
+  PiSessionOptions,
+  GrokSessionOptions,
+  HermesSessionOptions,
   TerminalSessionOptions
 } from './types'
 
@@ -67,14 +70,60 @@ export interface GeminiSession extends SessionBase {
   invalidSessionId?: boolean
 }
 
-export type Session = ClaudeSession | CodexSession | OpenCodeSession | TerminalSession | GeminiSession
+// 通用原生会话 ID 结构：所有新 CLI（pi/omp/grok/hermes）与 gemini 对齐——
+// ID 字段名 = `${type}SessionId`，resume 失效用一次性 invalidSessionId 守卫。
+export interface PiSession extends SessionBase {
+  type: 'pi'
+  options: PiSessionOptions
+  piSessionId: string | null
+  invalidSessionId?: boolean
+}
+
+export interface OmpSession extends SessionBase {
+  type: 'omp'
+  options: PiSessionOptions
+  ompSessionId: string | null
+  invalidSessionId?: boolean
+}
+
+export interface GrokSession extends SessionBase {
+  type: 'grok'
+  options: GrokSessionOptions
+  grokSessionId: string | null
+  invalidSessionId?: boolean
+}
+
+export interface HermesSession extends SessionBase {
+  type: 'hermes'
+  options: HermesSessionOptions
+  hermesSessionId: string | null
+  invalidSessionId?: boolean
+}
+
+export type Session =
+  | ClaudeSession
+  | CodexSession
+  | OpenCodeSession
+  | TerminalSession
+  | GeminiSession
+  | PiSession
+  | OmpSession
+  | GrokSession
+  | HermesSession
 
 export interface CreateSessionParams {
   name?: string
   icon?: string
   type: CliType
   projectPath: string
-  options?: ClaudeSessionOptions | CodexSessionOptions | OpenCodeSessionOptions | TerminalSessionOptions
+  options?:
+    | ClaudeSessionOptions
+    | CodexSessionOptions
+    | OpenCodeSessionOptions
+    | TerminalSessionOptions
+    | PiSessionOptions
+    | GrokSessionOptions
+    | HermesSessionOptions
   parentId?: string
   startPaused?: boolean
 }

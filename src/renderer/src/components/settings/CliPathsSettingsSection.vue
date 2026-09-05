@@ -37,17 +37,31 @@
         @change="$emit('update:gemini-path', ($event.target as HTMLInputElement).value)"
       />
     </div>
+    <div v-for="cli in extraClis" :key="cli.key" class="setting-row">
+      <label>{{ $t(`settings.${cli.key}Path`) }}</label>
+      <input
+        :value="cli.value"
+        type="text"
+        :placeholder="$t('settings.autoDetect')"
+        @change="$emit(`update:${cli.key}-path` as never, ($event.target as HTMLInputElement).value)"
+      />
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { computed } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   claudePath: string
   codexPath: string
   opencodePath: string
   geminiPath: string
+  piPath: string
+  ompPath: string
+  grokPath: string
+  hermesPath: string
 }>()
 
 defineEmits<{
@@ -55,9 +69,21 @@ defineEmits<{
   'update:codex-path': [value: string]
   'update:opencode-path': [value: string]
   'update:gemini-path': [value: string]
+  'update:pi-path': [value: string]
+  'update:omp-path': [value: string]
+  'update:grok-path': [value: string]
+  'update:hermes-path': [value: string]
 }>()
 
 useI18n()
+
+// 新 CLI 路径行统一循环渲染，避免模板重复四份
+const extraClis = computed(() => [
+  { key: 'pi', value: props.piPath },
+  { key: 'omp', value: props.ompPath },
+  { key: 'grok', value: props.grokPath },
+  { key: 'hermes', value: props.hermesPath }
+])
 </script>
 
 <style scoped lang="scss">

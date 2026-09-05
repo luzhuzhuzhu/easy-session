@@ -215,7 +215,28 @@
         </div>
         <div class="form-group field-wide">
           <label>{{ $t('session.dialog.opencodeSessionId') }}</label>
-          <input v-model="opencodeOptions.sessionId" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeSessionIdPlaceholder')" />
+          <div class="resume-id-row">
+            <input v-model="opencodeOptions.sessionId" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeSessionIdPlaceholder')" />
+            <button
+              type="button"
+              class="icon-text-action"
+              :disabled="candidatesLoading"
+              @click="toggleCandidates"
+            >
+              {{ candidatesLoading ? $t('session.dialog.candidatesLoading') : $t('session.dialog.pickCandidate') }}
+            </button>
+          </div>
+          <template v-if="showCandidates">
+            <div v-if="candidates.length === 0" class="setting-hint">{{ $t('session.dialog.candidatesEmpty') }}</div>
+            <ul v-else class="candidate-list">
+              <li v-for="candidate in candidates" :key="candidate.id">
+                <button type="button" class="candidate-item" @click="applyOpencodeCandidate(candidate)">
+                  <span class="candidate-title">{{ candidate.title || candidate.id }}</span>
+                  <span class="candidate-meta">{{ candidate.id }}</span>
+                </button>
+              </li>
+            </ul>
+          </template>
         </div>
         <div class="form-group">
           <label>{{ $t('session.dialog.opencodeServerMode') }}</label>
@@ -243,6 +264,161 @@
         {{ $t('session.dialog.opencodeConflictHint') }}
       </p>
     </section>
+
+    <!-- FEAT-3：gemini 与 claude 同构 -->
+    <section v-if="cliType === 'gemini'" class="opts-section">
+      <div class="opts-section-head">
+        <span class="opts-section-title">{{ $t('session.dialog.launchArgs') }}</span>
+      </div>
+      <div v-if="builtinValueDescriptors.length > 0" class="builtin-arg-grid">
+        <div v-for="descriptor in builtinValueDescriptors" :key="descriptor.flag" class="form-group">
+          <label class="arg-label">
+            <code>{{ descriptor.flag }}</code>
+            <span
+              v-if="descriptor.help"
+              class="arg-help"
+              :title="$t(`session.dialog.argHelp.${descriptor.help}`)"
+              :aria-label="$t(`session.dialog.argHelp.${descriptor.help}`)"
+              role="img"
+            >?</span>
+          </label>
+          <select
+            v-if="descriptor.control === 'select'"
+            v-model="builtinValues[descriptor.flag]"
+            class="form-input"
+          >
+            <option value="">{{ $t('session.dialog.builtinArgUnset') }}</option>
+            <option v-for="option in descriptor.options" :key="option" :value="option">{{ option }}</option>
+          </select>
+          <input
+            v-else
+            v-model="builtinValues[descriptor.flag]"
+            type="text"
+            class="form-input"
+            :placeholder="descriptor.placeholder || $t('session.dialog.builtinArgUnset')"
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- 新 CLI（pi/omp/grok/hermes）：常用参数 + 续接选项 + resume ID -->
+    <template v-if="supportsIdResume">
+      <section class="opts-section">
+        <div class="opts-section-head">
+          <span class="opts-section-title">{{ $t('session.dialog.launchArgs') }}</span>
+        </div>
+        <div v-if="builtinValueDescriptors.length > 0" class="builtin-arg-grid">
+          <div v-for="descriptor in builtinValueDescriptors" :key="descriptor.flag" class="form-group">
+            <label class="arg-label">
+              <code>{{ descriptor.flag }}</code>
+              <span
+                v-if="descriptor.help"
+                class="arg-help"
+                :title="$t(`session.dialog.argHelp.${descriptor.help}`)"
+                :aria-label="$t(`session.dialog.argHelp.${descriptor.help}`)"
+                role="img"
+              >?</span>
+            </label>
+            <select
+              v-if="descriptor.control === 'select'"
+              v-model="builtinValues[descriptor.flag]"
+              class="form-input"
+            >
+              <option value="">{{ $t('session.dialog.builtinArgUnset') }}</option>
+              <option v-for="option in descriptor.options" :key="option" :value="option">{{ option }}</option>
+            </select>
+            <input
+              v-else
+              v-model="builtinValues[descriptor.flag]"
+              type="text"
+              class="form-input"
+              :placeholder="descriptor.placeholder || $t('session.dialog.builtinArgUnset')"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section class="opts-section">
+        <div class="opts-section-head">
+          <span class="opts-section-title">{{ $t('session.dialog.resumeSection') }}</span>
+        </div>
+        <div class="check-row">
+          <label class="check-label">
+            <input v-model="idResumeOptions.continueLast" type="checkbox" />
+            {{ $t('session.dialog.idContinueLast') }}
+          </label>
+        </div>
+        <div class="form-group field-wide">
+          <label>{{ $t('session.dialog.idResumeId') }}</label>
+          <div class="resume-id-row">
+            <input
+              v-model="idResumeOptions.resumeId"
+              type="text"
+              class="form-input"
+              :placeholder="$t('session.dialog.idResumeIdPlaceholder')"
+            />
+            <button
+              type="button"
+              class="icon-text-action"
+              :disabled="candidatesLoading"
+              @click="toggleCandidates"
+            >
+              {{ candidatesLoading ? $t('session.dialog.candidatesLoading') : $t('session.dialog.pickCandidate') }}
+            </button>
+          </div>
+          <template v-if="showCandidates">
+            <div v-if="candidates.length === 0" class="setting-hint">{{ $t('session.dialog.candidatesEmpty') }}</div>
+            <ul v-else class="candidate-list">
+              <li v-for="candidate in candidates" :key="candidate.id">
+                <button type="button" class="candidate-item" @click="applyCandidate(candidate)">
+                  <span class="candidate-title">{{ candidate.title || candidate.id }}</span>
+                  <span class="candidate-meta">{{ candidate.id }}</span>
+                </button>
+              </li>
+            </ul>
+          </template>
+          <span class="setting-hint">{{ $t('session.dialog.idResumeHint') }}</span>
+        </div>
+      </section>
+
+      <!-- 自定义参数行（与新 CLI 同级） -->
+      <section class="opts-section">
+        <div class="opts-section-head">
+          <span class="opts-section-title">{{ $t('session.dialog.customLaunchArgs') }}</span>
+          <button type="button" class="icon-text-action" @click="addCustomArg">
+            <UiIcon name="plus" />
+            <span>{{ $t('session.dialog.addCustomArg') }}</span>
+          </button>
+        </div>
+        <div class="custom-arg-list">
+          <div v-for="arg in customArgs" :key="arg.id" class="custom-arg-row">
+            <input
+              v-model="arg.name"
+              type="text"
+              class="form-input"
+              :aria-label="$t('session.dialog.customArgName')"
+              :placeholder="$t('session.dialog.customArgNamePlaceholder')"
+            />
+            <input
+              v-model="arg.value"
+              type="text"
+              class="form-input"
+              :aria-label="$t('session.dialog.customArgValue')"
+              :placeholder="$t('session.dialog.customArgValuePlaceholder')"
+            />
+            <button
+              type="button"
+              class="arg-remove-btn"
+              :aria-label="$t('session.dialog.removeCustomArg')"
+              :title="$t('session.dialog.removeCustomArg')"
+              @click="removeCustomArg(arg.id)"
+            >
+              <UiIcon name="x" />
+            </button>
+          </div>
+        </div>
+      </section>
+    </template>
 
     <!-- terminal：shell 启动参数 -->
     <section v-if="cliType === 'terminal'" class="opts-section">
@@ -372,7 +548,7 @@ import type { CliType } from '@shared/cli-types'
 import { useSettingsStore } from '@/stores/settings'
 import { useToast } from '@/composables/useToast'
 import UiIcon from '@/components/ui/UiIcon.vue'
-import { detectShells, type DetectedShell } from '@/api/local-session'
+import { detectShells, getNativeIdCandidates, type DetectedShell } from '@/api/local-session'
 import {
   DEFAULT_TERMINAL_FONT_FAMILY,
   ensureMonospaceFallback,
@@ -408,8 +584,10 @@ import {
 const props = withDefaults(defineProps<{
   cliType: CliType
   initialOptions?: Record<string, unknown>
+  projectPath?: string
 }>(), {
-  initialOptions: undefined
+  initialOptions: undefined,
+  projectPath: ''
 })
 
 const { t } = useI18n()
@@ -462,6 +640,47 @@ const opencodeOptions = reactive({
   attachUrl: '',
   serverMode: 'off' as 'off' | 'attach'
 })
+
+// 新 CLI（pi/omp/grok/hermes）：resume 相关选项（resumeId 经 session:setNativeId
+// 或创建 options 绑定，continueLast 为启动 flag）
+const supportsIdResume = computed(
+  () => props.cliType === 'pi' || props.cliType === 'omp' || props.cliType === 'grok' || props.cliType === 'hermes'
+)
+const idResumeOptions = reactive({
+  resumeId: '',
+  continueLast: false
+})
+const candidates = ref<Array<{ id: string; title: string; updated: number }>>([])
+const candidatesLoading = ref(false)
+const showCandidates = ref(false)
+
+function toggleCandidates(): void {
+  if (props.cliType !== 'opencode' && !supportsIdResume.value) return
+  showCandidates.value = !showCandidates.value
+  if (showCandidates.value && candidates.value.length === 0) void loadCandidates()
+}
+
+async function loadCandidates(): Promise<void> {
+  if (candidatesLoading.value) return
+  candidatesLoading.value = true
+  try {
+    candidates.value = await getNativeIdCandidates(props.cliType, props.projectPath || undefined)
+  } catch {
+    candidates.value = []
+  } finally {
+    candidatesLoading.value = false
+  }
+}
+
+function applyCandidate(candidate: { id: string }): void {
+  idResumeOptions.resumeId = candidate.id
+  showCandidates.value = false
+}
+
+function applyOpencodeCandidate(candidate: { id: string }): void {
+  opencodeOptions.sessionId = candidate.id
+  showCandidates.value = false
+}
 
 const detectedShells = ref<DetectedShell[]>([])
 const shellChoice = ref('')
@@ -643,7 +862,16 @@ function resetFromOptions(): void {
     return
   }
 
-  // opencode
+  if (supportsIdResume.value) {
+    applyArgs(Array.isArray(options.customArgs) ? [...(options.customArgs as CustomCliArgument[])] : [])
+    idResumeOptions.resumeId = typeof options.resumeId === 'string' ? options.resumeId : ''
+    idResumeOptions.continueLast = options.continueLast === true
+    showCandidates.value = false
+    return
+  }
+
+  // opencode：候选列表状态在切类型时复位
+  showCandidates.value = false
   opencodeOptions.model = typeof options.model === 'string' ? options.model : ''
   opencodeOptions.agent = typeof options.agent === 'string' ? options.agent : ''
   opencodeOptions.prompt = typeof options.prompt === 'string' ? options.prompt : ''
@@ -688,6 +916,7 @@ interface FormSnapshot {
   customArgs: CustomArgRow[]
   codexPermissionsMode: typeof codexPermissionsMode.value
   opencode: typeof opencodeOptions
+  idResume: typeof idResumeOptions
   shellChoice: string
   customShellPath: string
   startupCommandsText: string
@@ -707,6 +936,7 @@ function captureSnapshot(): FormSnapshot {
     customArgs: customArgs.value.map((row) => ({ ...row })),
     codexPermissionsMode: codexPermissionsMode.value,
     opencode: { ...opencodeOptions },
+    idResume: { ...idResumeOptions },
     shellChoice: shellChoice.value,
     customShellPath: customShellPath.value,
     startupCommandsText: startupCommandsText.value,
@@ -729,6 +959,7 @@ function restoreSnapshot(snapshot: FormSnapshot): void {
   customArgs.value = snapshot.customArgs.map((row) => ({ ...row }))
   codexPermissionsMode.value = snapshot.codexPermissionsMode
   Object.assign(opencodeOptions, snapshot.opencode)
+  Object.assign(idResumeOptions, snapshot.idResume)
   shellChoice.value = snapshot.shellChoice
   customShellPath.value = snapshot.customShellPath
   startupCommandsText.value = snapshot.startupCommandsText
@@ -917,6 +1148,16 @@ function buildOptions(): Record<string, unknown> {
       customArgs: args.length > 0 ? args : undefined,
       appearance,
       model: undefined
+    })
+  }
+
+  if (supportsIdResume.value) {
+    const args = collectAllArgs()
+    return mergeWithInitial({
+      resumeId: idResumeOptions.resumeId.trim() || undefined,
+      continueLast: idResumeOptions.continueLast || undefined,
+      customArgs: args.length > 0 ? args : undefined,
+      appearance
     })
   }
 
@@ -1233,6 +1474,62 @@ defineExpose({ buildOptions, hasOpencodeConflict, getCollabMode })
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+}
+
+.resume-id-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.candidate-list {
+  list-style: none;
+  margin: var(--spacing-xs) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.candidate-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  padding: 6px var(--spacing-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+
+  .candidate-title {
+    font-size: var(--font-size-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .candidate-meta {
+    color: var(--text-muted);
+    font-family: var(--font-mono, monospace);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

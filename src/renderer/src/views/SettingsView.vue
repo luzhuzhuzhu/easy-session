@@ -69,10 +69,18 @@
         :codex-path="settingsStore.settings.codexPath"
         :opencode-path="settingsStore.settings.opencodePath"
         :gemini-path="settingsStore.settings.geminiPath"
+        :pi-path="settingsStore.settings.piPath"
+        :omp-path="settingsStore.settings.ompPath"
+        :grok-path="settingsStore.settings.grokPath"
+        :hermes-path="settingsStore.settings.hermesPath"
         @update:claude-path="settingsStore.settings.claudePath = $event; handleSave()"
         @update:codex-path="settingsStore.settings.codexPath = $event; handleSave()"
         @update:opencode-path="settingsStore.settings.opencodePath = $event; handleSave()"
         @update:gemini-path="settingsStore.settings.geminiPath = $event; handleSave()"
+        @update:pi-path="settingsStore.settings.piPath = $event; handleSave()"
+        @update:omp-path="settingsStore.settings.ompPath = $event; handleSave()"
+        @update:grok-path="settingsStore.settings.grokPath = $event; handleSave()"
+        @update:hermes-path="settingsStore.settings.hermesPath = $event; handleSave()"
       />
     </div>
 
@@ -393,10 +401,18 @@ const settingsSections = computed<SettingsSectionMeta[]>(() => [
       t('settings.codexPath'),
       t('settings.opencodePath'),
       t('settings.geminiPath'),
+      t('settings.piPath'),
+      t('settings.ompPath'),
+      t('settings.grokPath'),
+      t('settings.hermesPath'),
       'Claude',
       'Codex',
       'OpenCode',
-      'Gemini'
+      'Gemini',
+      'Pi',
+      'OMP',
+      'Grok',
+      'Hermes'
     ]
   },
   {

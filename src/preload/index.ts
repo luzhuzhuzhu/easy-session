@@ -27,7 +27,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'session:input', 'session:write', 'session:output:history', 'session:output:clear', 'session:output:journalTail', 'session:output:search',
   'session:resize', 'session:rename', 'session:updateIcon',
   'session:restart', 'session:start', 'session:pause',
-  'session:updateOptions', 'session:sendTo',
+  'session:updateOptions', 'session:sendTo', 'session:setNativeId', 'session:nativeIdCandidates',
   'bus:snapshot', 'bus:sendMessage', 'bus:createTask', 'bus:taskTransition', 'bus:getCollabSkill', 'bus:setTaskStatus',
   'bus:archiveTask', 'bus:unarchiveTask',
   'bus:setSessionCollabMode', 'terminal:detectShells',

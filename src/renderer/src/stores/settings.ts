@@ -15,6 +15,10 @@ export interface AppSettings {
   codexPath: string
   opencodePath: string
   geminiPath: string
+  piPath: string
+  ompPath: string
+  grokPath: string
+  hermesPath: string
   desktopRemoteMountEnabled: boolean
   bufferSize: number
   terminalFont: string
@@ -72,6 +76,10 @@ const defaults: AppSettings = {
   codexPath: '',
   opencodePath: '',
   geminiPath: '',
+  piPath: '',
+  ompPath: '',
+  grokPath: '',
+  hermesPath: '',
   desktopRemoteMountEnabled: false,
   bufferSize: 5000,
   terminalFont: 'Consolas, monospace',
@@ -154,6 +162,10 @@ function normalizeSettings(input: unknown): AppSettings {
     codexPath: normalizeString(raw.codexPath, defaults.codexPath),
     opencodePath: normalizeString(raw.opencodePath, defaults.opencodePath),
     geminiPath: normalizeString(raw.geminiPath, defaults.geminiPath),
+    piPath: normalizeString(raw.piPath, defaults.piPath),
+    ompPath: normalizeString(raw.ompPath, defaults.ompPath),
+    grokPath: normalizeString(raw.grokPath, defaults.grokPath),
+    hermesPath: normalizeString(raw.hermesPath, defaults.hermesPath),
     desktopRemoteMountEnabled: normalizeBoolean(raw.desktopRemoteMountEnabled, defaults.desktopRemoteMountEnabled),
     bufferSize: normalizeNumber(raw.bufferSize, defaults.bufferSize),
     terminalFont: normalizeString(raw.terminalFont, defaults.terminalFont),

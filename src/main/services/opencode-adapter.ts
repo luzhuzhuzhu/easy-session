@@ -176,6 +176,55 @@ export class OpenCodeAdapter {
     })
   }
 
+  // resume ID 选择器数据源：列出该项目路径下的候选会话（id + 标题 + 时间），
+  // 供用户在会话设置里挑一个绑定。不做时间窗过滤（人工选择场景，越全越好用）。
+  async collectSessionCandidatesByPath(
+    projectPath: string,
+    preferredPath?: string,
+    maxCount = 40
+  ): Promise<Array<{ id: string; title: string; updated: number }>> {
+    const executable = this.getExecutable(preferredPath)
+    const command = `"${executable}" session list --format json --max-count ${Math.max(1, maxCount)}`
+    const targetPath = this.normalizePath(projectPath)
+
+    return new Promise((resolve) => {
+      exec(command, { cwd: projectPath || undefined, maxBuffer: 10 * 1024 * 1024, timeout: 8000 }, (error, stdout) => {
+        if (error || !stdout) {
+          resolve([])
+          return
+        }
+        try {
+          const parsed = JSON.parse(stdout) as unknown
+          // 先扫一遍标题（id → title），供选择器展示
+          const titles = new Map<string, string>()
+          const walkTitles = (value: unknown): void => {
+            if (!value || typeof value !== 'object') return
+            if (Array.isArray(value)) {
+              value.forEach(walkTitles)
+              return
+            }
+            const obj = value as Record<string, unknown>
+            const id = typeof obj.id === 'string' ? obj.id : typeof obj.sessionID === 'string' ? obj.sessionID : null
+            const title = typeof obj.title === 'string' ? obj.title : ''
+            if (id && title && !titles.has(id)) titles.set(id, title)
+            Object.values(obj).forEach(walkTitles)
+          }
+          walkTitles(parsed)
+
+          const seen = new Set<string>()
+          const candidates = this.collectSessionCandidates(parsed)
+            .filter((item) => this.pathMatches(item.path, targetPath))
+            .filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)))
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .map((item) => ({ id: item.id, title: titles.get(item.id) ?? '', updated: item.timestamp }))
+          resolve(candidates)
+        } catch {
+          resolve([])
+        }
+      })
+    })
+  }
+
   extractSessionIdFromOutput(data: string): string | null {
     const hints: string[] = []
 

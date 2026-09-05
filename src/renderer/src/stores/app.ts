@@ -12,6 +12,11 @@ interface CliPathSettings {
   claudePath?: string
   codexPath?: string
   opencodePath?: string
+  geminiPath?: string
+  piPath?: string
+  ompPath?: string
+  grokPath?: string
+  hermesPath?: string
   [key: string]: string | undefined
 }
 

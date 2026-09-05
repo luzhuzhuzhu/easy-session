@@ -4,6 +4,7 @@ import { SessionManager } from '../services/session-manager'
 import { detectShells } from '../services/shell-detector'
 import type { CreateSessionParams, SessionFilter, Session } from '../services/session-types'
 import { CLI_REGISTRY } from './cli-registry'
+import type { OpenCodeAdapter } from '../services/opencode-adapter'
 
 // session:create 的形状校验：用 zod 取代「不校验直接强转持久化」。
 // options 用 passthrough（校验已知字段类型，放过未知字段保兼容），校验作为准入门，
@@ -45,7 +46,8 @@ function assertPositiveInt(value: unknown, name: string): asserts value is numbe
 
 export function registerSessionHandlers(
   sessionManager: SessionManager,
-  agentBus?: { presetCollabMode(sessionId: string, mode: string): void }
+  agentBus?: { presetCollabMode(sessionId: string, mode: string): void },
+  openCodeAdapter?: OpenCodeAdapter
 ): void {
   ipcMain.handle('session:create', (_event, params: CreateSessionParams) => {
     const result = createSessionSchema.safeParse(params)
@@ -164,6 +166,26 @@ export function registerSessionHandlers(
       throw new Error('参数 options 必须为普通对象')
     }
     return sessionManager.updateSessionOptions(id, options)
+  })
+
+  // 自定义绑定/修改会话的原生 resume ID（claude/codex/opencode/gemini/pi/omp/grok/hermes）。
+  // value 为空串/null 表示解除绑定，下次启动全新会话；运行中的进程不受影响，重启后生效。
+  ipcMain.handle('session:setNativeId', (_event, id: string, cliType: string, value: string | null) => {
+    assertString(id, 'id')
+    if (typeof cliType !== 'string' || !cliType) throw new Error('参数 cliType 必须为非空字符串')
+    if (value !== null && typeof value !== 'string') throw new Error('参数 value 必须为字符串或 null')
+    return sessionManager.setNativeSessionId(id, cliType as Session['type'], value)
+  })
+
+  // 会话候选列表（resume ID 选择器数据源）：按 CLI 发现本机已有会话。
+  // 目前 opencode 支持（session list --format json）；其他 CLI 返回空数组，
+  // 前端回退为手动输入框。
+  ipcMain.handle('session:nativeIdCandidates', async (_event, cliType: string, projectPath?: string) => {
+    if (typeof cliType !== 'string' || !cliType) throw new Error('参数 cliType 必须为非空字符串')
+    if (cliType !== 'opencode' || !openCodeAdapter) return []
+    const normalizedPath = typeof projectPath === 'string' && projectPath.trim() ? projectPath.trim() : undefined
+    if (!normalizedPath) return []
+    return openCodeAdapter.collectSessionCandidatesByPath(normalizedPath, undefined, 40)
   })
 
   ipcMain.handle('terminal:detectShells', () => {

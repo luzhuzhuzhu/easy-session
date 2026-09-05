@@ -11,6 +11,7 @@
       ref="optionsFormRef"
       :cli-type="session.type"
       :initial-options="session.options"
+      :project-path="session.projectPath"
     />
 
     <template #footer>
