@@ -240,10 +240,10 @@ import {
   openSkillPath,
   type Skill
 } from '@/api/skill'
-import { LOCAL_INSTANCE_ID, type ProjectRef, type UnifiedProject, type UnifiedSession } from '@/models/unified-resource'
-import type { ProjectPromptCliType } from '@/api/local-project'
+import { LOCAL_INSTANCE_ID, type ProjectRef, type SessionRef, type UnifiedProject, type UnifiedSession } from '@/models/unified-resource'
 import { resolveProjectRouteRef } from '@/utils/project-routing'
 import { buildSessionDestroyConfirmCopy, buildSessionRestartConfirmCopy } from '@/utils/session-confirm'
+import { useProjectPromptEditor } from '@/composables/useProjectPromptEditor'
 import { formatRemoteOperationError, formatSessionOperationTarget } from '@/utils/remote-operation-error'
 
 const route = useRoute()
@@ -265,18 +265,6 @@ const expandedSessionOptionsIds = ref<string[]>([])
 
 const projectSkills = ref<Skill[]>([])
 
-const promptTab = ref<ProjectPromptCliType>('claude')
-const promptLoading = ref(false)
-const promptSaving = ref(false)
-const promptExists = ref(false)
-const promptFilePath = ref('')
-const promptSourceText = ref('')
-const promptEditText = ref('')
-const promptMessage = ref('')
-const promptMessageType = ref<'success' | 'error'>('success')
-const promptModified = computed(() => promptEditText.value !== promptSourceText.value)
-let promptLoadToken = 0
-
 const projectRef = computed<ProjectRef | null>(() => resolveProjectRouteRef(route))
 const projectCapabilities = computed(() => {
   if (!project.value) return null
@@ -292,6 +280,40 @@ const canReadPrompt = computed(() => !!projectCapabilities.value?.projectPromptR
 const canWritePrompt = computed(() => !!projectCapabilities.value?.projectPromptWrite)
 const showPromptPanel = computed(() => canReadPrompt.value || canWritePrompt.value)
 const showSkillsPanel = computed(() => project.value?.instanceId === LOCAL_INSTANCE_ID)
+
+// STAB-11：prompt 编辑器逻辑下沉到 useProjectPromptEditor（双 tab 缓存/加载/保存/丢弃确认）。
+const promptEditor = useProjectPromptEditor({
+  project,
+  projectRef,
+  enabled: showPromptPanel,
+  canWrite: canWritePrompt,
+  readPrompt: (ref, cli) => projectsStore.readProjectPromptForRef(ref, cli),
+  writePrompt: (ref, cli, content) => projectsStore.writeProjectPromptForRef(ref, cli, content),
+  t,
+  onSaved: () => toast.success(t('projectDetail.promptSaved')),
+  onSaveFailed: (message) => toast.error(t('toast.operationFailed') + ': ' + message),
+  confirmDiscard: (options) => confirmDialog.confirm(options)
+})
+const {
+  promptTab,
+  promptLoading,
+  promptSaving,
+  promptExists,
+  promptFilePath,
+  promptSourceText,
+  promptEditText,
+  promptMessage,
+  promptMessageType,
+  promptModified,
+  hasUnsavedPromptChanges,
+  resetPromptCache,
+  loadPromptContent,
+  savePromptContent,
+  reloadPromptContent,
+  confirmDiscardUnsavedPromptChanges,
+  handleBeforeUnload
+} = promptEditor
+
 const remoteCapabilityNotice = computed(() => {
   if (!project.value || project.value.instanceId === LOCAL_INSTANCE_ID) return ''
   const capabilities = projectCapabilities.value
@@ -308,30 +330,6 @@ const remoteCapabilityNotice = computed(() => {
   if (!missing.length) return ''
   const separator = locale.value === 'zh-CN' ? '、' : ', '
   return t('projectDetail.remoteCapabilityLimited', { capabilities: missing.join(separator) })
-})
-
-type PromptTabCache = {
-  loaded: boolean
-  projectKey: string
-  path: string
-  exists: boolean
-  source: string
-  edit: string
-}
-
-const promptCache = ref<Record<ProjectPromptCliType, PromptTabCache>>({
-  claude: { loaded: false, projectKey: '', path: '', exists: false, source: '', edit: '' },
-  codex: { loaded: false, projectKey: '', path: '', exists: false, source: '', edit: '' }
-})
-
-const hasUnsavedPromptChanges = computed(() => {
-  if (!project.value) return false
-  if (promptModified.value) return true
-  return Object.values(promptCache.value).some((cached) => {
-    return cached.loaded &&
-      cached.projectKey === project.value?.globalProjectKey &&
-      cached.edit !== cached.source
-  })
 })
 
 const now = ref(Date.now())
@@ -443,24 +441,41 @@ async function reloadProjectSessions() {
   )
 }
 
-async function startSessionFromProject(id: string) {
+// STAB-11：会话操作统一助手——查找会话、执行 action、刷新列表、成功/失败 toast。
+// 四段近似重复的 try/catch（start/pause/restart/destroy）收敛于此。
+async function runSessionAction(
+  id: string,
+  action: 'start' | 'pause' | 'restart' | 'destroy',
+  options?: { beforeRun?: (target: UnifiedSession) => Promise<boolean> }
+): Promise<void> {
+  const actionKeys = { start: 'session.start', pause: 'session.pause', restart: 'session.restart', destroy: 'session.destroy' } as const
+  const toastKeys = { start: 'toast.sessionStarted', pause: 'toast.sessionPaused', restart: 'toast.sessionRestarted', destroy: 'toast.sessionDestroyed' } as const
+  const storeActions = {
+    start: (ref: SessionRef) => sessionsStore.startSessionRef(ref),
+    pause: (ref: SessionRef) => sessionsStore.pauseSessionRef(ref),
+    restart: (ref: SessionRef) => sessionsStore.restartSessionRef(ref),
+    destroy: (ref: SessionRef) => sessionsStore.destroySessionRef(ref)
+  } as const
+
   let target: UnifiedSession | undefined
   try {
     target = projectSessions.value.find((session) => session.sessionId === id)
     if (!target) throw new Error('Session not found')
-    await sessionsStore.startSessionRef({
+    const sessionRef = {
       instanceId: target.instanceId,
       sessionId: target.sessionId,
       globalSessionKey: target.globalSessionKey
-    })
+    }
+    if (options?.beforeRun && !(await options.beforeRun(target))) return
+    await storeActions[action](sessionRef)
     await reloadProjectSessions()
-    toast.success(t('toast.sessionStarted'))
+    toast.success(t(toastKeys[action]))
   } catch (e: unknown) {
     toast.error(formatRemoteOperationError({
       t,
       instancesStore,
       instanceId: target?.instanceId || project.value?.instanceId || LOCAL_INSTANCE_ID,
-      action: t('session.start'),
+      action: t(actionKeys[action]),
       target: target
         ? formatSessionOperationTarget({
             instanceId: target.instanceId,
@@ -471,46 +486,22 @@ async function startSessionFromProject(id: string) {
       error: e
     }))
   }
+}
+
+async function startSessionFromProject(id: string) {
+  await runSessionAction(id, 'start')
 }
 
 async function pauseSessionFromProject(id: string) {
-  let target: UnifiedSession | undefined
-  try {
-    target = projectSessions.value.find((session) => session.sessionId === id)
-    if (!target) throw new Error('Session not found')
-    await sessionsStore.pauseSessionRef({
-      instanceId: target.instanceId,
-      sessionId: target.sessionId,
-      globalSessionKey: target.globalSessionKey
-    })
-    await reloadProjectSessions()
-    toast.success(t('toast.sessionPaused'))
-  } catch (e: unknown) {
-    toast.error(formatRemoteOperationError({
-      t,
-      instancesStore,
-      instanceId: target?.instanceId || project.value?.instanceId || LOCAL_INSTANCE_ID,
-      action: t('session.pause'),
-      target: target
-        ? formatSessionOperationTarget({
-            instanceId: target.instanceId,
-            sessionId: target.sessionId,
-            globalSessionKey: target.globalSessionKey
-          }, target.name)
-        : id,
-      error: e
-    }))
-  }
+  await runSessionAction(id, 'pause')
 }
 
 async function restartSessionFromProject(id: string) {
-  let target: UnifiedSession | undefined
-  try {
-    target = projectSessions.value.find((session) => session.sessionId === id)
-    if (!target) throw new Error('Session not found')
-    if (target.status === 'running') {
+  await runSessionAction(id, 'restart', {
+    beforeRun: async (target) => {
+      if (target.status !== 'running') return true
       const copy = buildSessionRestartConfirmCopy(target, t)
-      const confirmed = await confirmDialog.confirm({
+      return confirmDialog.confirm({
         title: copy.title,
         message: copy.message,
         details: copy.details,
@@ -518,31 +509,8 @@ async function restartSessionFromProject(id: string) {
         cancelText: t('confirm.cancel'),
         tone: 'danger'
       })
-      if (!confirmed) return
     }
-    await sessionsStore.restartSessionRef({
-      instanceId: target.instanceId,
-      sessionId: target.sessionId,
-      globalSessionKey: target.globalSessionKey
-    })
-    await reloadProjectSessions()
-    toast.success(t('toast.sessionRestarted'))
-  } catch (e: unknown) {
-    toast.error(formatRemoteOperationError({
-      t,
-      instancesStore,
-      instanceId: target?.instanceId || project.value?.instanceId || LOCAL_INSTANCE_ID,
-      action: t('session.restart'),
-      target: target
-        ? formatSessionOperationTarget({
-            instanceId: target.instanceId,
-            sessionId: target.sessionId,
-            globalSessionKey: target.globalSessionKey
-          }, target.name)
-        : id,
-      error: e
-    }))
-  }
+  })
 }
 
 async function destroySessionFromProject(id: string) {
@@ -561,28 +529,7 @@ async function destroySessionFromProject(id: string) {
     tone: 'danger'
   })
   if (!confirmed) return
-  try {
-    await sessionsStore.destroySessionRef({
-      instanceId: target.instanceId,
-      sessionId: target.sessionId,
-      globalSessionKey: target.globalSessionKey
-    })
-    await reloadProjectSessions()
-    toast.success(t('toast.sessionDestroyed'))
-  } catch (e: unknown) {
-    toast.error(formatRemoteOperationError({
-      t,
-      instancesStore,
-      instanceId: target.instanceId,
-      action: t('session.destroy'),
-      target: formatSessionOperationTarget({
-        instanceId: target.instanceId,
-        sessionId: target.sessionId,
-        globalSessionKey: target.globalSessionKey
-      }, target.name),
-      error: e
-    }))
-  }
+  await runSessionAction(id, 'destroy')
 }
 
 function openSession(session: UnifiedSession) {
@@ -592,118 +539,6 @@ function openSession(session: UnifiedSession) {
 async function handleCreateSessionCreated() {
   closeCreateSessionDialog()
   await reloadProjectSessions()
-}
-
-function resetPromptCache() {
-  promptCache.value = {
-    claude: { loaded: false, projectKey: '', path: '', exists: false, source: '', edit: '' },
-    codex: { loaded: false, projectKey: '', path: '', exists: false, source: '', edit: '' }
-  }
-}
-
-function cacheCurrentPromptState(tab: ProjectPromptCliType) {
-  if (!project.value) return
-  promptCache.value[tab] = {
-    loaded: true,
-    projectKey: project.value.globalProjectKey,
-    path: promptFilePath.value,
-    exists: promptExists.value,
-    source: promptSourceText.value,
-    edit: promptEditText.value
-  }
-}
-
-function applyPromptCache(tab: ProjectPromptCliType): boolean {
-  if (!project.value) return false
-  const cached = promptCache.value[tab]
-  if (!cached.loaded || cached.projectKey !== project.value.globalProjectKey) return false
-  promptFilePath.value = cached.path
-  promptExists.value = cached.exists
-  promptSourceText.value = cached.source
-  promptEditText.value = cached.edit
-  return true
-}
-
-async function loadPromptContent(force = false) {
-  if (!project.value || !projectRef.value || !showPromptPanel.value) return
-  if (!force && applyPromptCache(promptTab.value)) return
-  const token = ++promptLoadToken
-  promptLoading.value = true
-  promptMessage.value = ''
-  try {
-    const promptFile = await projectsStore.readProjectPromptForRef(projectRef.value, promptTab.value)
-    if (token !== promptLoadToken) return
-    if (!promptFile) {
-      promptMessage.value = t('config.saveError') + ': Project not found'
-      promptMessageType.value = 'error'
-      return
-    }
-    promptFilePath.value = promptFile.path
-    promptExists.value = promptFile.exists
-    promptSourceText.value = promptFile.content
-    promptEditText.value = promptFile.content
-    cacheCurrentPromptState(promptTab.value)
-  } catch (e: unknown) {
-    if (token !== promptLoadToken) return
-    promptMessage.value = t('config.saveError') + ': ' + (e instanceof Error ? e.message : String(e))
-    promptMessageType.value = 'error'
-  } finally {
-    if (token === promptLoadToken) promptLoading.value = false
-  }
-}
-
-async function savePromptContent() {
-  if (!project.value || !projectRef.value || !canWritePrompt.value) return
-  promptSaving.value = true
-  promptMessage.value = ''
-  try {
-    const saved = await projectsStore.writeProjectPromptForRef(projectRef.value, promptTab.value, promptEditText.value)
-    if (!saved) throw new Error('Project not found')
-
-    promptFilePath.value = saved.path
-    promptExists.value = true
-    promptSourceText.value = saved.content
-    promptEditText.value = saved.content
-    cacheCurrentPromptState(promptTab.value)
-    promptMessage.value = t('projectDetail.promptSaved')
-    promptMessageType.value = 'success'
-    toast.success(t('projectDetail.promptSaved'))
-  } catch (e: unknown) {
-    promptMessage.value = t('config.saveError') + ': ' + (e instanceof Error ? e.message : String(e))
-    promptMessageType.value = 'error'
-    toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
-  } finally {
-    promptSaving.value = false
-  }
-}
-
-async function reloadPromptContent() {
-  const confirmed = await confirmDiscardUnsavedPromptChanges()
-  if (!confirmed) return
-  await loadPromptContent(true)
-}
-
-async function confirmDiscardUnsavedPromptChanges(): Promise<boolean> {
-  cacheCurrentPromptState(promptTab.value)
-  if (!hasUnsavedPromptChanges.value) return true
-
-  return confirmDialog.confirm({
-    title: t('projectDetail.promptUnsavedTitle'),
-    message: t('projectDetail.promptUnsavedMessage'),
-    details: promptFilePath.value
-      ? t('projectDetail.promptUnsavedDetails') + '\n' + promptFilePath.value
-      : t('projectDetail.promptUnsavedDetails'),
-    confirmText: t('confirm.continue'),
-    cancelText: t('confirm.cancel'),
-    tone: 'danger'
-  })
-}
-
-function handleBeforeUnload(event: BeforeUnloadEvent): void {
-  cacheCurrentPromptState(promptTab.value)
-  if (!hasUnsavedPromptChanges.value) return
-  event.preventDefault()
-  event.returnValue = ''
 }
 
 async function loadProjectSkills() {
@@ -819,8 +654,7 @@ async function loadProject() {
       promptSourceText.value = ''
       promptEditText.value = ''
       promptMessage.value = ''
-    }
-    try {
+    }    try {
       await loadProjectSkills()
     } catch {
       projectSkills.value = []
@@ -854,15 +688,6 @@ onBeforeRouteUpdate(async () => {
 
 watch(() => [route.name, route.params.id, route.params.instanceId, route.params.projectId], () => {
   void loadProject()
-})
-
-watch(promptTab, (_next, prev) => {
-  if (prev) {
-    cacheCurrentPromptState(prev)
-  }
-  if (project.value) {
-    void loadPromptContent()
-  }
 })
 
 // STAB-9：运行中会话集合变化时同步 ticker（无运行中会话时暂停 1s 轮询）。
