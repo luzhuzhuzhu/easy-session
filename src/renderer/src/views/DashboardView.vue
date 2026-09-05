@@ -6,48 +6,23 @@
     </div>
 
     <div class="cli-sections">
-      <div class="card cli-card clickable" @click="toggleCliConfig('claude')">
+      <div
+        v-for="cli in DASHBOARD_CLI_TYPES"
+        :key="cli.id"
+        class="card cli-card clickable"
+        @click="toggleCliConfig(cli.id)"
+      >
         <div class="card-header">
-          <h3>{{ $t('dashboard.claudeStatus') }}</h3>
-          <UiIcon class="chevron" :class="{ rotated: activeCli === 'claude' }" name="chevron-down" />
+          <h3>{{ $t(cli.statusKey) }}</h3>
+          <UiIcon class="chevron" :class="{ rotated: activeCli === cli.id }" name="chevron-down" />
         </div>
         <div class="cli-status">
-          <span class="indicator" :class="statusClass(appStore.claudeAvailable, checking)"></span>
-          <span class="status-text">{{ statusText(appStore.claudeAvailable, checking) }}</span>
+          <span class="indicator" :class="statusClass(appStore.cliAvailable[cli.id], checking)"></span>
+          <span class="status-text">{{ statusText(appStore.cliAvailable[cli.id], checking) }}</span>
         </div>
-        <div v-if="!checking && appStore.claudeAvailable" class="cli-detail">
-          <div v-if="appStore.claudeInfo.path"><span class="label">{{ $t('dashboard.cliPath') }}</span> <code>{{ appStore.claudeInfo.path }}</code></div>
-          <div v-if="appStore.claudeInfo.version"><span class="label">{{ $t('dashboard.cliVersion') }}</span> {{ appStore.claudeInfo.version }}</div>
-        </div>
-      </div>
-
-      <div class="card cli-card clickable" @click="toggleCliConfig('codex')">
-        <div class="card-header">
-          <h3>{{ $t('dashboard.codexStatus') }}</h3>
-          <UiIcon class="chevron" :class="{ rotated: activeCli === 'codex' }" name="chevron-down" />
-        </div>
-        <div class="cli-status">
-          <span class="indicator" :class="statusClass(appStore.codexAvailable, checking)"></span>
-          <span class="status-text">{{ statusText(appStore.codexAvailable, checking) }}</span>
-        </div>
-        <div v-if="!checking && appStore.codexAvailable" class="cli-detail">
-          <div v-if="appStore.codexInfo.path"><span class="label">{{ $t('dashboard.cliPath') }}</span> <code>{{ appStore.codexInfo.path }}</code></div>
-          <div v-if="appStore.codexInfo.version"><span class="label">{{ $t('dashboard.cliVersion') }}</span> {{ appStore.codexInfo.version }}</div>
-        </div>
-      </div>
-
-      <div class="card cli-card clickable" @click="toggleCliConfig('opencode')">
-        <div class="card-header">
-          <h3>{{ $t('dashboard.opencodeStatus') }}</h3>
-          <UiIcon class="chevron" :class="{ rotated: activeCli === 'opencode' }" name="chevron-down" />
-        </div>
-        <div class="cli-status">
-          <span class="indicator" :class="statusClass(appStore.opencodeAvailable, checking)"></span>
-          <span class="status-text">{{ statusText(appStore.opencodeAvailable, checking) }}</span>
-        </div>
-        <div v-if="!checking && appStore.opencodeAvailable" class="cli-detail">
-          <div v-if="appStore.opencodeInfo.path"><span class="label">{{ $t('dashboard.cliPath') }}</span> <code>{{ appStore.opencodeInfo.path }}</code></div>
-          <div v-if="appStore.opencodeInfo.version"><span class="label">{{ $t('dashboard.cliVersion') }}</span> {{ appStore.opencodeInfo.version }}</div>
+        <div v-if="!checking && appStore.cliAvailable[cli.id]" class="cli-detail">
+          <div v-if="appStore.cliInfo[cli.id]?.path"><span class="label">{{ $t('dashboard.cliPath') }}</span> <code>{{ appStore.cliInfo[cli.id]?.path }}</code></div>
+          <div v-if="appStore.cliInfo[cli.id]?.version"><span class="label">{{ $t('dashboard.cliVersion') }}</span> {{ appStore.cliInfo[cli.id]?.version }}</div>
         </div>
       </div>
     </div>
@@ -138,6 +113,13 @@ const configStore = useConfigStore()
 const toast = useToast()
 const checking = ref(true)
 const activeCli = ref<'claude' | 'codex' | 'opencode' | null>(null)
+
+// FEAT-1：CLI 状态卡片按注册表循环渲染。
+const DASHBOARD_CLI_TYPES = [
+  { id: 'claude' as const, statusKey: 'dashboard.claudeStatus' },
+  { id: 'codex' as const, statusKey: 'dashboard.codexStatus' },
+  { id: 'opencode' as const, statusKey: 'dashboard.opencodeStatus' }
+]
 
 const runningSessions = computed(() =>
   sessionsStore.unifiedSessions.filter((session) => session.status === 'running').length

@@ -93,9 +93,7 @@
                   <div class="detail-item"><span class="label">{{ $t('session.totalRuntime') }}</span><span class="value">{{ formatDuration(getTotalRuntimeMs(s)) }}</span></div>
                   <div class="detail-item"><span class="label">{{ $t('session.singleRuntime') }}</span><span class="value">{{ formatDuration(getSingleRuntimeMs(s)) }}</span></div>
                   <div v-if="s.type === 'codex'" class="detail-item"><span class="label">{{ $t('session.permissionMode') }}</span><span class="value">{{ codexPermissionModeLabel(s) }}</span></div>
-                  <div v-if="s.codexSessionId" class="detail-item"><span class="label">{{ $t('projectDetail.codexSessionId') }}</span><span class="value">{{ s.codexSessionId }}</span></div>
-                  <div v-if="s.claudeSessionId" class="detail-item"><span class="label">{{ $t('projectDetail.claudeSessionId') }}</span><span class="value">{{ s.claudeSessionId }}</span></div>
-                  <div v-if="s.opencodeSessionId" class="detail-item"><span class="label">{{ $t('projectDetail.opencodeSessionId') }}</span><span class="value">{{ s.opencodeSessionId }}</span></div>
+                  <div v-if="s.nativeSessionId" class="detail-item"><span class="label">{{ $t('projectDetail.nativeSessionId') }}</span><span class="value">{{ s.nativeSessionId }}</span></div>
                 </div>
 
                 <div class="options-wrap">

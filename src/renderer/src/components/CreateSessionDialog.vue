@@ -239,11 +239,8 @@ const targetInstance = computed(() => instancesStore.getInstance(props.targetIns
 const targetCanCreateSession = computed(() => targetInstance.value?.capabilities.sessionCreate ?? true)
 const selectedCliDisplayName = computed(() => t(`session.${form.value.type}`))
 const selectedCliAvailable = computed(() => {
-  if (form.value.type === 'claude') return appStore.claudeAvailable
-  if (form.value.type === 'codex') return appStore.codexAvailable
-  if (form.value.type === 'opencode') return appStore.opencodeAvailable
-  // 终端会话不依赖外部 CLI，系统 shell 总是可用
-  return true
+  if (form.value.type === 'terminal') return true
+  return appStore.cliAvailable[form.value.type]
 })
 const selectedCliStatus = computed<CliStatus>(() => {
   if (!isLocalTarget.value) return 'remote'

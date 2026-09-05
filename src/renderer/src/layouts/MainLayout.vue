@@ -67,34 +67,16 @@
       <div class="topbar-right" @dblclick.stop>
         <div class="status-indicators">
           <button
+            v-for="cli in STATUS_CLI_TYPES"
+            :key="cli.id"
             class="cli-status-btn"
             type="button"
-            :title="cliStatusTitle(appStore.claudeAvailable, 'topbar.claudeOnline', 'topbar.claudeOffline')"
-            :aria-label="cliStatusTitle(appStore.claudeAvailable, 'topbar.claudeOnline', 'topbar.claudeOffline')"
+            :title="cliStatusTitle(appStore.cliAvailable[cli.id], cli.onlineKey, cli.offlineKey)"
+            :aria-label="cliStatusTitle(appStore.cliAvailable[cli.id], cli.onlineKey, cli.offlineKey)"
             @click="openCliSettings"
           >
-            <span class="status-dot" :class="cliDotClass(appStore.claudeAvailable)"></span>
-            <span class="status-label">Claude</span>
-          </button>
-          <button
-            class="cli-status-btn"
-            type="button"
-            :title="cliStatusTitle(appStore.codexAvailable, 'topbar.codexOnline', 'topbar.codexOffline')"
-            :aria-label="cliStatusTitle(appStore.codexAvailable, 'topbar.codexOnline', 'topbar.codexOffline')"
-            @click="openCliSettings"
-          >
-            <span class="status-dot" :class="cliDotClass(appStore.codexAvailable)"></span>
-            <span class="status-label">Codex</span>
-          </button>
-          <button
-            class="cli-status-btn"
-            type="button"
-            :title="cliStatusTitle(appStore.opencodeAvailable, 'topbar.opencodeOnline', 'topbar.opencodeOffline')"
-            :aria-label="cliStatusTitle(appStore.opencodeAvailable, 'topbar.opencodeOnline', 'topbar.opencodeOffline')"
-            @click="openCliSettings"
-          >
-            <span class="status-dot" :class="cliDotClass(appStore.opencodeAvailable)"></span>
-            <span class="status-label">OpenCode</span>
+            <span class="status-dot" :class="cliDotClass(appStore.cliAvailable[cli.id])"></span>
+            <span class="status-label">{{ cli.label }}</span>
           </button>
           <span class="session-count" v-if="activeSessionCount > 0">{{ activeSessionCount }} {{ $t('topbar.activeSessions') }}</span>
         </div>
@@ -243,6 +225,13 @@ async function closeWindow() {
 function openCliSettings(): void {
   void router.push({ path: '/settings', query: { category: 'cli' } })
 }
+
+// FEAT-1：顶栏 CLI 状态指示灯按注册表循环渲染（不再为每个 CLI 复制按钮块）。
+const STATUS_CLI_TYPES = [
+  { id: 'claude' as const, label: 'Claude', onlineKey: 'topbar.claudeOnline', offlineKey: 'topbar.claudeOffline' },
+  { id: 'codex' as const, label: 'Codex', onlineKey: 'topbar.codexOnline', offlineKey: 'topbar.codexOffline' },
+  { id: 'opencode' as const, label: 'OpenCode', onlineKey: 'topbar.opencodeOnline', offlineKey: 'topbar.opencodeOffline' }
+]
 
 function getCliStatusTitle(statusKey: string): string {
   return `${t(statusKey)} · ${t('topbar.openCliSettings')}`

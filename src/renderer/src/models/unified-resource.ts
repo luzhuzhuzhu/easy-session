@@ -87,7 +87,23 @@ export interface UnifiedSession {
   claudeSessionId?: string | null
   codexSessionId?: string | null
   opencodeSessionId?: string | null
+  /** FEAT-1：按 CLI 类型归一后的原生会话 ID（resume 用）。null = 尚未发现/不支持。 */
+  nativeSessionId?: string | null
   source: ResourceSource
+}
+
+const CLI_TO_NATIVE_FIELD: Partial<Record<Session['type'], 'claudeSessionId' | 'codexSessionId' | 'opencodeSessionId'>> = {
+  claude: 'claudeSessionId',
+  codex: 'codexSessionId',
+  opencode: 'opencodeSessionId'
+}
+
+// FEAT-1：把旧平铺字段（claudeSessionId/codexSessionId/opencodeSessionId）
+// 归一为 nativeSessionId。读取处统一走 helper，新增 CLI 只改 CLI_TO_NATIVE_FIELD。
+export function readNativeSessionId(session: Pick<UnifiedSession, 'type' | 'claudeSessionId' | 'codexSessionId' | 'opencodeSessionId'>): string | null {
+  const field = CLI_TO_NATIVE_FIELD[session.type]
+  if (!field) return null
+  return (session[field] as string | null | undefined) ?? null
 }
 
 export interface ProjectRef {
@@ -203,6 +219,7 @@ export function toUnifiedSession(
     claudeSessionId: session.claudeSessionId,
     codexSessionId: session.codexSessionId,
     opencodeSessionId: session.opencodeSessionId,
+    nativeSessionId: readNativeSessionId(session),
     source
   }
 }
