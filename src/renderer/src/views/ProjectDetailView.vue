@@ -337,6 +337,24 @@ const hasUnsavedPromptChanges = computed(() => {
 const now = ref(Date.now())
 let timer: ReturnType<typeof setInterval> | null = null
 
+// STAB-9：仅存在运行中会话时才需要秒级 now（驱动运行时长显示）；
+// 页面隐藏时暂停，离开页面时由 onUnmounted 清理。
+const hasRunningSession = computed(() =>
+  projectSessions.value.some((s) => s.status === 'running')
+)
+
+function syncTicker(): void {
+  const shouldRun = hasRunningSession.value && !document.hidden
+  if (shouldRun && !timer) {
+    timer = setInterval(() => {
+      now.value = Date.now()
+    }, 1000)
+  } else if (!shouldRun && timer) {
+    clearInterval(timer)
+    timer = null
+  }
+}
+
 function formatDate(ts: number) {
   if (!ts) return '-'
   return new Date(ts).toLocaleString()
@@ -814,14 +832,15 @@ async function loadProject() {
 
 onMounted(() => {
   void loadProject()
-  timer = setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
+  syncTicker()
+  document.addEventListener('visibilitychange', syncTicker)
   window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  timer = null
+  document.removeEventListener('visibilitychange', syncTicker)
   window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 
@@ -844,6 +863,11 @@ watch(promptTab, (_next, prev) => {
   if (project.value) {
     void loadPromptContent()
   }
+})
+
+// STAB-9：运行中会话集合变化时同步 ticker（无运行中会话时暂停 1s 轮询）。
+watch(hasRunningSession, () => {
+  syncTicker()
 })
 </script>
 

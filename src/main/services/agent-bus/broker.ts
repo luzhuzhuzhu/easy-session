@@ -933,7 +933,8 @@ function matchStoppedByName(
   return undefined
 }
 
-function isTaskStatus(value: unknown): value is AgentTask['status'] {  return (
+function isTaskStatus(value: unknown): value is AgentTask['status'] {
+  return (
     value === 'created' ||
     value === 'delivered' ||
     value === 'accepted' ||
