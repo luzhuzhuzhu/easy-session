@@ -40,6 +40,21 @@ const FORCE_FLUSH_MS = 30000
 const TICK_MS = 500
 // 注入文本与回车之间的延迟，避免 CLI 输入模式误判（照搬 golutra 结论）。
 const CONFIRM_DELAY_MS = 100
+// 注入正文长度上限：超过则截断，防止超长消息打爆 PTY。
+const MAX_INJECT_TEXT_LENGTH = 64 * 1024
+
+// 剥离注入正文中的全部 ESC/CSI 字节：消息内嵌 `\x1b[201~` 之类序列可提前结束
+// bracketed-paste，剩余内容会被目标终端当逐键输入（任意命令注入）。
+// 移除所有 0x1b/0x9b 后任何转义序列都无法成形；包裹用的 paste 标记由 flush() 拼接，不受影响。
+// 其余 C0 控制字符一并清除（保留换行/制表，供多行 paste 语义使用）。
+export function sanitizeInjectText(text: string): string {
+  let stripped = text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x9b]/g, (ch) => (ch === '\n' || ch === '\t' ? ch : ''))
+  if (stripped.length > MAX_INJECT_TEXT_LENGTH) {
+    log.warn({ length: stripped.length }, '[agent-bus] 注入文本超长，已截断')
+    stripped = stripped.slice(0, MAX_INJECT_TEXT_LENGTH)
+  }
+  return stripped
+}
 
 export class DispatchGate {
   private states = new Map<string, SessionGateState>()
@@ -152,9 +167,11 @@ export class DispatchGate {
   private async flush(sessionId: string, state: SessionGateState, text: string): Promise<void> {
     state.inflight = true
     try {
+      // 注入前剥离控制/转义序列（SEC-1）：防止消息内嵌 ESC 序列逃逸 paste 模式注入命令。
+      const safeText = sanitizeInjectText(text)
       // 多行走 bracketed paste，避免被逐行当成多条消息。
-      const multiline = text.includes('\n')
-      const body = multiline ? `\x1b[200~${text}\x1b[201~` : text
+      const multiline = safeText.includes('\n')
+      const body = multiline ? `\x1b[200~${safeText}\x1b[201~` : safeText
       this.bridge.writeRaw(sessionId, body)
       await delay(CONFIRM_DELAY_MS)
       // await 期间会话可能被 clear() 删除并由新 enqueue 重建：若 state 已不是当前状态，
@@ -167,7 +184,7 @@ export class DispatchGate {
       state.lastInjectAt = now
       state.reactionSeen = false
       // 记录待消费回显：注入文本会被 PTY echo 回来，先扣除再判定真正的 agent 反应。
-      state.pendingEcho = stripForEcho(text)
+      state.pendingEcho = stripForEcho(safeText)
     } catch (err) {
       // writeRaw 抛错（会话在注入瞬间死亡等）：吞掉，避免 void flush 变成未处理 rejection。
       log.warn({ err }, '[agent-bus] 注入失败')
