@@ -1,4 +1,28 @@
 import { ipc } from './ipc'
+import type { CliType } from '@shared/cli-types'
+
+export type ConfigCliType = Exclude<CliType, 'terminal'>
+
+export interface ConfigDocument {
+  cliType: ConfigCliType
+  path: string
+  format: string
+  exists: boolean
+  content: string
+  revision: string | null
+}
+
+export function readCliConfig(cliType: ConfigCliType): Promise<ConfigDocument> {
+  return ipc.invoke<ConfigDocument>('config:cli:read', cliType)
+}
+
+export function writeCliConfig(
+  cliType: ConfigCliType,
+  content: string,
+  expectedRevision?: string | null
+): Promise<ConfigDocument> {
+  return ipc.invoke<ConfigDocument>('config:cli:write', cliType, content, expectedRevision)
+}
 
 export function readClaudeConfig(): Promise<object> {
   return ipc.invoke<object>('config:claude:read')

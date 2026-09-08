@@ -39,6 +39,7 @@ import { RemoteServiceManager } from './services/remote-service-manager'
 import { CloudflareTunnelManager } from './services/cloudflare-tunnel-manager'
 import { RemoteNetworkSettingsManager } from './services/remote-network-settings-manager'
 import { RemoteGatewayManager } from './services/remote-gateway-manager'
+import { candidateCollectorFor } from './services/native-session-candidates'
 
 import { SessionOutputManager } from './services/session-output'
 import { AgentBus } from './services/agent-bus'
@@ -732,7 +733,18 @@ app.whenReady().then(async () => {
       {
         sessionManager,
         projectManager,
-        outputManager
+        outputManager,
+        openCodeAdapter,
+        nativeSessionCandidates: async (cliType, projectPath, preferredPath, maxCount) => {
+          if (cliType === 'opencode') {
+            return openCodeAdapter.collectSessionCandidatesByPath(projectPath, preferredPath, maxCount)
+          }
+          if (cliType === 'codex') {
+            return codexAdapter.collectSessionCandidatesByPath(projectPath, maxCount)
+          }
+          const collector = candidateCollectorFor(cliType)
+          return collector ? collector(projectPath, preferredPath, maxCount) : []
+        }
       },
       userData
     )

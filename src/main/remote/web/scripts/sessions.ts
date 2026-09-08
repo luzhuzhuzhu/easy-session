@@ -1,3 +1,7 @@
+import { CLI_TYPES } from '../../../../shared/cli-types'
+
+const REMOTE_CLI_TYPES = JSON.stringify(CLI_TYPES)
+
 export const sessionsScript = `
   const HISTORY_LINES = 200;
   const LIST_AUTO_REFRESH_INTERVAL_MS = 15000;
@@ -63,6 +67,10 @@ export const sessionsScript = `
     'ctrl-u': '\\u0015',
     'ctrl-z': '\\u001a'
   };
+
+  function getSupportedCliTypes() {
+    return ${REMOTE_CLI_TYPES};
+  }
 
   function getCurrentPageBaseUrl() {
     try {
@@ -182,9 +190,9 @@ export const sessionsScript = `
           setInlineNotice('序号无效。', 'error');
           return;
         }
-        const type = (window.prompt('CLI 类型（claude / codex / opencode）：', 'claude') || '').trim().toLowerCase();
-        if (type !== 'claude' && type !== 'codex' && type !== 'opencode') {
-          setInlineNotice('类型无效。', 'error');
+        const type = (window.prompt('CLI 类型（' + getSupportedCliTypes().join(' / ') + '）：', 'claude') || '').trim().toLowerCase();
+        if (!getSupportedCliTypes().includes(type)) {
+          setInlineNotice('类型无效，支持：' + getSupportedCliTypes().join(' / ') + '。', 'error');
           return;
         }
         void safeAction('创建会话', async function () {

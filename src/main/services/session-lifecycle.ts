@@ -2,6 +2,9 @@ import type { Session, CreateSessionParams } from './session-types'
 
 // 会话生命周期接口 - Claude 和 Codex 各自实现
 export interface ISessionLifecycle {
+  // 生命周期在输出中发现新会话 ID 或失效状态时主动请求持久化。
+  setPersistCallback?(fn: () => void): void
+
   // 创建新会话并启动进程
   create(id: string, name: string, params: CreateSessionParams): Session
   // 恢复/重启已有会话的进程

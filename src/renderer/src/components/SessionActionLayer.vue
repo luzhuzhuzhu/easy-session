@@ -49,7 +49,7 @@
     >
       {{ $t('session.restart') }}
     </MenuItem>
-    <div v-if="contextSession?.instanceId === 'local'" class="context-separator" role="separator"></div>
+    <div v-if="contextSession?.instanceId === 'local' || showSessionSettings" class="context-separator" role="separator"></div>
     <MenuItem
       v-if="contextSession?.instanceId === 'local'"
       :label="$t('session.rename')"
@@ -65,9 +65,11 @@
       {{ $t('session.changeIcon') }}
     </MenuItem>
     <MenuItem
-      v-if="contextSession?.instanceId === 'local'"
+      v-if="showSessionSettings"
       :label="$t('session.sessionSettings')"
-      @click="emit('session-settings')"
+      :disabled="!canUpdateSessionSettings"
+      :title="formatActionTitle($t('session.sessionSettings'), canUpdateSessionSettings)"
+      @click="emit('session-settings'); emit('close-context')"
     >
       {{ $t('session.sessionSettings') }}
     </MenuItem>
@@ -226,7 +228,16 @@ const showStartAction = computed(() => !!props.contextSession && props.contextSe
 const showPauseAction = computed(() => !!props.contextSession && props.contextSession.status === 'running')
 const showRestartAction = computed(() => !!props.contextSession)
 const showDestroyAction = computed(() => !!props.contextSession)
-
+const showSessionSettings = computed(() => {
+  if (!props.contextSession) return false
+  if (props.contextSession.instanceId === 'local') return true
+  return !!props.contextSessionCapabilities?.sessionRestart
+})
+const canUpdateSessionSettings = computed(() => {
+  if (!props.contextSession) return false
+  if (props.contextSession.instanceId === 'local') return true
+  return !!props.contextSessionCapabilities?.sessionRestart
+})
 const canStartContextAction = computed(() => !!props.contextSessionCapabilities?.sessionStart)
 const canPauseContextAction = computed(() => !!props.contextSessionCapabilities?.sessionPause)
 const canRestartContextAction = computed(() => !!props.contextSessionCapabilities?.sessionRestart)

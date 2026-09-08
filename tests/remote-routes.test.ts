@@ -121,7 +121,12 @@ describe('remote routes', () => {
         pauseSession: vi.fn((id: string) => (id === 's1' ? { ...sessions[0], status: 'stopped' } : null)),
         restartSession: vi.fn(async (id: string) => (id === 's1' ? sessions[0] : null)),
         destroySession: vi.fn((id: string) => id === 's1')
-      } as any
+      } as any,
+      openCodeAdapter: {
+        collectSessionCandidatesByPath: vi.fn(async () => [
+          { id: 'oc-1', title: 'Demo session', updated: 1700000000000 }
+        ])
+      }
     }
   })
 
@@ -331,6 +336,38 @@ describe('remote routes', () => {
     }
   })
 
+  it('should proxy OpenCode native-id candidates with preferred executable path', async () => {
+    const server = await startServer(buildApp())
+    try {
+      const resp = await fetch(
+        `${server.baseUrl}/api/sessions/native-id-candidates?cliType=opencode&projectPath=D%3A%2Frepo%2Fdemo&preferredPath=C%3A%2FProgram%20Files%2Fopencode.exe`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      expect(resp.status).toBe(200)
+      const body = await resp.json()
+      expect(body.data).toEqual([{ id: 'oc-1', title: 'Demo session', updated: 1700000000000 }])
+      expect((deps.openCodeAdapter?.collectSessionCandidatesByPath as any).mock.calls[0]).toEqual([
+        'D:/repo/demo',
+        'C:/Program Files/opencode.exe',
+        40
+      ])
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('should reject terminal native-id candidate queries', async () => {
+    const server = await startServer(buildApp())
+    try {
+      const resp = await fetch(
+        `${server.baseUrl}/api/sessions/native-id-candidates?cliType=terminal&projectPath=D%3A%2Frepo%2Fdemo`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      expect(resp.status).toBe(400)
+    } finally {
+      await server.close()
+    }
+  })
   it('should return session output history via rest endpoint', async () => {
     const server = await startServer(buildApp())
     try {

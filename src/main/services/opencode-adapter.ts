@@ -1,4 +1,4 @@
-import { exec } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { homedir } from 'os'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
@@ -29,6 +29,23 @@ export class OpenCodeAdapter {
     if (preferredPath) return preferredPath
     if (this.customPath) return this.customPath
     return 'opencode'
+  }
+
+  private getDiscoveryExecutable(preferredPath?: string): string {
+    return this.getExecutable(preferredPath)
+  }
+
+  private execSessionList(
+    executable: string,
+    cwd: string,
+    maxCount: number,
+    callback: (error: Error | null, stdout: string) => void
+  ): void {
+    const args = ['session', 'list', '--format', 'json', '--max-count', String(Math.max(1, maxCount))]
+    // execFile avoids shell parsing, preserving configured executable paths that contain spaces.
+    execFile(executable, args, { cwd: cwd || undefined, maxBuffer: 10 * 1024 * 1024, timeout: 8000 }, (error, stdout) => {
+      callback(error, String(stdout ?? ''))
+    })
   }
 
   async getCliPath(): Promise<string> {
@@ -66,7 +83,7 @@ export class OpenCodeAdapter {
     const id = `opencode-${randomUUID()}`
     const args: string[] = this.buildArgs(options)
     const executable = this.getExecutable(options?.cliPath)
-    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined })
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined, cliType: 'opencode' })
     return id
   }
 
@@ -80,12 +97,10 @@ export class OpenCodeAdapter {
     const args: string[] = ['--session', sessionId]
 
     if (fork) args.push('--fork')
-    if (options?.model) args.push('--model', options.model)
-    if (options?.agent) args.push('--agent', options.agent)
-    if (options?.prompt) args.push('--prompt', options.prompt)
+    this.appendCommonRunArgs(args, options)
 
     const executable = this.getExecutable(options?.cliPath)
-    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined })
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined, cliType: 'opencode' })
     return id
   }
 
@@ -94,12 +109,10 @@ export class OpenCodeAdapter {
     const args: string[] = ['--continue']
 
     if (fork) args.push('--fork')
-    if (options?.model) args.push('--model', options.model)
-    if (options?.agent) args.push('--agent', options.agent)
-    if (options?.prompt) args.push('--prompt', options.prompt)
+    this.appendCommonRunArgs(args, options)
 
     const executable = this.getExecutable(options?.cliPath)
-    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined })
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined, cliType: 'opencode' })
     return id
   }
 
@@ -118,7 +131,7 @@ export class OpenCodeAdapter {
     if (options?.agent) args.push('--agent', options.agent)
 
     const executable = this.getExecutable(options?.cliPath)
-    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined })
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined, cliType: 'opencode' })
     return id
   }
 
@@ -142,14 +155,13 @@ export class OpenCodeAdapter {
     maxSkewMs = OPENCODE_SESSION_DISCOVERY_MAX_SKEW_MS,
     requireTimestamp = false
   ): Promise<string | null> {
-    const executable = this.getExecutable(preferredPath)
-    const command = `"${executable}" session list --format json --max-count ${Math.max(1, maxCount)}`
+    const executable = this.getDiscoveryExecutable(preferredPath)
     const targetPath = this.normalizePath(projectPath)
 
     return new Promise((resolve) => {
       // 超时兜底：CLI 卡住（首次运行更新检查等）时 discovery 不能无限 pending，
       // 否则重试循环会堆积挂起子进程且阻塞启动链。
-      exec(command, { cwd: projectPath || undefined, maxBuffer: 10 * 1024 * 1024, timeout: 8000 }, (error, stdout) => {
+      this.execSessionList(executable, projectPath, maxCount, (error, stdout) => {
         if (error || !stdout) {
           resolve(null)
           return
@@ -183,12 +195,11 @@ export class OpenCodeAdapter {
     preferredPath?: string,
     maxCount = 40
   ): Promise<Array<{ id: string; title: string; updated: number }>> {
-    const executable = this.getExecutable(preferredPath)
-    const command = `"${executable}" session list --format json --max-count ${Math.max(1, maxCount)}`
+    const executable = this.getDiscoveryExecutable(preferredPath)
     const targetPath = this.normalizePath(projectPath)
 
     return new Promise((resolve) => {
-      exec(command, { cwd: projectPath || undefined, maxBuffer: 10 * 1024 * 1024, timeout: 8000 }, (error, stdout) => {
+      this.execSessionList(executable, projectPath, maxCount, (error, stdout) => {
         if (error || !stdout) {
           resolve([])
           return
@@ -216,7 +227,12 @@ export class OpenCodeAdapter {
             .filter((item) => this.pathMatches(item.path, targetPath))
             .filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)))
             .sort((a, b) => b.timestamp - a.timestamp)
-            .map((item) => ({ id: item.id, title: titles.get(item.id) ?? '', updated: item.timestamp }))
+            .map((item) => ({
+              id: item.id,
+              title: titles.get(item.id) ?? 'OpenCode session',
+              updated: item.timestamp,
+              projectPath: item.path || undefined
+            }))
           resolve(candidates)
         } catch {
           resolve([])
@@ -248,13 +264,19 @@ export class OpenCodeAdapter {
     return (preferred.length > 0 ? preferred[preferred.length - 1] : hints[hints.length - 1]) || null
   }
 
-  private buildArgs(options?: OpenCodeSessionOptions): string[] {
-    const args: string[] = []
-
+  private appendCommonRunArgs(args: string[], options?: OpenCodeSessionOptions): void {
     if (options?.model) args.push('--model', options.model)
     if (options?.agent) args.push('--agent', options.agent)
     if (options?.prompt) args.push('--prompt', options.prompt)
+    if (options?.auto) args.push('--auto')
+    if (options?.mini) args.push('--mini')
+    if (options?.noReplay) args.push('--no-replay')
+    if (typeof options?.replayLimit === 'number') args.push('--replay-limit', String(options.replayLimit))
+  }
 
+  private buildArgs(options?: OpenCodeSessionOptions): string[] {
+    const args: string[] = []
+    this.appendCommonRunArgs(args, options)
     return args
   }
 

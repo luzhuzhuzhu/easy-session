@@ -104,9 +104,18 @@ describe('ClaudeSessionLifecycle', () => {
     expect(outputManager.appendOutput).toHaveBeenCalledTimes(1)
   })
 
-  it('should throw when claudeSessionId is missing', () => {
+  it('should create a fresh native session when claudeSessionId is missing', () => {
     const session = createClaudeSession({ claudeSessionId: null })
 
-    expect(() => lifecycle.startProcess(session, 2_000)).toThrow('Claude session ID is missing')
+    lifecycle.startProcess(session, 2_000)
+
+    expect(session.claudeSessionId).toEqual(expect.any(String))
+    expect(adapter.startSession).toHaveBeenCalledWith(
+      'D:/repo/project-a',
+      {},
+      session.claudeSessionId
+    )
+    expect(adapter.resumeSession).not.toHaveBeenCalled()
+    expect(session.status).toBe('running')
   })
 })

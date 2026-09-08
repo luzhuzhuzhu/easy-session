@@ -8,26 +8,30 @@ import type { ClaudeSessionOptions } from './types'
 const CLAUDE_INVALID_SESSION_PATTERN = /No conversation found(?: with session ID)?/i
 
 export class ClaudeSessionLifecycle implements ISessionLifecycle {
+  private persistFn: (() => void) | null = null
+
   constructor(
     private claudeAdapter: ClaudeAdapter,
     private outputManager: SessionOutputManager
   ) {}
 
-  setPersistCallback(_fn: () => void): void {
-    // Claude lifecycle当前不需要在输出阶段主动触发持久化，
-    // 但 SessionManager 会统一注入该回调，保留此方法以兼容调用方。
+  setPersistCallback(fn: () => void): void {
+    this.persistFn = fn
   }
 
   create(id: string, name: string, params: CreateSessionParams): ClaudeSession {
-    const claudeSessionId = randomUUID()
-    const now = Date.now()
     const options = (params.options || {}) as ClaudeSessionOptions
+    const claudeSessionId = options.resumeId?.trim() || randomUUID()
+    if (options.resumeId) options.resumeId = claudeSessionId
+    const now = Date.now()
 
     let processId: string | null = null
     let status: 'running' | 'error' = 'running'
 
     try {
-      processId = this.claudeAdapter.startSession(params.projectPath, options, claudeSessionId)
+      processId = options.resumeId
+        ? this.claudeAdapter.resumeSession(params.projectPath, options, claudeSessionId)
+        : this.claudeAdapter.startSession(params.projectPath, options, claudeSessionId)
     } catch (err) {
       status = 'error'
       const errMsg = err instanceof Error ? err.message : String(err)
@@ -61,7 +65,14 @@ export class ClaudeSessionLifecycle implements ISessionLifecycle {
 
     const s = session
     if (!s.claudeSessionId) {
-      throw new Error('Claude session ID is missing, cannot resume')
+      // 清空绑定后按“全新会话”处理：为下一次启动分配新的原生 ID，
+      // 不把空绑定误当成无法恢复而直接置为错误。
+      s.claudeSessionId = randomUUID()
+      s.processId = this.claudeAdapter.startSession(s.projectPath, s.options, s.claudeSessionId)
+      s.status = 'running'
+      s.lastStartAt = startAt
+      s.lastActiveAt = startAt
+      return
     }
     // invalidSessionId 仍为 true：说明 shouldAutoRestartAfterExit 已换上全新 UUID，
     // 但该 UUID 的会话在 Claude 存储里还不存在，必须用 --session-id「创建」而非
@@ -87,6 +98,7 @@ export class ClaudeSessionLifecycle implements ISessionLifecycle {
       const s = session as ClaudeSession
       if (s.invalidSessionId) return
       s.invalidSessionId = true
+      this.persistFn?.()
       this.outputManager.appendOutput(
         s.id,
         'Warning: Claude reported session not found. Will start a new conversation after this process exits.\n',

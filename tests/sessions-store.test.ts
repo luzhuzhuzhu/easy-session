@@ -38,6 +38,7 @@ const sessionApi = vi.hoisted(() => ({
   startSession: vi.fn(),
   pauseSession: vi.fn(),
   onSessionStatusChange: vi.fn(() => () => {}),
+  onSessionChanged: vi.fn(() => () => {}),
   getSession: vi.fn(async () => null),
   getOutputHistory: vi.fn(async () => []),
   resizeTerminal: vi.fn(),

@@ -45,7 +45,8 @@ export class CodexAdapter {
     const id = `codex-${randomUUID()}`
     const args: string[] = this.buildCommonArgs(options)
 
-    this.cliManager.spawn(id, 'codex', args, { cwd: projectPath || undefined })
+    const executable = options?.cliPath?.trim() || 'codex'
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined })
     return id
   }
 
@@ -61,7 +62,8 @@ export class CodexAdapter {
       codexSessionId
     ]
 
-    this.cliManager.spawn(id, 'codex', args, { cwd: projectPath || undefined })
+    const executable = options?.cliPath?.trim() || 'codex'
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined })
     return id
   }
 
@@ -73,6 +75,34 @@ export class CodexAdapter {
     return {
       global: join(homedir(), '.codex', 'config.json')
     }
+  }
+
+  async collectSessionCandidatesByPath(
+    projectPath: string,
+    maxCount = 40
+  ): Promise<Array<{ id: string; title: string; updated: number; projectPath: string }>> {
+    const root = join(homedir(), '.codex', 'sessions')
+    if (!existsSync(root)) return []
+
+    const normalizedProjectPath = this.normalizePath(projectPath)
+    const files = await this.collectRecentSessionFiles(root)
+    const candidates: Array<{ id: string; title: string; updated: number; projectPath: string }> = []
+    const seen = new Set<string>()
+
+    for (const file of files) {
+      const meta = await this.readSessionMeta(file.path)
+      if (!meta || this.normalizePath(meta.cwd) !== normalizedProjectPath || seen.has(meta.id)) continue
+      seen.add(meta.id)
+      candidates.push({
+        id: meta.id,
+        title: 'Codex session',
+        updated: meta.startedAt ?? file.mtimeMs,
+        projectPath: meta.cwd
+      })
+      if (candidates.length >= Math.max(1, maxCount)) break
+    }
+
+    return candidates.sort((a, b) => b.updated - a.updated)
   }
 
   async findSessionIdByProjectPath(projectPath: string, targetStartMs?: number, maxSkewMs = 120_000): Promise<string | null> {

@@ -1,5 +1,17 @@
 <template>
   <div class="session-options-form">
+    <details
+      class="option-group cli-options-group"
+      :open="cliOptionsExpanded"
+      @toggle="handleCliOptionsToggle"
+    >
+      <summary class="option-group-summary">
+        <strong class="option-group-title">{{ $t('session.dialog.cliParameters') }}</strong>
+        <span class="option-group-chevron" aria-hidden="true">›</span>
+      </summary>
+
+      <div class="option-group-content cli-options-content">
+
     <!-- codex：权限模式（包装 --sandbox / --ask-for-approval） -->
     <section v-if="cliType === 'codex'" class="opts-section">
       <div class="opts-section-head">
@@ -70,7 +82,6 @@
       <div v-if="builtinDescriptors.length > 0" class="opts-subsection">
         <div class="opts-subhead">
           <label>{{ $t('session.dialog.builtinArgs') }}</label>
-          <span class="opts-section-hint">{{ $t('session.dialog.builtinArgsHint') }}</span>
         </div>
       <div v-if="builtinValueDescriptors.length > 0" class="builtin-arg-grid">
         <div v-for="descriptor in builtinValueDescriptors" :key="descriptor.flag" class="form-group">
@@ -154,8 +165,7 @@
       </div>
     </section>
 
-    <!-- terminal：shell 选择 + 启动命令 -->
-    <section v-if="cliType === 'terminal'" class="opts-section">
+    <section v-if="showCollabMode" class="opts-section">
       <div class="opts-section-head">
         <span class="opts-section-title">{{ $t('session.dialog.collabMode') }}</span>
       </div>
@@ -213,31 +223,56 @@
           <label>{{ $t('session.dialog.opencodePrompt') }}</label>
           <input v-model="opencodeOptions.prompt" type="text" class="form-input" :placeholder="$t('session.dialog.opencodePromptPlaceholder')" />
         </div>
-        <div class="form-group field-wide">
-          <label>{{ $t('session.dialog.opencodeSessionId') }}</label>
-          <div class="resume-id-row">
-            <input v-model="opencodeOptions.sessionId" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeSessionIdPlaceholder')" />
-            <button
-              type="button"
-              class="icon-text-action"
-              :disabled="candidatesLoading"
-              @click="toggleCandidates"
-            >
-              {{ candidatesLoading ? $t('session.dialog.candidatesLoading') : $t('session.dialog.pickCandidate') }}
-            </button>
-          </div>
-          <template v-if="showCandidates">
-            <div v-if="candidates.length === 0" class="setting-hint">{{ $t('session.dialog.candidatesEmpty') }}</div>
-            <ul v-else class="candidate-list">
-              <li v-for="candidate in candidates" :key="candidate.id">
-                <button type="button" class="candidate-item" @click="applyOpencodeCandidate(candidate)">
-                  <span class="candidate-title">{{ candidate.title || candidate.id }}</span>
-                  <span class="candidate-meta">{{ candidate.id }}</span>
-                </button>
-              </li>
-            </ul>
-          </template>
+        <div class="form-group">
+          <label>{{ $t('session.dialog.opencodeVariant') }}</label>
+          <input v-model="opencodeOptions.variant" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeVariantPlaceholder')" />
         </div>
+        <div class="form-group">
+          <label>{{ $t('session.dialog.opencodeThinking') }}</label>
+          <input v-model="opencodeOptions.thinking" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeThinkingPlaceholder')" />
+        </div>
+        <div class="form-group">
+          <label>{{ $t('session.dialog.opencodeFormat') }}</label>
+          <input v-model="opencodeOptions.format" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeFormatPlaceholder')" />
+        </div>
+        <div class="form-group">
+          <label>{{ $t('session.dialog.opencodeTitle') }}</label>
+          <input v-model="opencodeOptions.title" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeTitlePlaceholder')" />
+        </div>
+        <div class="form-group">
+          <label>{{ $t('session.dialog.opencodeReplayLimit') }}</label>
+          <input v-model="opencodeOptions.replayLimit" type="number" min="1" step="1" class="form-input" />
+        </div>
+        <div class="form-group field-wide">
+          <label>{{ $t('session.dialog.opencodeFiles') }}</label>
+          <input v-model="opencodeOptions.fileText" type="text" class="form-input" :placeholder="$t('session.dialog.opencodeFilesPlaceholder')" />
+        </div>
+        <SessionResumeSection
+          v-model="opencodeOptions.sessionId"
+          :title="$t('session.dialog.resumeSection')"
+          :label="$t('session.dialog.opencodeSessionId')"
+          :hint="$t('session.dialog.idResumeHintForCli', { cli: 'OpenCode' })"
+          :placeholder="$t('session.dialog.opencodeSessionIdPlaceholder')"
+          input-id="opencode-session-id"
+          :can-pick="canShowCandidatePicker"
+          :picker-open="showCandidates"
+          :loading="candidatesLoading"
+          :error="candidatesError"
+          :candidates="candidates"
+          :pick-label="$t('session.dialog.pickCandidate')"
+          :loading-label="$t('session.dialog.candidatesLoading')"
+          :empty-label="$t('session.dialog.candidatesEmpty')"
+          :error-label="$t('session.dialog.candidatesError')"
+          :continue-label="$t('session.dialog.opencodeContinueLast')"
+          :conflict-label="$t('session.dialog.opencodeConflictHint')"
+          :auto-selected-label="$t('session.dialog.candidateAutoSelected')"
+          :auto-selected="!!autoSelectedCandidateId"
+          :continue-last="opencodeOptions.continueLast"
+          @update:model-value="resumeIdEdited = true"
+          @update:continue-last="opencodeOptions.continueLast = $event"
+          @toggle-picker="toggleCandidates"
+          @select="applyCandidate"
+        />
         <div class="form-group">
           <label>{{ $t('session.dialog.opencodeServerMode') }}</label>
           <select v-model="opencodeOptions.serverMode" class="form-input">
@@ -258,6 +293,18 @@
         <label class="check-label">
           <input v-model="opencodeOptions.fork" type="checkbox" />
           {{ $t('session.dialog.opencodeFork') }}
+        </label>
+        <label class="check-label">
+          <input v-model="opencodeOptions.auto" type="checkbox" />
+          {{ $t('session.dialog.opencodeAuto') }}
+        </label>
+        <label class="check-label">
+          <input v-model="opencodeOptions.mini" type="checkbox" />
+          {{ $t('session.dialog.opencodeMini') }}
+        </label>
+        <label class="check-label">
+          <input v-model="opencodeOptions.noReplay" type="checkbox" />
+          {{ $t('session.dialog.opencodeNoReplay') }}
         </label>
       </div>
       <p v-if="opencodeOptions.sessionId && opencodeOptions.continueLast" class="warning-text">
@@ -301,6 +348,35 @@
       </div>
     </section>
 
+    <!-- Claude/Codex/Gemini：显式 resume ID；与 ID 型 CLI 共用同一交互 -->
+    <SessionResumeSection
+      v-if="supportsExplicitResume"
+      v-model="idResumeOptions.resumeId"
+      :title="$t('session.dialog.resumeSection')"
+      :label="resumeIdLabel"
+      :hint="resumeIdHint"
+      :placeholder="$t('session.dialog.idResumeIdPlaceholder')"
+      :input-id="`${props.cliType}-resume-id`"
+      :can-pick="canShowCandidatePicker"
+      :picker-open="showCandidates"
+      :loading="candidatesLoading"
+      :error="candidatesError"
+      :candidates="candidates"
+      :pick-label="$t('session.dialog.pickCandidate')"
+      :loading-label="$t('session.dialog.candidatesLoading')"
+      :empty-label="$t('session.dialog.candidatesEmpty')"
+      :error-label="$t('session.dialog.candidatesError')"
+      :continue-label="$t('session.dialog.idContinueLast')"
+      :conflict-label="$t('session.dialog.resumeConflictHint')"
+      :auto-selected-label="$t('session.dialog.candidateAutoSelected')"
+      :auto-selected="!!autoSelectedCandidateId"
+      :show-continue="false"
+      :continue-last="false"
+      @update:model-value="resumeIdEdited = true"
+      @toggle-picker="toggleCandidates"
+      @select="applyCandidate"
+    />
+
     <!-- 新 CLI（pi/omp/grok/hermes）：常用参数 + 续接选项 + resume ID -->
     <template v-if="supportsIdResume">
       <section class="opts-section">
@@ -338,48 +414,33 @@
         </div>
       </section>
 
-      <section class="opts-section">
-        <div class="opts-section-head">
-          <span class="opts-section-title">{{ $t('session.dialog.resumeSection') }}</span>
-        </div>
-        <div class="check-row">
-          <label class="check-label">
-            <input v-model="idResumeOptions.continueLast" type="checkbox" />
-            {{ $t('session.dialog.idContinueLast') }}
-          </label>
-        </div>
-        <div class="form-group field-wide">
-          <label>{{ $t('session.dialog.idResumeId') }}</label>
-          <div class="resume-id-row">
-            <input
-              v-model="idResumeOptions.resumeId"
-              type="text"
-              class="form-input"
-              :placeholder="$t('session.dialog.idResumeIdPlaceholder')"
-            />
-            <button
-              type="button"
-              class="icon-text-action"
-              :disabled="candidatesLoading"
-              @click="toggleCandidates"
-            >
-              {{ candidatesLoading ? $t('session.dialog.candidatesLoading') : $t('session.dialog.pickCandidate') }}
-            </button>
-          </div>
-          <template v-if="showCandidates">
-            <div v-if="candidates.length === 0" class="setting-hint">{{ $t('session.dialog.candidatesEmpty') }}</div>
-            <ul v-else class="candidate-list">
-              <li v-for="candidate in candidates" :key="candidate.id">
-                <button type="button" class="candidate-item" @click="applyCandidate(candidate)">
-                  <span class="candidate-title">{{ candidate.title || candidate.id }}</span>
-                  <span class="candidate-meta">{{ candidate.id }}</span>
-                </button>
-              </li>
-            </ul>
-          </template>
-          <span class="setting-hint">{{ $t('session.dialog.idResumeHint') }}</span>
-        </div>
-      </section>
+      <SessionResumeSection
+        v-model="idResumeOptions.resumeId"
+        :title="$t('session.dialog.resumeSection')"
+        :label="resumeIdLabel"
+        :hint="resumeIdHint"
+        :placeholder="$t('session.dialog.idResumeIdPlaceholder')"
+        :input-id="`${props.cliType}-resume-id`"
+        :can-pick="canShowCandidatePicker"
+        :picker-open="showCandidates"
+        :loading="candidatesLoading"
+        :error="candidatesError"
+        :candidates="candidates"
+        :pick-label="$t('session.dialog.pickCandidate')"
+        :loading-label="$t('session.dialog.candidatesLoading')"
+        :empty-label="$t('session.dialog.candidatesEmpty')"
+        :error-label="$t('session.dialog.candidatesError')"
+        :continue-label="$t('session.dialog.idContinueLast')"
+        :conflict-label="$t('session.dialog.resumeConflictHint')"
+        :auto-selected-label="$t('session.dialog.candidateAutoSelected')"
+        :auto-selected="!!autoSelectedCandidateId"
+        :show-continue="true"
+        :continue-last="idResumeOptions.continueLast"
+        @update:model-value="resumeIdEdited = true"
+        @update:continue-last="idResumeOptions.continueLast = $event"
+        @toggle-picker="toggleCandidates"
+        @select="applyCandidate"
+      />
 
       <!-- 自定义参数行（与新 CLI 同级） -->
       <section class="opts-section">
@@ -457,13 +518,17 @@
         </div>
       </div>
     </section>
+    </div>
 
-    <!-- 所有类型：终端外观（字体/字重），留空跟随全局设置，保存即生效 -->
-    <section class="opts-section">
-      <div class="opts-section-head">
-        <span class="opts-section-title">{{ $t('session.dialog.appearance') }}</span>
-        <span class="opts-section-hint">{{ $t('session.dialog.appearanceHint') }}</span>
-      </div>
+    </details>
+
+    <details class="option-group appearance-group" :open="appearanceExpanded" @toggle="handleAppearanceToggle">
+      <summary class="option-group-summary">
+        <strong class="option-group-title">{{ $t('session.dialog.appearance') }}</strong>
+        <span class="option-group-chevron" aria-hidden="true">›</span>
+      </summary>
+
+      <section class="appearance-content">
       <div class="builtin-arg-grid">
         <div class="form-group">
           <label>{{ $t('session.dialog.appearanceFontFamily') }}</label>
@@ -537,7 +602,8 @@
         <span :style="{ fontWeight: appearanceBoldPreviewWeight }">{{ TERMINAL_FONT_PREVIEW_BOLD_LINE }}</span>
       </div>
       <p class="opts-section-hint">{{ appearanceDistinctWeightsLabel }}</p>
-    </section>
+      </section>
+    </details>
   </div>
 </template>
 
@@ -548,7 +614,10 @@ import type { CliType } from '@shared/cli-types'
 import { useSettingsStore } from '@/stores/settings'
 import { useToast } from '@/composables/useToast'
 import UiIcon from '@/components/ui/UiIcon.vue'
-import { detectShells, getNativeIdCandidates, type DetectedShell } from '@/api/local-session'
+import SessionResumeSection from '@/components/SessionResumeSection.vue'
+import { detectShells, type DetectedShell } from '@/api/local-session'
+import { getSharedGatewayResolver } from '@/gateways/gateway-resolver'
+import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
 import {
   DEFAULT_TERMINAL_FONT_FAMILY,
   ensureMonospaceFallback,
@@ -583,11 +652,17 @@ import {
 
 const props = withDefaults(defineProps<{
   cliType: CliType
+  mode?: 'create' | 'edit'
   initialOptions?: Record<string, unknown>
+  initialNativeId?: string | null
   projectPath?: string
+  instanceId?: string
 }>(), {
+  mode: 'create',
   initialOptions: undefined,
-  projectPath: ''
+  initialNativeId: null,
+  projectPath: '',
+  instanceId: LOCAL_INSTANCE_ID
 })
 
 const { t } = useI18n()
@@ -615,8 +690,19 @@ const builtinToggleDescriptors = computed(() =>
   builtinDescriptors.value.filter((d) => d.control === 'toggle')
 )
 const supportsPresets = computed(() => props.cliType === 'claude' || props.cliType === 'codex')
+const cliOptionsExpanded = ref(true)
+const appearanceExpanded = ref(false)
+const showCollabMode = computed(() => props.cliType === 'terminal' && props.mode === 'create')
 
-// 内置参数控件状态（toggle 与值分开存，避免 v-model 类型混用）
+function handleAppearanceToggle(event: Event): void {
+  appearanceExpanded.value = (event.currentTarget as HTMLDetailsElement).open
+}
+
+function handleCliOptionsToggle(event: Event): void {
+  cliOptionsExpanded.value = (event.currentTarget as HTMLDetailsElement).open
+}
+
+
 const builtinToggles = reactive<Record<string, boolean>>({})
 const builtinValues = reactive<Record<string, string>>({})
 const customArgs = ref<CustomArgRow[]>([createCustomArgRow()])
@@ -634,6 +720,15 @@ const opencodeOptions = reactive({
   model: '',
   agent: '',
   prompt: '',
+  variant: '',
+  thinking: '',
+  format: '',
+  title: '',
+  replayLimit: '',
+  fileText: '',
+  auto: false,
+  mini: false,
+  noReplay: false,
   sessionId: '',
   continueLast: false,
   fork: false,
@@ -641,8 +736,14 @@ const opencodeOptions = reactive({
   serverMode: 'off' as 'off' | 'attach'
 })
 
-// 新 CLI（pi/omp/grok/hermes）：resume 相关选项（resumeId 经 session:setNativeId
-// 或创建 options 绑定，continueLast 为启动 flag）
+const canShowCandidatePicker = computed(
+  () => props.cliType !== 'terminal' && !!props.projectPath
+)
+const supportsExplicitResume = computed(
+  () => props.cliType === 'claude' || props.cliType === 'codex' || props.cliType === 'gemini'
+)
+const resumeIdLabel = computed(() => t('session.dialog.idResumeIdForCli', { cli: props.cliType }))
+const resumeIdHint = computed(() => t('session.dialog.idResumeHintForCli', { cli: props.cliType }))
 const supportsIdResume = computed(
   () => props.cliType === 'pi' || props.cliType === 'omp' || props.cliType === 'grok' || props.cliType === 'hermes'
 )
@@ -650,38 +751,112 @@ const idResumeOptions = reactive({
   resumeId: '',
   continueLast: false
 })
-const candidates = ref<Array<{ id: string; title: string; updated: number }>>([])
+const candidates = ref<Array<{ id: string; title?: string; content?: string; updated?: number; projectPath?: string }>>([])
 const candidatesLoading = ref(false)
 const showCandidates = ref(false)
+const candidatesError = ref(false)
+const resumeIdEdited = ref(false)
+const autoSelectedCandidateId = ref('')
+const candidatesLoaded = ref(false)
+const optionsBaseline = ref<string | null>(null)
+let candidateRequestSeq = 0
+let candidateRequestKey = ''
+
+const hasInitialResumeBinding = computed(() => {
+  const options = props.initialOptions || {}
+  const optionId = props.cliType === 'opencode' ? options.sessionId : options.resumeId
+  return !!(props.initialNativeId?.trim() || (typeof optionId === 'string' && optionId.trim()))
+})
+
+function resetCandidateState(): void {
+  candidateRequestSeq += 1
+  candidateRequestKey = ''
+  candidates.value = []
+  showCandidates.value = false
+  candidatesError.value = false
+  candidatesLoaded.value = false
+  autoSelectedCandidateId.value = ''
+}
 
 function toggleCandidates(): void {
-  if (props.cliType !== 'opencode' && !supportsIdResume.value) return
+  if (!canShowCandidatePicker.value) return
   showCandidates.value = !showCandidates.value
-  if (showCandidates.value && candidates.value.length === 0) void loadCandidates()
+  if (showCandidates.value && !candidatesLoaded.value) void loadCandidates()
 }
 
 async function loadCandidates(): Promise<void> {
-  if (candidatesLoading.value) return
+  if (!canShowCandidatePicker.value) return
+  const requestKey = `${props.instanceId}:${props.cliType}:${props.projectPath}`
+  if (candidatesLoading.value && requestKey === candidateRequestKey) return
+  const requestSeq = ++candidateRequestSeq
+  candidateRequestKey = requestKey
   candidatesLoading.value = true
+  candidatesError.value = false
   try {
-    candidates.value = await getNativeIdCandidates(props.cliType, props.projectPath || undefined)
+    const gateway = await getSharedGatewayResolver().resolve(props.instanceId)
+    const configuredKey = `${props.cliType}Path` as keyof typeof settingsStore.settings
+    const configuredPath = props.instanceId === LOCAL_INSTANCE_ID
+      ? (typeof settingsStore.settings[configuredKey] === 'string'
+          ? settingsStore.settings[configuredKey].trim() || undefined
+          : undefined)
+      : undefined
+    const result = await gateway.getNativeIdCandidates(
+      props.instanceId,
+      props.cliType,
+      props.projectPath,
+      configuredPath
+    )
+    if (requestSeq !== candidateRequestSeq || requestKey !== candidateRequestKey) return
+    candidates.value = result
+    candidatesLoaded.value = true
+    if (!resumeIdEdited.value && !hasInitialResumeBinding.value && candidates.value.length === 1) {
+      const [candidate] = candidates.value
+      if (candidate) {
+        if (props.cliType === 'opencode') opencodeOptions.sessionId = candidate.id
+        else idResumeOptions.resumeId = candidate.id
+        autoSelectedCandidateId.value = candidate.id
+      }
+    }
   } catch {
+    if (requestSeq !== candidateRequestSeq || requestKey !== candidateRequestKey) return
     candidates.value = []
+    candidatesError.value = true
+    candidatesLoaded.value = true
   } finally {
-    candidatesLoading.value = false
+    if (requestSeq === candidateRequestSeq && requestKey === candidateRequestKey) {
+      candidatesLoading.value = false
+    }
   }
 }
 
-function applyCandidate(candidate: { id: string }): void {
-  idResumeOptions.resumeId = candidate.id
-  showCandidates.value = false
+function stableSerialize(value: unknown): string {
+  if (value === undefined) return 'undefined'
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'undefined'
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`
+  const record = value as Record<string, unknown>
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`).join(',')}}`
 }
 
-function applyOpencodeCandidate(candidate: { id: string }): void {
-  opencodeOptions.sessionId = candidate.id
-  showCandidates.value = false
+function markBaseline(): void {
+  optionsBaseline.value = stableSerialize(buildOptions())
 }
 
+const isDirtyState = computed(() => {
+  if (props.mode !== 'edit' || optionsBaseline.value === null) return false
+  return optionsBaseline.value !== stableSerialize(buildOptions())
+})
+
+function isDirty(): boolean {
+  return isDirtyState.value
+}
+
+function applyCandidate(id: string): void {
+  if (props.cliType === 'opencode') opencodeOptions.sessionId = id
+  else idResumeOptions.resumeId = id
+  resumeIdEdited.value = true
+  autoSelectedCandidateId.value = ''
+  showCandidates.value = false
+}
 const detectedShells = ref<DetectedShell[]>([])
 const shellChoice = ref('')
 const customShellPath = ref('')
@@ -848,6 +1023,8 @@ function resetFromOptions(): void {
       codexPermissionsMode.value =
         mode === 'read-only' || mode === 'default' || mode === 'full-access' ? mode : ''
     }
+    idResumeOptions.resumeId = props.initialNativeId?.trim() || (typeof options.resumeId === 'string' ? options.resumeId : '')
+    idResumeOptions.continueLast = false
     return
   }
 
@@ -862,9 +1039,16 @@ function resetFromOptions(): void {
     return
   }
 
+  if (props.cliType === 'gemini') {
+    applyArgs(Array.isArray(options.customArgs) ? [...(options.customArgs as CustomCliArgument[])] : [])
+    idResumeOptions.resumeId = props.initialNativeId?.trim() || (typeof options.resumeId === 'string' ? options.resumeId : '')
+    idResumeOptions.continueLast = false
+    return
+  }
+
   if (supportsIdResume.value) {
     applyArgs(Array.isArray(options.customArgs) ? [...(options.customArgs as CustomCliArgument[])] : [])
-    idResumeOptions.resumeId = typeof options.resumeId === 'string' ? options.resumeId : ''
+    idResumeOptions.resumeId = props.initialNativeId?.trim() || (typeof options.resumeId === 'string' ? options.resumeId : '')
     idResumeOptions.continueLast = options.continueLast === true
     showCandidates.value = false
     return
@@ -875,7 +1059,16 @@ function resetFromOptions(): void {
   opencodeOptions.model = typeof options.model === 'string' ? options.model : ''
   opencodeOptions.agent = typeof options.agent === 'string' ? options.agent : ''
   opencodeOptions.prompt = typeof options.prompt === 'string' ? options.prompt : ''
-  opencodeOptions.sessionId = typeof options.sessionId === 'string' ? options.sessionId : ''
+  opencodeOptions.variant = typeof options.variant === 'string' ? options.variant : ''
+  opencodeOptions.thinking = typeof options.thinking === 'string' ? options.thinking : ''
+  opencodeOptions.format = typeof options.format === 'string' ? options.format : ''
+  opencodeOptions.title = typeof options.title === 'string' ? options.title : ''
+  opencodeOptions.replayLimit = typeof options.replayLimit === 'number' ? String(options.replayLimit) : ''
+  opencodeOptions.fileText = Array.isArray(options.file) ? options.file.filter((file): file is string => typeof file === 'string').join('\n') : ''
+  opencodeOptions.auto = options.auto === true
+  opencodeOptions.mini = options.mini === true
+  opencodeOptions.noReplay = options.noReplay === true
+  opencodeOptions.sessionId = props.initialNativeId?.trim() || (typeof options.sessionId === 'string' ? options.sessionId : '')
   opencodeOptions.continueLast = options.continueLast === true
   opencodeOptions.fork = options.fork === true
   opencodeOptions.attachUrl = typeof options.attachUrl === 'string' ? options.attachUrl : ''
@@ -975,6 +1168,7 @@ watch(
   () => props.cliType,
   (_newType, oldType) => {
     if (oldType) snapshotsByType.set(oldType, captureSnapshot())
+    resumeIdEdited.value = false
     const cached = snapshotsByType.get(props.cliType)
     if (cached) {
       restoreSnapshot(cached)
@@ -982,16 +1176,32 @@ watch(
       resetFromOptions()
     }
     void ensureShellsLoaded()
+    if (canShowCandidatePicker.value) void loadCandidates()
+    markBaseline()
   },
   { immediate: true }
 )
 
 watch(
-  () => props.initialOptions,
+  [() => props.initialOptions, () => props.initialNativeId],
   () => {
     snapshotsByType.clear()
+    resetCandidateState()
+    candidatesLoading.value = false
+    candidatesError.value = false
+    resumeIdEdited.value = false
+    optionsBaseline.value = null
     resetFromOptions()
     void ensureShellsLoaded()
+    markBaseline()
+  }
+)
+
+watch(
+  () => props.projectPath,
+  () => {
+    resetCandidateState()
+    if (canShowCandidatePicker.value) void loadCandidates()
   }
 )
 
@@ -1105,6 +1315,7 @@ function buildOptions(): Record<string, unknown> {
   if (props.cliType === 'claude') {
     const args = collectAllArgs()
     return mergeWithInitial({
+      resumeId: idResumeOptions.resumeId.trim(),
       customArgs: args.length > 0 ? args : undefined,
       appearance,
       // 模型已迁移进 customArgs 体系，旧字段删除以防 adapter 重复下发 --model；
@@ -1117,6 +1328,7 @@ function buildOptions(): Record<string, unknown> {
   if (props.cliType === 'codex') {
     const args = collectAllArgs()
     return mergeWithInitial({
+      resumeId: idResumeOptions.resumeId.trim(),
       // 不指定时不向 codex 下发任何沙箱/审批参数，遵循用户本机 CLI 默认
       permissionsMode: codexPermissionsMode.value || undefined,
       customArgs: args.length > 0 ? args : undefined,
@@ -1141,20 +1353,19 @@ function buildOptions(): Record<string, unknown> {
     })
   }
 
-  // FEAT-3：gemini 与 claude 同构——模型/审批模式经 customArgs 或专属字段下发
   if (props.cliType === 'gemini') {
     const args = collectAllArgs()
     return mergeWithInitial({
       customArgs: args.length > 0 ? args : undefined,
-      appearance,
-      model: undefined
+      resumeId: idResumeOptions.resumeId.trim(),
+      appearance
     })
   }
 
   if (supportsIdResume.value) {
     const args = collectAllArgs()
     return mergeWithInitial({
-      resumeId: idResumeOptions.resumeId.trim() || undefined,
+      resumeId: idResumeOptions.resumeId.trim(),
       continueLast: idResumeOptions.continueLast || undefined,
       customArgs: args.length > 0 ? args : undefined,
       appearance
@@ -1166,7 +1377,18 @@ function buildOptions(): Record<string, unknown> {
     model: opencodeOptions.model.trim() || undefined,
     agent: opencodeOptions.agent.trim() || undefined,
     prompt: opencodeOptions.prompt.trim() || undefined,
-    sessionId: opencodeOptions.sessionId.trim() || undefined,
+    variant: opencodeOptions.variant.trim() || undefined,
+    thinking: opencodeOptions.thinking.trim() || undefined,
+    format: opencodeOptions.format.trim() || undefined,
+    title: opencodeOptions.title.trim() || undefined,
+    replayLimit: Number.isInteger(Number(opencodeOptions.replayLimit)) && Number(opencodeOptions.replayLimit) > 0
+      ? Number(opencodeOptions.replayLimit)
+      : undefined,
+    file: opencodeOptions.fileText.split(/\r?\n/).map((file) => file.trim()).filter(Boolean),
+    auto: opencodeOptions.auto || undefined,
+    mini: opencodeOptions.mini || undefined,
+    noReplay: opencodeOptions.noReplay || undefined,
+    sessionId: opencodeOptions.sessionId.trim(),
     continueLast: opencodeOptions.continueLast || undefined,
     fork: opencodeOptions.fork || undefined,
     attachUrl:
@@ -1186,21 +1408,111 @@ function getCollabMode(): string {
   return collabMode.value
 }
 
-defineExpose({ buildOptions, hasOpencodeConflict, getCollabMode })
+defineExpose({ buildOptions, hasOpencodeConflict, getCollabMode, isDirty, markBaseline })
 </script>
 
 <style scoped lang="scss">
 .session-options-form {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 10px;
   min-width: 0;
 }
+
+.option-group {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  box-shadow: none;
+}
+
+.option-group-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 10px;
+  color: var(--text-primary);
+  cursor: pointer;
+  list-style: none;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.option-group-title {
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+}
+
+.option-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.option-group-summary:hover,
+.option-group-summary:focus-visible {
+  outline: none;
+  background: var(--bg-hover);
+}
+
+.option-group-copy {
+  display: none;
+}
+
+.option-group-chevron {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 24px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.option-group[open] .option-group-summary {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.option-group[open] .option-group-chevron {
+  color: var(--text-primary);
+  transform: rotate(90deg);
+}
+
+.option-group-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 6px 9px 9px;
+}
+
+.cli-options-content {
+  min-width: 0;
+}
+
+.cli-options-group > .option-group-content > .opts-section,
+.cli-options-group > .option-group-content > template + .opts-section {
+  padding: 0;
+}
+
+.cli-options-group > .option-group-content > .opts-section + .opts-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+}
+
+.appearance-content {
+  padding: 6px 9px 9px;
+}
+
+.appearance-content .builtin-arg-grid {
+  gap: 12px;
+}
+
 
 .opts-section {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 8px;
   min-width: 0;
 
   & + & {
@@ -1346,7 +1658,7 @@ defineExpose({ buildOptions, hasOpencodeConflict, getCollabMode })
 .builtin-arg-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-sm);
+  gap: 8px;
 }
 
 .builtin-toggle-row {
@@ -1358,7 +1670,7 @@ defineExpose({ buildOptions, hasOpencodeConflict, getCollabMode })
 .opencode-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-sm);
+  gap: 8px;
 
   .field-wide {
     grid-column: 1 / -1;
@@ -1477,69 +1789,14 @@ defineExpose({ buildOptions, hasOpencodeConflict, getCollabMode })
   }
 }
 
-.resume-id-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--spacing-xs);
-  align-items: center;
-}
-
-.candidate-list {
-  list-style: none;
-  margin: var(--spacing-xs) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 180px;
-  overflow-y: auto;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--bg-primary);
-}
-
-.candidate-item {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  width: 100%;
-  padding: 6px var(--spacing-sm);
-  border: none;
-  background: transparent;
-  color: var(--text-primary);
-  text-align: left;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: var(--font-size-xs);
-
-  &:hover {
-    background: var(--bg-hover);
-  }
-
-  .candidate-title {
-    font-size: var(--font-size-sm);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .candidate-meta {
-    color: var(--text-muted);
-    font-family: var(--font-mono, monospace);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-@media (max-width: 560px) {
+@media (max-width: 700px) {
   .builtin-arg-grid,
   .opencode-grid {
     grid-template-columns: 1fr;
   }
+}
 
-  .custom-arg-row {
+@media (max-width: 560px) {  .custom-arg-row {
     grid-template-columns: 1fr 30px;
 
     .form-input:first-child {

@@ -1,5 +1,5 @@
 import { io, type Socket } from 'socket.io-client'
-import type { OutputLine, SessionFilter } from '../api/local-session'
+import type { OutputLine, SessionFilter, NativeSessionCandidate } from '../api/local-session'
 import type { Project, ProjectPromptCliType, ProjectPromptFile } from '../api/local-project'
 import { ipc } from '../api/ipc'
 import {
@@ -20,12 +20,13 @@ import type {
   GatewayStatusEvent,
   GatewayUpdateProjectParams
 } from './types'
+import type { CliType } from '@shared/cli-types'
 
 interface RemoteSessionDto {
   id: string
   name: string
   icon: string | null
-  type: 'claude' | 'codex' | 'opencode' | 'terminal' | 'gemini'
+  type: CliType
   projectId: string | null
   projectPath: string
   status: UnifiedSession['status']
@@ -40,6 +41,11 @@ interface RemoteSessionDto {
   claudeSessionId?: string | null
   codexSessionId?: string | null
   opencodeSessionId?: string | null
+  geminiSessionId?: string | null
+  piSessionId?: string | null
+  ompSessionId?: string | null
+  grokSessionId?: string | null
+  hermesSessionId?: string | null
 }
 
 interface RemoteOutputEventPayload {
@@ -87,6 +93,9 @@ type RemoteGatewayInvokeMethod =
   | 'listSessions'
   | 'getSession'
   | 'getOutputHistory'
+  | 'updateSessionOptions'
+  | 'setNativeSessionId'
+  | 'getNativeIdCandidates'
   | 'writeRaw'
   | 'resize'
   | 'listProjects'
@@ -374,6 +383,22 @@ export class RemoteGateway implements Gateway {
           }
           return response.lines as T
         })
+      case 'updateSessionOptions':
+        return this.requestJsonDirect<T>(`/api/sessions/${args[0]}/options`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ options: args[1] ?? {} })
+        })
+      case 'setNativeSessionId':
+        return this.requestJsonDirect<T>(`/api/sessions/${args[0]}/native-id`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cliType: args[1], value: args[2] ?? null })
+        })
+      case 'getNativeIdCandidates':
+        return this.requestJsonDirect<T>(
+          `/api/sessions/native-id-candidates?cliType=${encodeURIComponent(String(args[0]))}${args[1] ? `&projectPath=${encodeURIComponent(String(args[1]))}` : ''}${args[2] ? `&preferredPath=${encodeURIComponent(String(args[2]))}` : ''}`
+        )
       case 'writeRaw':
         try {
           await this.emitAckDirect('session:write', { sessionId: args[0], data: args[1] })
@@ -547,6 +572,23 @@ export class RemoteGateway implements Gateway {
       passthroughOnly: !!response.passthroughOnly,
       capabilities: { ...response.capabilities }
     }
+  }
+
+  async updateSessionOptions(instanceId: string, sessionId: string, options: Record<string, unknown>): Promise<UnifiedSession | null> {
+    this.assertInstance(instanceId)
+    const session = await this.invoke<RemoteSessionDto | null>('updateSessionOptions', sessionId, options)
+    return session ? toUnifiedSession(session, { instanceId, source: 'remote' }) : null
+  }
+
+  async setNativeSessionId(instanceId: string, sessionId: string, cliType: CliType, value: string | null): Promise<UnifiedSession | null> {
+    this.assertInstance(instanceId)
+    const session = await this.invoke<RemoteSessionDto | null>('setNativeSessionId', sessionId, cliType, value)
+    return session ? toUnifiedSession(session, { instanceId, source: 'remote' }) : null
+  }
+
+  async getNativeIdCandidates(instanceId: string, cliType: CliType, projectPath?: string, preferredPath?: string): Promise<NativeSessionCandidate[]> {
+    this.assertInstance(instanceId)
+    return this.invoke<Array<{ id: string; title?: string; content?: string; updated?: number; projectPath?: string }>>('getNativeIdCandidates', cliType, projectPath, preferredPath)
   }
 
   async listProjects(instanceId: string): Promise<UnifiedProject[]> {

@@ -43,7 +43,7 @@ export function registerAllHandlers(services: Services): void {
     grok: services.grokAdapter,
     hermes: services.hermesAdapter
   })
-  registerSessionHandlers(services.sessionManager, services.agentBus, services.openCodeAdapter)
+  registerSessionHandlers(services.sessionManager, services.agentBus, services.openCodeAdapter, services.codexAdapter)
   registerProjectHandlers(services.projectManager, services.sessionManager)
   registerSkillHandlers(services.skillManager, services.projectManager)
   registerSettingsHandlers()

@@ -9,23 +9,27 @@ import type { GeminiSessionOptions } from './types'
 const GEMINI_INVALID_SESSION_PATTERN = /(No conversation found|session not found)/i
 
 export class GeminiSessionLifecycle implements ISessionLifecycle {
+  private persistFn: (() => void) | null = null
+
   constructor(
     private geminiAdapter: GeminiAdapter,
     private outputManager: SessionOutputManager
   ) {}
 
-  setPersistCallback(_fn: () => void): void {
-    // 与 Claude 相同：暂不需要输出阶段持久化，保留注入口以兼容调用方。
+  setPersistCallback(fn: () => void): void {
+    this.persistFn = fn
   }
 
   create(id: string, name: string, params: CreateSessionParams): GeminiSession {
     const options = (params.options || {}) as GeminiSessionOptions
+    const resumeId = typeof options.resumeId === 'string' && options.resumeId.trim() ? options.resumeId.trim() : null
+    if (resumeId) options.resumeId = resumeId
     const now = Date.now()
 
     let processId: string | null = null
     let status: 'running' | 'error' = 'running'
     try {
-      processId = this.geminiAdapter.startSession(params.projectPath, options)
+      processId = this.geminiAdapter.startSession(params.projectPath, options, resumeId ?? undefined)
     } catch (err) {
       status = 'error'
       const errMsg = err instanceof Error ? err.message : String(err)
@@ -48,7 +52,7 @@ export class GeminiSessionLifecycle implements ISessionLifecycle {
       processId,
       options,
       parentId: params.parentId || null,
-      geminiSessionId: null
+      geminiSessionId: resumeId
     }
   }
 
@@ -57,7 +61,13 @@ export class GeminiSessionLifecycle implements ISessionLifecycle {
       throw new Error(`GeminiSessionLifecycle received non-gemini session: ${session.type}`)
     }
     const s = session
-    s.processId = this.geminiAdapter.startSession(s.projectPath, s.options, s.geminiSessionId ?? undefined)
+    const nativeId = s.geminiSessionId?.trim() || undefined
+    const optionId = s.options.resumeId?.trim() || undefined
+    const resumeId = nativeId ?? optionId
+    s.geminiSessionId = resumeId ?? null
+    if (resumeId) s.options.resumeId = resumeId
+    else delete s.options.resumeId
+    s.processId = this.geminiAdapter.startSession(s.projectPath, s.options, resumeId)
     s.status = 'running'
     s.lastStartAt = startAt
     s.lastActiveAt = startAt
@@ -68,6 +78,7 @@ export class GeminiSessionLifecycle implements ISessionLifecycle {
     const s = session as GeminiSession
     if (s.geminiSessionId && GEMINI_INVALID_SESSION_PATTERN.test(data) && !s.invalidSessionId) {
       s.invalidSessionId = true
+      this.persistFn?.()
       this.outputManager.appendOutput(
         s.id,
         'Warning: Gemini reported session not found. Will start a new conversation after this process exits.\n',
@@ -76,10 +87,47 @@ export class GeminiSessionLifecycle implements ISessionLifecycle {
     }
   }
 
-  cleanup(_session: Session): void {}
+  shouldAutoRestartAfterExit(session: Session, exitCode: number | null): boolean {
+    if (session.type !== 'gemini' || exitCode === 0) return false
+    const s = session as GeminiSession
+    if (!s.invalidSessionId) return false
+    s.geminiSessionId = null
+    delete s.options.resumeId
+    s.invalidSessionId = false
+    this.persistFn?.()
+    this.outputManager.appendOutput(
+      s.id,
+      'Info: Starting a fresh Gemini conversation because the previous session could not be resumed.\n',
+      'stdout'
+    )
+    return true
+  }
 
-  migrateOnLoad(_session: Session): boolean {
-    return false
+  cleanup(session: Session): void {
+    if (session.type === 'gemini') {
+      delete session.invalidSessionId
+    }
+  }
+
+  migrateOnLoad(session: Session): boolean {
+    if (session.type !== 'gemini') return false
+    const s = session as GeminiSession
+    const nativeId = s.geminiSessionId?.trim() || null
+    const optionId = s.options.resumeId?.trim() || null
+    const resolved = nativeId ?? optionId
+    let changed = false
+    if (s.geminiSessionId !== resolved) {
+      s.geminiSessionId = resolved
+      changed = true
+    }
+    if (resolved && s.options.resumeId !== resolved) {
+      s.options.resumeId = resolved
+      changed = true
+    } else if (!resolved && 'resumeId' in s.options) {
+      delete s.options.resumeId
+      changed = true
+    }
+    return changed
   }
 
   hydrateSessionId(_session: Session): boolean {

@@ -15,6 +15,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'window:minimize', 'window:maximize', 'window:close',
   'dialog:selectFolder', 'shell:openPath', 'cli:check',
   // config
+  'config:cli:read', 'config:cli:write',
   'config:claude:read', 'config:claude:write',
   'config:claude:project:read', 'config:claude:project:write',
   'config:codex:read', 'config:codex:write',
@@ -64,6 +65,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   // cli
   'cli:kill', 'cli:write', 'cli:list',
   'cli:claude:version', 'cli:codex:version', 'cli:opencode:version',
+  'cli:gemini:version', 'cli:pi:version', 'cli:omp:version', 'cli:grok:version', 'cli:hermes:version',
   // crash awareness (UX-13)
   'app:crash:info', 'app:crash:openLog'
 ]
@@ -71,6 +73,7 @@ const ALLOWED_INVOKE_CHANNELS = [
 const ALLOWED_RECEIVE_CHANNELS = [
   'session:output',
   'session:status',
+  'session:changed',
   'session:focus-request',
   'remote-session:output',
   'remote-session:status',

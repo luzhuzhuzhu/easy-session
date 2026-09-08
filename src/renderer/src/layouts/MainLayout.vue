@@ -71,8 +71,8 @@
             :key="cli.id"
             class="cli-status-btn"
             type="button"
-            :title="cliStatusTitle(appStore.cliAvailable[cli.id], cli.onlineKey, cli.offlineKey)"
-            :aria-label="cliStatusTitle(appStore.cliAvailable[cli.id], cli.onlineKey, cli.offlineKey)"
+            :title="cliStatusTitle(appStore.cliAvailable[cli.id], cli.label)"
+            :aria-label="cliStatusTitle(appStore.cliAvailable[cli.id], cli.label)"
             @click="openCliSettings"
           >
             <span class="status-dot" :class="cliDotClass(appStore.cliAvailable[cli.id])"></span>
@@ -132,6 +132,7 @@ import logoSrc from '@/assets/logo-easy-session-light.png'
 import { resolveProjectRouteRef } from '@/utils/project-routing'
 import { NAV_SHORTCUT_DEFS } from '@/composables/shortcut-registry'
 import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
+import { CLI_TYPES, CLI_TYPE_DISPLAY_NAMES, type CliType } from '@shared/cli-types'
 
 const route = useRoute()
 const router = useRouter()
@@ -214,7 +215,7 @@ async function closeWindow() {
       }),
       details: t('topbar.confirmCloseRunningDetails'),
       confirmText: t('topbar.confirmCloseRunningAction'),
-      cancelText: t('common.cancel'),
+      cancelText: t('confirm.cancel'),
       tone: 'danger'
     })
     if (!confirmed) return
@@ -226,15 +227,13 @@ function openCliSettings(): void {
   void router.push({ path: '/settings', query: { category: 'cli' } })
 }
 
-// FEAT-1：顶栏 CLI 状态指示灯按注册表循环渲染（不再为每个 CLI 复制按钮块）。
-const STATUS_CLI_TYPES = [
-  { id: 'claude' as const, label: 'Claude', onlineKey: 'topbar.claudeOnline', offlineKey: 'topbar.claudeOffline' },
-  { id: 'codex' as const, label: 'Codex', onlineKey: 'topbar.codexOnline', offlineKey: 'topbar.codexOffline' },
-  { id: 'opencode' as const, label: 'OpenCode', onlineKey: 'topbar.opencodeOnline', offlineKey: 'topbar.opencodeOffline' }
-]
+// 外部 CLI 状态从共享类型表派生；terminal 不是可执行 CLI 探测目标。
+const STATUS_CLI_TYPES = CLI_TYPES
+  .filter((id): id is Exclude<CliType, 'terminal'> => id !== 'terminal')
+  .map((id) => ({ id, label: CLI_TYPE_DISPLAY_NAMES[id] }))
 
-function getCliStatusTitle(statusKey: string): string {
-  return `${t(statusKey)} · ${t('topbar.openCliSettings')}`
+function getCliStatusTitle(status: string): string {
+  return `${status} · ${t('topbar.openCliSettings')}`
 }
 
 function cliDotClass(available: boolean): 'checking' | 'online' | 'offline' {
@@ -242,9 +241,9 @@ function cliDotClass(available: boolean): 'checking' | 'online' | 'offline' {
   return available ? 'online' : 'offline'
 }
 
-function cliStatusTitle(available: boolean, onlineKey: string, offlineKey: string): string {
-  if (appStore.cliChecking) return getCliStatusTitle('topbar.cliChecking')
-  return getCliStatusTitle(available ? onlineKey : offlineKey)
+function cliStatusTitle(available: boolean, label: string): string {
+  if (appStore.cliChecking) return getCliStatusTitle(`${label} · ${t('status.checking')}`)
+  return getCliStatusTitle(`${label} · ${t(available ? 'status.available' : 'status.unavailable')}`)
 }
 
 function formatProjectInstanceCrumb(instanceId: string): string {
@@ -275,8 +274,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  min-width: 960px;
-  min-height: 600px;
+  min-width: 0;
+  min-height: 0;
   background: var(--bg-primary);
   color: var(--text-primary);
 }
@@ -481,7 +480,9 @@ onMounted(() => {
 .status-indicators {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  max-width: min(52vw, 660px);
+  overflow: hidden;
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   min-width: 0;
@@ -525,7 +526,7 @@ onMounted(() => {
 }
 
 .status-label {
-  margin-right: var(--spacing-sm);
+  margin-right: 2px;
   font-size: 11px;
   letter-spacing: 0;
 }
@@ -617,6 +618,21 @@ onMounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+@media (max-width: 1320px) {
+  .status-label {
+    display: none;
+  }
+
+  .cli-status-btn {
+    width: 16px;
+    justify-content: center;
+  }
+
+  .status-indicators {
+    gap: 2px;
+  }
 }
 
 @media (max-width: 1160px) {

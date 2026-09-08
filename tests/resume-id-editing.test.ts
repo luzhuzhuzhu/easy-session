@@ -6,10 +6,10 @@ import { SessionManager } from '../src/main/services/session-manager'
 import { GeminiAdapter } from '../src/main/services/gemini-adapter'
 import { GeminiSessionLifecycle } from '../src/main/services/gemini-session-lifecycle'
 import { OpenCodeAdapter } from '../src/main/services/opencode-adapter'
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import type { Session } from '../src/main/services/session-types'
 
-vi.mock('child_process', () => ({ exec: vi.fn() }))
+vi.mock('child_process', () => ({ execFile: vi.fn() }))
 
 function makeManagerWithGemini(): SessionManager {
   const outputManager = {
@@ -81,9 +81,9 @@ describe('setNativeSessionId (session-manager)', () => {
 
 describe('collectSessionCandidatesByPath (opencode-adapter)', () => {
   it('returns deduped candidates with titles for the matching path', async () => {
-    const childExec = vi.mocked(exec)
+    const childExec = vi.mocked(execFile)
     childExec.mockImplementation(
-      ((_cmd: string, _opts: unknown, cb: (err: null, stdout: string) => void) =>
+      ((_executable: string, _args: string[], _opts: unknown, cb: (err: Error | null, stdout?: string) => void) =>
         cb(
           null,
           JSON.stringify([
@@ -103,9 +103,9 @@ describe('collectSessionCandidatesByPath (opencode-adapter)', () => {
   })
 
   it('returns empty array when CLI fails', async () => {
-    const childExec = vi.mocked(exec)
-    childExec.mockImplementation(((_cmd: string, _opts: unknown, cb: (err: Error) => void) =>
-      cb(new Error('boom'))) as never)
+    const childExec = vi.mocked(execFile)
+    childExec.mockImplementation(((_executable: string, _args: string[], _opts: unknown, cb: (err: Error | null, stdout?: string) => void) =>
+      cb(new Error('boom'), '')) as never)
     const adapter = new OpenCodeAdapter({} as never)
     const result = await adapter.collectSessionCandidatesByPath('d:/proj')
     expect(result).toEqual([])

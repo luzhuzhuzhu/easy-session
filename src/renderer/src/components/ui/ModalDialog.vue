@@ -15,6 +15,7 @@
         class="modal-close"
         type="button"
         :aria-label="closeLabel"
+        :disabled="closeDisabled"
         @click="$emit('close')"
       >&times;</button>
     </header>
@@ -42,12 +43,14 @@ withDefaults(defineProps<{
   closeLabel?: string
   panelClass?: string
   closeOnBackdrop?: boolean
+  closeDisabled?: boolean
 }>(), {
   title: '',
   ariaLabel: undefined,
   closeLabel: 'Close',
   panelClass: '',
-  closeOnBackdrop: true
+  closeOnBackdrop: true,
+  closeDisabled: false
 })
 
 defineEmits<{
@@ -67,7 +70,7 @@ onMounted(() => {
 .dialog.modal-frame {
   display: flex;
   flex-direction: column;
-  width: min(92vw, 760px);
+  width: min(94vw, 900px);
   max-height: 88vh;
   padding: 0;
   overflow: hidden;

@@ -35,6 +35,22 @@ export function getCodexVersion(): Promise<string> {
   return ipc.invoke<string>('cli:codex:version')
 }
 
-export function getOpenCodeVersion(preferredPath?: string): Promise<string> {
-  return ipc.invoke<string>('cli:opencode:version', preferredPath)
+export function getGeminiVersion(preferredPath?: string): Promise<string> {
+  return ipc.invoke<string>('cli:gemini:version', preferredPath)
+}
+
+export function getPiVersion(preferredPath?: string): Promise<string> {
+  return ipc.invoke<string>('cli:pi:version', preferredPath)
+}
+
+export function getOmpVersion(preferredPath?: string): Promise<string> {
+  return ipc.invoke<string>('cli:omp:version', preferredPath)
+}
+
+export function getGrokVersion(preferredPath?: string): Promise<string> {
+  return ipc.invoke<string>('cli:grok:version', preferredPath)
+}
+
+export function getHermesVersion(preferredPath?: string): Promise<string> {
+  return ipc.invoke<string>('cli:hermes:version', preferredPath)
 }

@@ -60,7 +60,8 @@ export class ClaudeAdapter {
     args.push(...this.busArgs(custom))
     args.push(...custom)
 
-    this.cliManager.spawn(id, 'claude', args, { cwd: projectPath || undefined })
+    const executable = options?.cliPath?.trim() || 'claude'
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined })
     return id
   }
 
@@ -79,7 +80,8 @@ export class ClaudeAdapter {
     args.push(...this.busArgs(custom))
     args.push(...custom)
 
-    this.cliManager.spawn(id, 'claude', args, { cwd: projectPath || undefined })
+    const executable = options?.cliPath?.trim() || 'claude'
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined })
     return id
   }
 

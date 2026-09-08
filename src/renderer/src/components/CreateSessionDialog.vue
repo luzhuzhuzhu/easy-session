@@ -3,7 +3,8 @@
     v-if="visible"
     :aria-label="$t('session.create')"
     :close-label="$t('session.dialog.cancel')"
-    @close="$emit('cancel')"
+    :close-on-backdrop="!creating"
+    @close="!creating && $emit('cancel')"
   >
     <template #header>
       <div class="type-selector" role="radiogroup" :aria-label="$t('session.selectType')">
@@ -15,14 +16,16 @@
           type="button"
           role="radio"
           :aria-checked="form.type === type"
+          :aria-label="$t(`session.${type}`)"
           @click="form.type = type"
         >
-          <span>{{ $t(`session.${type}`) }}</span>
+          <span class="type-option-icon"><CliTypeIcon :type="type" /></span>
+          <span class="type-option-label">{{ $t(`session.${type}`) }}</span>
         </button>
       </div>
     </template>
 
-    <section class="form-section">
+    <section class="form-section basic-info-section">
       <div
         v-if="statusMessage"
         class="cli-status-row"
@@ -43,90 +46,84 @@
         </button>
       </div>
 
-      <div class="form-group">
-        <label>{{ $t('session.dialog.projectPath') }} *</label>
-        <div class="path-input">
-          <input v-model="form.projectPath" type="text" class="form-input" readonly />
-          <Button
-            v-if="canBrowseProjectPath"
-            size="sm"
-            @click="selectFolder"
-          >
-            {{ $t('session.dialog.browse') }}
-          </Button>
+      <div class="basic-fields-grid">
+        <div class="form-group project-field">
+          <label for="create-project-path">{{ $t('session.dialog.projectPath') }} *</label>
+          <div class="path-input">
+            <input id="create-project-path" v-model="form.projectPath" type="text" class="form-input" readonly />
+            <Button
+              v-if="canBrowseProjectPath"
+              size="sm"
+              @click="selectFolder"
+            >
+              {{ $t('session.dialog.browse') }}
+            </Button>
+          </div>
+          <span v-if="projectPathHint" class="path-hint">{{ projectPathHint }}</span>
+          <span v-if="pathError" class="error-text">{{ pathError }}</span>
         </div>
-        <span v-if="projectPathHint" class="path-hint">{{ projectPathHint }}</span>
-        <span v-if="pathError" class="error-text">{{ pathError }}</span>
-      </div>
 
-      <div class="form-group">
-        <label>{{ $t('session.dialog.name') }}</label>
-        <div class="name-row">
-          <div class="icon-picker-wrap">
-            <button
-              type="button"
-              class="icon-pick-btn"
-              :aria-label="$t('session.dialog.pickIcon')"
-              @click="toggleEmojiPicker"
-            >
-              {{ form.icon || '😀' }}
-            </button>
-            <!-- fixed 定位脱离 modal-body 的 overflow 裁剪，z 轴高于弹窗遮罩(300) -->
-            <div
-              v-if="showEmojiPicker"
-              class="emoji-grid"
-              :style="{ top: `${emojiPickerPos.top}px`, left: `${emojiPickerPos.left}px` }"
-            >
-              <button
-                v-for="e in emojiList" :key="e" type="button" class="emoji-cell"
-                :class="{ selected: form.icon === e }"
-                @click="form.icon = e; showEmojiPicker = false"
-              >{{ e }}</button>
+        <div class="form-group name-field">
+          <label for="create-session-name">{{ $t('session.dialog.name') }}</label>
+          <div class="name-row">
+            <div class="icon-picker-wrap">
               <button
                 type="button"
-                class="emoji-cell clear-cell"
-                :aria-label="$t('session.dialog.clearIcon')"
-                @click="form.icon = ''; showEmojiPicker = false"
-              >✕</button>
+                class="icon-pick-btn"
+                :aria-label="$t('session.dialog.pickIcon')"
+                @click="toggleEmojiPicker"
+              >
+                {{ form.icon || '😀' }}
+              </button>
+              <!-- fixed 定位脱离 modal-body 的 overflow 裁剪，z 轴高于弹窗遮罩(300) -->
+              <div
+                v-if="showEmojiPicker"
+                class="emoji-grid"
+                :style="{ top: `${emojiPickerPos.top}px`, left: `${emojiPickerPos.left}px` }"
+              >
+                <button
+                  v-for="e in emojiList" :key="e" type="button" class="emoji-cell"
+                  :class="{ selected: form.icon === e }"
+                  @click="form.icon = e; showEmojiPicker = false"
+                >{{ e }}</button>
+                <button
+                  type="button"
+                  class="emoji-cell clear-cell"
+                  :aria-label="$t('session.dialog.clearIcon')"
+                  @click="form.icon = ''; showEmojiPicker = false"
+                >✕</button>
+              </div>
             </div>
+            <input
+              id="create-session-name"
+              v-model="form.name"
+              type="text"
+              :placeholder="defaultName"
+              class="form-input"
+            />
           </div>
-          <input
-            v-model="form.name"
-            type="text"
-            :placeholder="defaultName"
-            class="form-input"
-            @keydown.enter.prevent="handleSubmit"
-          />
         </div>
       </div>
     </section>
 
-    <section class="advanced-block">
-      <button
-        type="button"
-        class="advanced-toggle"
-        :aria-expanded="showAdvancedOptions"
-        @click="showAdvancedOptions = !showAdvancedOptions"
-      >
-        <span>{{ $t('session.dialog.advancedOptions') }}</span>
-        <span class="advanced-toggle-icon" :class="{ open: showAdvancedOptions }">&gt;</span>
-      </button>
-
-      <!-- v-show 而非 v-if：折叠面板时保留表单状态，提交时参数不丢失 -->
-      <div v-show="showAdvancedOptions" class="advanced-fields">
-        <SessionOptionsForm ref="optionsFormRef" :cli-type="form.type" :project-path="form.projectPath" />
-      </div>
-    </section>
+    <SessionOptionsForm
+      ref="optionsFormRef"
+      :key="`${props.targetInstanceId}:${props.targetProjectId ?? props.targetProjectPath}:${form.type}`"
+      :cli-type="form.type"
+      mode="create"
+      :project-path="form.projectPath"
+      :instance-id="props.targetInstanceId"
+    />
 
     <template #footer>
-      <Button @click="$emit('cancel')">{{ $t('session.dialog.cancel') }}</Button>
+      <Button @click="$emit('cancel')" :disabled="creating">{{ $t('session.dialog.cancel') }}</Button>
       <Button
         tone="primary"
-        :disabled="!!createDisabledReason"
+        :disabled="!!createDisabledReason || creating"
         :title="createDisabledReason"
         @click="handleSubmit"
       >
-        {{ $t('session.dialog.confirm') }}
+        {{ creating ? $t('session.dialog.creating') : $t('session.dialog.confirm') }}
       </Button>
     </template>
   </ModalDialog>
@@ -145,6 +142,7 @@ import { useOverlayStack } from '@/composables/useOverlayStack'
 import Button from '@/components/ui/Button.vue'
 import ModalDialog from '@/components/ui/ModalDialog.vue'
 import SessionOptionsForm from '@/components/SessionOptionsForm.vue'
+import CliTypeIcon from '@/components/CliTypeIcon.vue'
 import { ipc } from '@/api/ipc'
 import { LOCAL_INSTANCE_ID } from '@/models/unified-resource'
 import { SESSION_EMOJI_LIST } from '@/models/session-emoji'
@@ -201,7 +199,7 @@ const optionsFormRef = ref<InstanceType<typeof SessionOptionsForm> | null>(null)
 const pathError = ref('')
 const showEmojiPicker = ref(false)
 const emojiPickerPos = ref({ top: 0, left: 0 })
-const showAdvancedOptions = ref(false)
+const creating = ref(false)
 
 const EMOJI_GRID_WIDTH = 280
 const EMOJI_GRID_MAX_HEIGHT = 248
@@ -291,7 +289,7 @@ watch(
       projectPath: props.targetProjectPath || props.defaultProjectPath || ''
     }
     showEmojiPicker.value = false
-    showAdvancedOptions.value = false
+    creating.value = false
     pathError.value = ''
     refreshCliStatus()
   }
@@ -327,6 +325,7 @@ async function selectFolder() {
 }
 
 async function handleSubmit() {
+  if (creating.value) return
   if (createDisabledReason.value) {
     toast.warning(createDisabledReason.value)
     return
@@ -346,13 +345,13 @@ async function handleSubmit() {
   }
 
   let options = optionsFormRef.value?.buildOptions() ?? {}
-  if (form.value.type === 'opencode') {
-    const cliPath = settingsStore.settings.opencodePath?.trim()
-    if (cliPath && !options.cliPath) {
-      options = { cliPath, ...options }
-    }
+  const configuredPath = settingsStore.settings[`${form.value.type}Path` as keyof typeof settingsStore.settings]
+  const cliPath = typeof configuredPath === 'string' ? configuredPath.trim() : ''
+  if (cliPath && !options.cliPath && instanceId === LOCAL_INSTANCE_ID) {
+    options = { cliPath, ...options }
   }
 
+  creating.value = true
   try {
     if (optionsFormRef.value?.hasOpencodeConflict()) {
       toast.warning(t('session.dialog.opencodeConflictHint'))
@@ -383,24 +382,45 @@ async function handleSubmit() {
     })
   } catch (e: unknown) {
     toast.error(t('toast.operationFailed') + ': ' + (e instanceof Error ? e.message : String(e)))
+  } finally {
+    creating.value = false
   }
 }
 </script>
 
 <style scoped lang="scss">
-.form-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
+.basic-info-section {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
+
+.basic-section-head,
+.basic-section-head h4,
+.basic-section-head p {
+  display: none;
+}
+
+.basic-fields-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.9fr);
+  gap: 6px;
+  align-items: start;
+}
+
+.project-field,
+.name-field {
+  min-width: 0;
+}
+
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: 4px;
 
   label {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
     color: var(--text-secondary);
   }
 }
@@ -412,22 +432,27 @@ async function handleSubmit() {
   align-items: center;
   gap: var(--spacing-xs);
   flex: 1 1 auto;
-  max-width: 480px;
+  width: 100%;
+  max-width: none;
   min-width: 0;
   height: 42px;
   padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg-primary) 70%, var(--bg-secondary));
+  background: var(--bg-secondary);
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .type-option {
-  display: grid;
-  place-items: center;
-  flex: 1 1 0;
-  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex: 0 0 48px;
+  min-width: 48px;
   height: 100%;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -441,30 +466,49 @@ async function handleSubmit() {
   overflow: hidden;
   user-select: none;
   transition:
+    flex-basis var(--transition-fast),
+    gap var(--transition-fast),
     background var(--transition-fast),
     border-color var(--transition-fast),
     color var(--transition-fast);
 
-  span {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   &:hover {
     color: var(--text-primary);
-    background: var(--bg-tertiary);
+    background: var(--bg-hover);
   }
 
   &.active {
-    border-color: color-mix(in srgb, var(--accent-primary) 36%, var(--border-color));
-    background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-tertiary));
+    flex-basis: 132px;
+    gap: 6px;
+    border-color: color-mix(in srgb, var(--accent-primary) 42%, var(--border-color));
+    background: color-mix(in srgb, var(--accent-primary) 18%, var(--bg-card));
     color: var(--text-primary);
   }
+}
+
+.type-option-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border: 1px solid color-mix(in srgb, var(--border-light) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.type-option-label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: max-width var(--transition-fast), opacity var(--transition-fast);
+}
+
+.type-option.active .type-option-label {
+  max-width: 82px;
+  opacity: 1;
 }
 
 .cli-status-row {
@@ -511,48 +555,9 @@ async function handleSubmit() {
   font-size: var(--font-size-xs);
 }
 
-.advanced-block {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg-tertiary) 42%, transparent);
-  overflow: hidden;
-}
-
-.advanced-toggle {
-  width: 100%;
-  height: 36px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  border: none;
-  cursor: pointer;
-
-  &:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-}
-
-.advanced-toggle-icon {
-  transition: transform var(--transition-fast);
-
-  &.open {
-    transform: rotate(90deg);
-  }
-}
-
-.advanced-fields {
-  padding: var(--spacing-md) 12px;
-  border-top: 1px solid var(--border-color);
-}
-
 .path-input {
   display: flex;
-  gap: var(--spacing-sm);
+  gap: 6px;
 
   .form-input {
     flex: 1;
@@ -563,7 +568,7 @@ async function handleSubmit() {
 .name-row {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: 3px;
 
   .form-input {
     flex: 1;
@@ -631,13 +636,27 @@ async function handleSubmit() {
   font-size: 12px;
 }
 
-@media (max-width: 560px) {
-  .type-selector {
-    max-width: none;
+@media (max-width: 640px) {
+  .type-option.active {
+    flex-basis: 48px;
+    gap: 0;
+  }
+
+  .type-option.active .type-option-label {
+    max-width: 0;
+    opacity: 0;
   }
 
   .path-input {
     flex-direction: column;
+  }
+
+  .basic-fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .path-input :deep(.ui-button) {
+    width: 100%;
   }
 }
 </style>

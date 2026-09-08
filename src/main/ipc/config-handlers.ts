@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { ConfigService } from '../services/config-service'
+import { isEditableCliType } from '../services/config-paths'
 import { ProjectManager } from '../services/project-manager'
 
 // SEC-6：项目级配置读写必须限定在已注册项目内——否则被攻破的 renderer
@@ -14,6 +15,20 @@ function assertRegisteredProject(projectManager: ProjectManager, projectPath: st
 }
 
 export function registerConfigHandlers(configService: ConfigService, projectManager: ProjectManager): void {
+  ipcMain.handle('config:cli:read', (_event, cliType: unknown) => {
+    if (!isEditableCliType(cliType)) throw new Error('参数 cliType 必须为支持配置编辑的 CLI')
+    return configService.readConfig(cliType)
+  })
+
+  ipcMain.handle('config:cli:write', (_event, cliType: unknown, content: unknown, expectedRevision?: unknown) => {
+    if (!isEditableCliType(cliType)) throw new Error('参数 cliType 必须为支持配置编辑的 CLI')
+    if (typeof content !== 'string') throw new Error('参数 content 必须为字符串')
+    if (expectedRevision !== undefined && expectedRevision !== null && typeof expectedRevision !== 'string') {
+      throw new Error('参数 expectedRevision 必须为字符串或 null')
+    }
+    return configService.writeConfig(cliType, content, expectedRevision as string | null | undefined)
+  })
+
   ipcMain.handle('config:claude:read', () => {
     return configService.getClaudeGlobalConfig()
   })

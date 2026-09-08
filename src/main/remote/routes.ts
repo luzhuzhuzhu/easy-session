@@ -18,6 +18,7 @@ import type {
   RemoteSessionOutputHistoryResponse,
   RemoteSuccessBody
 } from './types'
+import type { Session } from '../services/session-types'
 import { buildRemoteCapabilityMap } from './capabilities'
 import { renderLoginPage, renderSessionsPage } from './web'
 import { isCliType, type CliType } from '../../shared/cli-types'
@@ -69,12 +70,18 @@ function parseSessionListFilter(req: Request): {
   } = {}
 
   const typeRaw = req.query.type
-  if (isCliType(typeRaw)) {
+  if (typeRaw !== undefined) {
+    if (!isCliType(typeRaw)) {
+      throw new HttpError(400, 'BAD_REQUEST', 'type must be a supported CLI type')
+    }
     filter.type = typeRaw
   }
 
   const statusRaw = req.query.status
-  if (typeof statusRaw === 'string' && ['idle', 'running', 'stopped', 'error'].includes(statusRaw)) {
+  if (statusRaw !== undefined) {
+    if (typeof statusRaw !== 'string' || !['idle', 'running', 'stopped', 'error'].includes(statusRaw)) {
+      throw new HttpError(400, 'BAD_REQUEST', 'status must be idle, running, stopped, or error')
+    }
     filter.status = statusRaw as 'idle' | 'running' | 'stopped' | 'error'
   }
 
@@ -145,7 +152,10 @@ function parseCreateBody(body: unknown): RemoteSessionCreateBody {
     projectPath: typeof candidate.projectPath === 'string' ? candidate.projectPath.trim() : undefined,
     name: typeof candidate.name === 'string' && candidate.name.trim() ? candidate.name.trim() : undefined,
     icon: typeof candidate.icon === 'string' ? candidate.icon : undefined,
-    options: typeof candidate.options === 'object' && candidate.options ? (candidate.options as Record<string, unknown>) : {},
+    options:
+      typeof candidate.options === 'object' && candidate.options && !Array.isArray(candidate.options)
+        ? (candidate.options as Record<string, unknown>)
+        : {},
     parentId: typeof candidate.parentId === 'string' ? candidate.parentId.trim() : undefined,
     startPaused
   }
@@ -157,6 +167,40 @@ function parseCreateBody(body: unknown): RemoteSessionCreateBody {
   return parsed
 }
 
+function parseSessionOptionsBody(body: unknown): Record<string, unknown> {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new HttpError(400, 'BAD_REQUEST', 'Body must be an object')
+  }
+
+  const candidate = body as Record<string, unknown>
+  if (Object.prototype.hasOwnProperty.call(candidate, 'options')) {
+    if (!candidate.options || typeof candidate.options !== 'object' || Array.isArray(candidate.options)) {
+      throw new HttpError(400, 'BAD_REQUEST', 'options must be a plain object')
+    }
+    return candidate.options as Record<string, unknown>
+  }
+
+  return candidate
+}
+
+function parseNativeIdBody(body: unknown): { cliType: CliType; value: string | null } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new HttpError(400, 'BAD_REQUEST', 'Body must be an object')
+  }
+
+  const candidate = body as Record<string, unknown>
+  if (!isCliType(candidate.cliType) || candidate.cliType === 'terminal') {
+    throw new HttpError(400, 'BAD_REQUEST', 'cliType must be a supported non-terminal CLI type')
+  }
+  if (candidate.value !== null && typeof candidate.value !== 'string') {
+    throw new HttpError(400, 'BAD_REQUEST', 'value must be a string or null')
+  }
+
+  return {
+    cliType: candidate.cliType,
+    value: candidate.value
+  }
+}
 function parseProjectCreateBody(body: unknown): RemoteProjectCreateBody {
   if (!body || typeof body !== 'object') {
     throw new HttpError(400, 'BAD_REQUEST', 'Body must be an object')
@@ -659,6 +703,35 @@ export function registerRemoteRoutes(
     })
   )
 
+  app.get(
+    '/api/sessions/native-id-candidates',
+    withHandler(async (req, res) => {
+      const cliTypeRaw = req.query.cliType
+      if (!isCliType(cliTypeRaw) || cliTypeRaw === 'terminal') {
+        throw new HttpError(400, 'BAD_REQUEST', 'cliType must be a supported non-terminal CLI type')
+      }
+      const projectPathRaw = req.query.projectPath
+      const projectPath = typeof projectPathRaw === 'string' ? projectPathRaw.trim() : ''
+      if (!projectPath) {
+        sendSuccess(res, getRequestId(req), [])
+        return
+      }
+      const preferredPathRaw = req.query.preferredPath
+      const preferredPath = typeof preferredPathRaw === 'string' ? preferredPathRaw.trim() : undefined
+      if (deps.nativeSessionCandidates) {
+        const candidates = await deps.nativeSessionCandidates(cliTypeRaw, projectPath, preferredPath, 40)
+        sendSuccess(res, getRequestId(req), candidates)
+        return
+      }
+      if (cliTypeRaw !== 'opencode' || !deps.openCodeAdapter) {
+        sendSuccess(res, getRequestId(req), [])
+        return
+      }
+      const candidates = await deps.openCodeAdapter.collectSessionCandidatesByPath(projectPath, preferredPath, 40)
+      sendSuccess(res, getRequestId(req), candidates)
+    })
+  )
+
   // UX-10：已退出会话的 journal 尾部（只读，不受 passthroughOnly 限制——
   // journal 是事后取证数据，不含可执行能力）。
   app.get(
@@ -709,6 +782,30 @@ export function registerRemoteRoutes(
         parentId: body.parentId,
         startPaused: body.startPaused
       } as any)
+      sendSuccess(res, getRequestId(req), toRemoteSessionDto(deps, session))
+    })
+  )
+
+  app.patch(
+    '/api/sessions/:id/options',
+    withHandler(async (req, res) => {
+      assertLifecycleAllowed(passthroughOnly)
+      const id = getRouteParam(req, 'id')
+      const options = parseSessionOptionsBody(req.body)
+      const session = deps.sessionManager.updateSessionOptions(id, options as Session['options'])
+      if (!session) throw new HttpError(404, 'SESSION_NOT_FOUND', `Session not found: ${id}`)
+      sendSuccess(res, getRequestId(req), toRemoteSessionDto(deps, session))
+    })
+  )
+
+  app.put(
+    '/api/sessions/:id/native-id',
+    withHandler(async (req, res) => {
+      assertLifecycleAllowed(passthroughOnly)
+      const id = getRouteParam(req, 'id')
+      const body = parseNativeIdBody(req.body)
+      const session = deps.sessionManager.setNativeSessionId(id, body.cliType, body.value)
+      if (!session) throw new HttpError(404, 'SESSION_NOT_FOUND', `Session not found: ${id}`)
       sendSuccess(res, getRequestId(req), toRemoteSessionDto(deps, session))
     })
   )

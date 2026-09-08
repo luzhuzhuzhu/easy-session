@@ -3,7 +3,7 @@ import type { ProjectManager } from '../services/project-manager'
 import type { Project } from '../services/project-types'
 import type { OutputLine, SessionOutputManager } from '../services/session-output'
 import type { Session, SessionFilter } from '../services/session-types'
-import type { CliType } from '../services/types'
+import type { CliType } from '../../shared/cli-types'
 import type {
   RemoteServiceEnvOverrides,
   RemoteServiceTokenMode
@@ -26,10 +26,37 @@ export interface RemoteRuntimeConfig {
   baseUrl: string
 }
 
+export interface NativeSessionCandidate {
+  id: string
+  title?: string
+  content?: string
+  updated?: number
+  projectPath?: string
+}
+
+export interface NativeSessionCandidatesResponse {
+  supported: boolean
+  candidates: NativeSessionCandidate[]
+  error?: string
+}
+
 export interface RemoteDependencies {
   sessionManager: SessionManager
   projectManager: ProjectManager
   outputManager: SessionOutputManager
+  nativeSessionCandidates?: (
+    cliType: CliType,
+    projectPath: string,
+    preferredPath?: string,
+    maxCount?: number
+  ) => Promise<NativeSessionCandidate[]>
+  openCodeAdapter?: {
+    collectSessionCandidatesByPath(
+      projectPath: string,
+      preferredPath?: string,
+      maxCount?: number
+    ): Promise<NativeSessionCandidate[]>
+  }
 }
 
 export interface RemoteServerInfo {

@@ -7,7 +7,8 @@ import type { GrokSessionOptions } from './types'
 // Grok Build（x.ai 官方 grok CLI，npm @xai-official/grok）：
 // -r/--resume <SESSION_ID|title>、-c 续当前目录最近会话、-m/--model、
 // --permission-mode default|acceptEdits|auto|dontAsk|bypassPermissions|plan、
-// --effort low..max。会话列表：`grok sessions list -n <N>`（纯文本，无 --json）。
+// --effort low..max。会话列表：`grok sessions list -n <N>`（纯文本表格，无 --json；
+// provider 必须固定 cwd 并严格校验表头/列，未知版本格式按 unsupported/error 处理）。
 export class GrokAdapter {
   private cliManager: CliManager
   private appendSystemPrompt: string | null = null
@@ -50,7 +51,7 @@ export class GrokAdapter {
     args.push(...custom)
 
     const executable = this.resolveExecutable(options)
-    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined })
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined, cliType: 'grok' })
     return id
   }
 

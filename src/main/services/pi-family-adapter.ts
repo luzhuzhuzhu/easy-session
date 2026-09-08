@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { exec } from 'child_process'
 import { CliManager } from './cli-manager'
 import { normalizeCustomCliArgs } from './cli-args'
+import type { CliType } from '../../shared/cli-types'
 import type { PiSessionOptions } from './types'
 
 // 「pi 系」adapter 基类：pi 与 omp（oh-my-pi）同源，启动参数仅 resume 形态不同。
@@ -10,15 +11,17 @@ export class PiFamilyAdapter {
   protected cliManager: CliManager
   private appendSystemPrompt: string | null = null
   private readonly idPrefix: string
+  private readonly cliType: CliType
   private readonly command: string
   private readonly versionLabel: string
 
   constructor(
     cliManager: CliManager,
-    opts: { idPrefix: string; command: string; versionLabel: string }
+    opts: { idPrefix: 'pi' | 'omp'; command: string; versionLabel: string }
   ) {
     this.cliManager = cliManager
     this.idPrefix = opts.idPrefix
+    this.cliType = opts.idPrefix
     this.command = opts.command
     this.versionLabel = opts.versionLabel
   }
@@ -48,7 +51,7 @@ export class PiFamilyAdapter {
     const id = `${this.idPrefix}-${randomUUID()}`
     const args: string[] = this.buildArgs(options, resumeId)
     const executable = this.resolveExecutable(options)
-    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined, cliType: this.idPrefix as never })
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined, cliType: this.cliType })
     return id
   }
 

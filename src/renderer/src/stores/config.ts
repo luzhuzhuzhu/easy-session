@@ -1,104 +1,125 @@
+import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
 import {
-  readClaudeConfig,
-  writeClaudeConfig,
-  readCodexConfig,
-  writeCodexConfig,
-  readOpenCodeConfig,
-  writeOpenCodeConfig
+  readCliConfig,
+  writeCliConfig,
+  type ConfigCliType,
+  type ConfigDocument
 } from '@/api/config'
 
-export const useConfigStore = defineStore('config', () => {
-  const claudeConfig = ref<Record<string, unknown>>({})
-  const codexConfig = ref<Record<string, unknown>>({})
-  const opencodeConfig = ref<Record<string, unknown>>({})
-  const loading = ref(false)
-  const loadingCount = ref(0)
-  const loadedTabs = ref({
-    claude: false,
-    codex: false,
-    opencode: false
-  })
-  const lastSaved = ref<string | null>(null)
-  const activeTab = ref<'claude' | 'codex' | 'opencode'>('claude')
+export const CONFIG_CLI_TYPES: readonly ConfigCliType[] = [
+  'claude',
+  'codex',
+  'opencode',
+  'gemini',
+  'pi',
+  'omp',
+  'grok',
+  'hermes'
+]
 
-  function setActiveTab(tab: 'claude' | 'codex' | 'opencode') {
+function keyed<T>(create: () => T): Record<ConfigCliType, T> {
+  return Object.fromEntries(CONFIG_CLI_TYPES.map((cliType) => [cliType, create()])) as Record<ConfigCliType, T>
+}
+
+function legacyConfig(document: ConfigDocument | null): Record<string, unknown> {
+  if (!document?.content.trim()) return {}
+  try {
+    const value: unknown = JSON.parse(document.content)
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+export const useConfigStore = defineStore('config', () => {
+  const documents = reactive<Record<ConfigCliType, ConfigDocument | null>>(keyed(() => null))
+  const loaded = reactive<Record<ConfigCliType, boolean>>(keyed(() => false))
+  const loading = reactive<Record<ConfigCliType, boolean>>(keyed(() => false))
+  const saving = reactive<Record<ConfigCliType, boolean>>(keyed(() => false))
+  const lastSaved = reactive<Record<ConfigCliType, string | null>>(keyed(() => null))
+  const activeTab = ref<ConfigCliType>('claude')
+
+  // Compatibility aliases retained for callers built against the original three-CLI store.
+  const claudeConfig = computed(() => legacyConfig(documents.claude))
+  const codexConfig = computed(() => legacyConfig(documents.codex))
+  const opencodeConfig = computed(() => legacyConfig(documents.opencode))
+
+  function setActiveTab(tab: ConfigCliType): void {
     activeTab.value = tab
   }
 
-  function beginLoading() {
-    loadingCount.value += 1
-    loading.value = loadingCount.value > 0
-  }
+  async function loadConfig(cliType: ConfigCliType, force = false): Promise<ConfigDocument> {
+    if (!force && loaded[cliType] && documents[cliType]) return documents[cliType]
+    if (loading[cliType] && documents[cliType]) return documents[cliType]
 
-  function endLoading() {
-    loadingCount.value = Math.max(0, loadingCount.value - 1)
-    loading.value = loadingCount.value > 0
-  }
-
-  async function loadClaudeConfig(force = false) {
-    if (!force && loadedTabs.value.claude) return
-    beginLoading()
+    loading[cliType] = true
     try {
-      claudeConfig.value = (await readClaudeConfig()) as Record<string, unknown>
-      loadedTabs.value.claude = true
+      const document = await readCliConfig(cliType)
+      documents[cliType] = document
+      loaded[cliType] = true
+      return document
     } finally {
-      endLoading()
+      loading[cliType] = false
     }
   }
 
-  async function saveClaudeConfig(config: Record<string, unknown>) {
-    await writeClaudeConfig(config)
-    claudeConfig.value = config
-    loadedTabs.value.claude = true
-    lastSaved.value = new Date().toLocaleString('zh-CN')
-  }
-
-  async function loadCodexConfig(force = false) {
-    if (!force && loadedTabs.value.codex) return
-    beginLoading()
+  async function saveConfig(
+    cliType: ConfigCliType,
+    content: string,
+    expectedRevision?: string | null
+  ): Promise<ConfigDocument> {
+    saving[cliType] = true
     try {
-      codexConfig.value = (await readCodexConfig()) as Record<string, unknown>
-      loadedTabs.value.codex = true
+      const document = await writeCliConfig(cliType, content, expectedRevision)
+      documents[cliType] = document
+      loaded[cliType] = true
+      lastSaved[cliType] = new Date().toLocaleString('zh-CN')
+      return document
     } finally {
-      endLoading()
+      saving[cliType] = false
     }
   }
 
-  async function saveCodexConfig(config: Record<string, unknown>) {
-    await writeCodexConfig(config)
-    codexConfig.value = config
-    loadedTabs.value.codex = true
-    lastSaved.value = new Date().toLocaleString('zh-CN')
+  function loadClaudeConfig(force = false) {
+    return loadConfig('claude', force)
   }
 
-  async function loadOpenCodeConfig(force = false) {
-    if (!force && loadedTabs.value.opencode) return
-    beginLoading()
-    try {
-      opencodeConfig.value = (await readOpenCodeConfig()) as Record<string, unknown>
-      loadedTabs.value.opencode = true
-    } finally {
-      endLoading()
-    }
+  function loadCodexConfig(force = false) {
+    return loadConfig('codex', force)
   }
 
-  async function saveOpenCodeConfig(config: Record<string, unknown>) {
-    await writeOpenCodeConfig(config)
-    opencodeConfig.value = config
-    loadedTabs.value.opencode = true
-    lastSaved.value = new Date().toLocaleString('zh-CN')
+  function loadOpenCodeConfig(force = false) {
+    return loadConfig('opencode', force)
+  }
+
+  function saveClaudeConfig(config: Record<string, unknown>) {
+    return saveConfig('claude', JSON.stringify(config, null, 2), documents.claude?.revision)
+  }
+
+  function saveCodexConfig(config: Record<string, unknown>) {
+    return saveConfig('codex', JSON.stringify(config, null, 2), documents.codex?.revision)
+  }
+
+  function saveOpenCodeConfig(config: Record<string, unknown>) {
+    return saveConfig('opencode', JSON.stringify(config, null, 2), documents.opencode?.revision)
   }
 
   return {
+    documents,
+    loaded,
+    loading,
+    saving,
+    lastSaved,
+    activeTab,
     claudeConfig,
     codexConfig,
     opencodeConfig,
-    loading,
-    lastSaved,
-    activeTab,
     setActiveTab,
+    loadConfig,
+    saveConfig,
     loadClaudeConfig,
     saveClaudeConfig,
     loadCodexConfig,

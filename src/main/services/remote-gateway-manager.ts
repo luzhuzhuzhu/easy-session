@@ -6,7 +6,9 @@ import type { OutputLine } from './session-output'
 import { RemoteInstanceManager } from './remote-instance-manager'
 import type { RemoteCapabilitiesResponse } from '../remote/types'
 import type { RemoteInstanceRecord } from './remote-instance-types'
+import type { CliType } from '../../shared/cli-types'
 type RemoteProjectPromptCliType = 'claude' | 'codex'
+
 
 interface RemoteProjectPromptFile {
   path: string
@@ -27,7 +29,7 @@ interface RemoteSessionDto {
   id: string
   name: string
   icon: string | null
-  type: 'claude' | 'codex' | 'opencode' | 'terminal'
+  type: CliType
   projectId: string | null
   projectPath: string
   status: SessionStatus
@@ -42,6 +44,11 @@ interface RemoteSessionDto {
   claudeSessionId?: string | null
   codexSessionId?: string | null
   opencodeSessionId?: string | null
+  geminiSessionId?: string | null
+  piSessionId?: string | null
+  ompSessionId?: string | null
+  grokSessionId?: string | null
+  hermesSessionId?: string | null
 }
 
 interface OutputHistoryResponse {
@@ -87,6 +94,9 @@ export type RemoteGatewayInvokeMethod =
   | 'listSessions'
   | 'getSession'
   | 'getOutputHistory'
+  | 'updateSessionOptions'
+  | 'setNativeSessionId'
+  | 'getNativeIdCandidates'
   | 'writeRaw'
   | 'resize'
   | 'listProjects'
@@ -544,6 +554,41 @@ class RemoteGatewayClient {
     return response.lines
   }
 
+  async updateSessionOptions(sessionId: string, options: Record<string, unknown>): Promise<RemoteSessionDto | null> {
+    try {
+      return await this.requestJson<RemoteSessionDto>(`/api/sessions/${sessionId}/options`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ options })
+      })
+    } catch (error) {
+      if (this.isHttpStatus(error, 404)) return null
+      throw error
+    }
+  }
+
+  async setNativeSessionId(sessionId: string, cliType: CliType, value: string | null): Promise<RemoteSessionDto | null> {
+    try {
+      return await this.requestJson<RemoteSessionDto>(`/api/sessions/${sessionId}/native-id`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cliType, value })
+      })
+    } catch (error) {
+      if (this.isHttpStatus(error, 404)) return null
+      throw error
+    }
+  }
+
+  async getNativeIdCandidates(cliType: CliType, projectPath?: string, preferredPath?: string): Promise<Array<{ id: string; title: string; updated: number }>> {
+    const query = new URLSearchParams({ cliType })
+    if (projectPath) query.set('projectPath', projectPath)
+    if (preferredPath) query.set('preferredPath', preferredPath)
+    return this.requestJson<Array<{ id: string; title: string; updated: number }>>(
+      `/api/sessions/native-id-candidates?${query.toString()}`
+    )
+  }
+
   subscribeOutput(sessionId: string, listener: (event: RemoteGatewayOutputEvent) => void): () => void {
     let listeners = this.outputListenersBySession.get(sessionId)
     if (!listeners) {
@@ -727,6 +772,12 @@ export class RemoteGatewayManager {
         return client.getSession(args[0] as string)
       case 'getOutputHistory':
         return client.getOutputHistory(args[0] as string, args[1] as number | undefined)
+      case 'updateSessionOptions':
+        return client.updateSessionOptions(args[0] as string, args[1] as Record<string, unknown>)
+      case 'setNativeSessionId':
+        return client.setNativeSessionId(args[0] as string, args[1] as CliType, args[2] as string | null)
+      case 'getNativeIdCandidates':
+        return client.getNativeIdCandidates(args[0] as CliType, args[1] as string | undefined, args[2] as string | undefined)
       case 'writeRaw':
         return client.writeRaw(args[0] as string, args[1] as string)
       case 'resize':

@@ -25,14 +25,18 @@ export class CodexSessionLifecycle implements ISessionLifecycle {
   }
 
   create(id: string, name: string, params: CreateSessionParams): CodexSession {
-    const now = Date.now()
     const options = (params.options || {}) as CodexSessionOptions
+    const configuredId = typeof options.resumeId === 'string' ? options.resumeId.trim() : ''
+    if (configuredId) options.resumeId = configuredId
+    const now = Date.now()
 
     let processId: string | null = null
     let status: 'running' | 'error' = 'running'
 
     try {
-      processId = this.codexAdapter.startSession(params.projectPath, options)
+      processId = configuredId
+        ? this.codexAdapter.resumeSession(params.projectPath, options, configuredId)
+        : this.codexAdapter.startSession(params.projectPath, options)
     } catch (err) {
       status = 'error'
       const errMsg = err instanceof Error ? err.message : String(err)
@@ -52,7 +56,7 @@ export class CodexSessionLifecycle implements ISessionLifecycle {
       processId,
       options,
       parentId: params.parentId || null,
-      codexSessionId: null
+      codexSessionId: configuredId || null
     }
   }
 

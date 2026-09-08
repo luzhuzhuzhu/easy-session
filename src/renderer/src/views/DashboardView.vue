@@ -6,25 +6,27 @@
     </div>
 
     <div class="cli-sections">
-      <div
+      <button
         v-for="cli in DASHBOARD_CLI_TYPES"
         :key="cli.id"
+        type="button"
         class="card cli-card clickable"
-        @click="toggleCliConfig(cli.id)"
+        :aria-expanded="activeCli === cli.id"
+        @click="handleCliCard(cli.id)"
       >
         <div class="card-header">
-          <h3>{{ $t(cli.statusKey) }}</h3>
+          <h3><CliTypeIcon :type="cli.id" /><span class="cli-card-name">{{ cli.label }}</span></h3>
           <UiIcon class="chevron" :class="{ rotated: activeCli === cli.id }" name="chevron-down" />
         </div>
         <div class="cli-status">
-          <span class="indicator" :class="statusClass(appStore.cliAvailable[cli.id], checking)"></span>
-          <span class="status-text">{{ statusText(appStore.cliAvailable[cli.id], checking) }}</span>
+          <span class="indicator" :class="statusClass(appStore.cliAvailable[cli.id], appStore.cliChecking)"></span>
+          <span class="status-text">{{ statusText(appStore.cliAvailable[cli.id], appStore.cliChecking) }}</span>
         </div>
-        <div v-if="!checking && appStore.cliAvailable[cli.id]" class="cli-detail">
-          <div v-if="appStore.cliInfo[cli.id]?.path"><span class="label">{{ $t('dashboard.cliPath') }}</span> <code>{{ appStore.cliInfo[cli.id]?.path }}</code></div>
+        <div v-if="!appStore.cliChecking && appStore.cliAvailable[cli.id]" class="cli-detail">
+          <div v-if="appStore.cliInfo[cli.id]?.path"><span class="label">{{ $t('dashboard.cliPath') }}</span> <code :title="appStore.cliInfo[cli.id]?.path">{{ appStore.cliInfo[cli.id]?.path }}</code></div>
           <div v-if="appStore.cliInfo[cli.id]?.version"><span class="label">{{ $t('dashboard.cliVersion') }}</span> {{ appStore.cliInfo[cli.id]?.version }}</div>
         </div>
-      </div>
+      </button>
     </div>
 
     <div v-if="activeCli" class="fullwidth-config">
@@ -94,13 +96,15 @@ import { useAppStore } from '@/stores/app'
 import { useProjectsStore } from '@/stores/projects'
 import { useSessionsStore } from '@/stores/sessions'
 import { useInstancesStore } from '@/stores/instances'
-import { useConfigStore } from '@/stores/config'
+import { useConfigStore, CONFIG_CLI_TYPES } from '@/stores/config'
 import { selectFolder } from '@/api/local-project'
 import { useToast } from '@/composables/useToast'
 import ConfigEditorPanel from '@/components/ConfigEditorPanel.vue'
+import CliTypeIcon from '@/components/CliTypeIcon.vue'
 import Button from '@/components/ui/Button.vue'
 import UiIcon from '@/components/ui/UiIcon.vue'
 import { buildProjectRouteLocation } from '@/utils/project-routing'
+import { CLI_TYPES, CLI_TYPE_DISPLAY_NAMES, type CliType } from '@shared/cli-types'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -111,15 +115,15 @@ const sessionsStore = useSessionsStore()
 const instancesStore = useInstancesStore()
 const configStore = useConfigStore()
 const toast = useToast()
-const checking = ref(true)
-const activeCli = ref<'claude' | 'codex' | 'opencode' | null>(null)
+type ConfigurableCli = Exclude<CliType, 'terminal'>
+const activeCli = ref<ConfigurableCli | null>(null)
 
-// FEAT-1：CLI 状态卡片按注册表循环渲染。
-const DASHBOARD_CLI_TYPES = [
-  { id: 'claude' as const, statusKey: 'dashboard.claudeStatus' },
-  { id: 'codex' as const, statusKey: 'dashboard.codexStatus' },
-  { id: 'opencode' as const, statusKey: 'dashboard.opencodeStatus' }
-]
+const DASHBOARD_CLI_TYPES = CLI_TYPES
+  .filter((id): id is Exclude<CliType, 'terminal'> => id !== 'terminal')
+  .map((id) => ({
+    id,
+    label: CLI_TYPE_DISPLAY_NAMES[id]
+  }))
 
 const runningSessions = computed(() =>
   sessionsStore.unifiedSessions.filter((session) => session.status === 'running').length
@@ -144,14 +148,14 @@ function queryPanelValue(): string {
 
 function syncPanelFromQuery(): void {
   const panel = queryPanelValue()
-  if (panel === 'claude' || panel === 'codex' || panel === 'opencode') {
-    activeCli.value = panel
+  if (CONFIG_CLI_TYPES.includes(panel as ConfigurableCli)) {
+    activeCli.value = panel as ConfigurableCli
   } else {
     activeCli.value = null
   }
 }
 
-function replacePanelQuery(cli: 'claude' | 'codex' | 'opencode' | null): void {
+function replacePanelQuery(cli: ConfigurableCli | null): void {
   const nextQuery: LocationQueryRaw = { ...route.query }
   if (cli) {
     nextQuery.panel = cli
@@ -161,7 +165,7 @@ function replacePanelQuery(cli: 'claude' | 'codex' | 'opencode' | null): void {
   void router.replace({ path: '/dashboard', query: nextQuery })
 }
 
-function toggleCliConfig(cli: 'claude' | 'codex' | 'opencode') {
+function toggleCliConfig(cli: ConfigurableCli) {
   configStore.setActiveTab(cli)
   if (activeCli.value === cli) {
     activeCli.value = null
@@ -170,6 +174,10 @@ function toggleCliConfig(cli: 'claude' | 'codex' | 'opencode') {
     activeCli.value = cli
     replacePanelQuery(cli)
   }
+}
+
+function handleCliCard(cli: Exclude<CliType, 'terminal'>): void {
+  toggleCliConfig(cli)
 }
 
 async function handleNewProject() {
@@ -193,12 +201,11 @@ onMounted(async () => {
   syncPanelFromQuery()
   await appStore.init()
   await instancesStore.fetchInstances()
-  await Promise.all([
+  await Promise.allSettled([
     appStore.checkCliStatus(),
     projectsStore.fetchAllProjects(),
     sessionsStore.fetchAllSessions()
   ])
-  checking.value = false
 })
 
 watch(
@@ -235,11 +242,11 @@ watch(
 }
 
 .cli-sections {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
   gap: var(--spacing-md);
   padding: var(--spacing-md);
   flex-shrink: 0;
-  overflow-x: auto;
 }
 
 .fullwidth-config {
@@ -255,8 +262,12 @@ watch(
   transition: all var(--transition-fast);
 
   &.cli-card {
-    flex: 1;
-    min-width: 200px;
+    width: 100%;
+    min-width: 0;
+    min-height: 112px;
+    text-align: left;
+    color: inherit;
+    font: inherit;
   }
 
   &.clickable {
@@ -285,19 +296,34 @@ watch(
   margin-bottom: var(--spacing-sm);
 
   h3 {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
     margin-bottom: 0;
+
+    :deep(.cli-type-icon) {
+      width: 17px;
+      height: 17px;
+      color: var(--text-secondary);
+    }
   }
 
-  .chevron {
+  .chevron,
+  .settings-shortcut {
     width: 12px;
     height: 12px;
     color: var(--text-muted);
     transition: transform var(--transition-fast);
+  }
 
-    &.rotated {
-      transform: rotate(180deg);
-      color: var(--accent-primary);
-    }
+  .chevron.rotated {
+    transform: rotate(180deg);
+    color: var(--accent-primary);
+  }
+
+  .settings-shortcut {
+    opacity: 0.72;
   }
 }
 
@@ -340,11 +366,17 @@ watch(
   }
 
   code {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
     font-family: var(--font-mono);
     font-size: var(--font-size-xs);
     background: var(--bg-tertiary);
     padding: 2px 6px;
     border-radius: var(--radius-xs);
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+    white-space: nowrap;
   }
 
   div + div { margin-top: 4px; }

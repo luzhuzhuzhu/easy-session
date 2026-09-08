@@ -10,7 +10,11 @@ import {
   resizeTerminal,
   restartSession,
   startSession,
+  updateSessionOptions,
+  setSessionNativeId,
+  getNativeIdCandidates,
   writeToSession,
+  type Session,
   type OutputLine,
   type SessionFilter
 } from '../api/local-session'
@@ -235,6 +239,23 @@ export class LocalGateway implements Gateway {
       passthroughOnly: false,
       capabilities: createFullCapabilities()
     }
+  }
+
+  async updateSessionOptions(instanceId: string, sessionId: string, options: Record<string, unknown>): Promise<UnifiedSession | null> {
+    assertLocalInstance(instanceId)
+    const session = await updateSessionOptions(sessionId, options)
+    return session ? toUnifiedSession(session) : null
+  }
+
+  async setNativeSessionId(instanceId: string, sessionId: string, cliType: Session['type'], value: string | null): Promise<UnifiedSession | null> {
+    assertLocalInstance(instanceId)
+    const session = await setSessionNativeId(sessionId, cliType, value)
+    return session ? toUnifiedSession(session) : null
+  }
+
+  async getNativeIdCandidates(instanceId: string, cliType: Session['type'], projectPath?: string, preferredPath?: string) {
+    assertLocalInstance(instanceId)
+    return getNativeIdCandidates(cliType, projectPath, preferredPath)
   }
 
   async clearOutput(instanceId: string, sessionId: string): Promise<void> {

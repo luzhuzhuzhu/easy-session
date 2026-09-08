@@ -115,9 +115,14 @@ export class SessionManager {
       grok: this.grokLifecycle || createNoopLifecycle('Grok'),
       hermes: this.hermesLifecycle || createNoopLifecycle('Hermes')
     }
-    claudeLifecycle.setPersistCallback(() => this.persist())
-    codexLifecycle.setPersistCallback(() => this.persist())
-    this.opencodeLifecycle?.setPersistCallback(() => this.persist())
+    claudeLifecycle.setPersistCallback?.(() => this.persist())
+    codexLifecycle.setPersistCallback?.(() => this.persist())
+    this.opencodeLifecycle?.setPersistCallback?.(() => this.persist())
+    this.geminiLifecycle?.setPersistCallback?.(() => this.persist())
+    this.piLifecycle?.setPersistCallback?.(() => this.persist())
+    this.ompLifecycle?.setPersistCallback?.(() => this.persist())
+    this.grokLifecycle?.setPersistCallback?.(() => this.persist())
+    this.hermesLifecycle?.setPersistCallback?.(() => this.persist())
 
     this.cliManager.onOutput((processId, data, stream) => {
       const sessionId = this.processIndex.get(processId)
@@ -293,6 +298,7 @@ export class SessionManager {
         () => this.sessions.get(id) as OpenCodeSession | undefined
       )
     }
+    this.scheduleSessionIdDiscovery(session, session.createdAt)
 
     this.persist()
 
@@ -478,8 +484,36 @@ export class SessionManager {
 
     // 跨越联合类型的边界赋值：options 形状由调用方（会话设置表单）按会话类型构建
     ;(session as { options: Session['options'] }).options = options
+    this.synchronizeNativeBinding(session)
     this.persist()
+    this.broadcastSessionChange(session)
     return session
+  }
+
+  private synchronizeNativeBinding(session: Session): void {
+    const field = NATIVE_ID_FIELDS[session.type]
+    if (!field || session.type === 'terminal') return
+    const options = session.options as Record<string, unknown>
+    const record = session as unknown as Record<string, unknown>
+    const optionKey = session.type === 'opencode' ? 'sessionId' : 'resumeId'
+    const hasOption = Object.prototype.hasOwnProperty.call(options, optionKey)
+    const optionValue = typeof options[optionKey] === 'string' ? options[optionKey].trim() : ''
+    const currentValue = typeof record[field] === 'string' ? String(record[field]).trim() : ''
+
+    if (hasOption) {
+      const normalized = optionValue || null
+      record[field] = normalized
+      if (normalized) options[optionKey] = normalized
+      else delete options[optionKey]
+      return
+    }
+
+    if (currentValue) {
+      options[optionKey] = currentValue
+    } else {
+      record[field] = null
+      delete options[optionKey]
+    }
   }
 
   // 用户自定义绑定/修改原生 resume ID（会话设置对话框「恢复会话 ID」）。
@@ -490,11 +524,22 @@ export class SessionManager {
     const trimmed = typeof value === 'string' ? value.trim() : ''
     const field = NATIVE_ID_FIELDS[cliType]
     if (!field) return null
-    ;(session as unknown as Record<string, unknown>)[field] = trimmed || null
+    const normalized = trimmed || null
+    ;(session as unknown as Record<string, unknown>)[field] = normalized
+    const options = session.options as Record<string, unknown>
+    if (cliType === 'opencode') {
+      if (normalized) options.sessionId = normalized
+      else delete options.sessionId
+    } else if (cliType !== 'terminal' && normalized) {
+      options.resumeId = normalized
+    } else if (cliType !== 'terminal') {
+      delete options.resumeId
+    }
     // 手动绑定/解除都视为一次新的用户意图：清掉 resume 失效守卫与自动重启标记
     delete (session as { invalidSessionId?: boolean }).invalidSessionId
     delete (session as { noAutoRestart?: boolean }).noAutoRestart
     this.persist()
+    this.broadcastSessionChange(session)
     return session
   }
 
@@ -620,6 +665,24 @@ export class SessionManager {
         () => this.sessions.get(session.id) as OpenCodeSession | undefined
       )
     }
+    if (session.type === 'gemini' && session.processId && this.geminiLifecycle) {
+      void Promise.resolve(this.geminiLifecycle.hydrateSessionId?.(session)).then((changed) => {
+        if (changed) {
+          this.persist()
+          this.broadcastSessionChange(session)
+        }
+      })
+    }
+    for (const type of ['pi', 'omp', 'grok', 'hermes'] as const) {
+      if (session.type !== type || !session.processId) continue
+      const lifecycle = this.lifecycles[type]
+      void Promise.resolve(lifecycle.hydrateSessionId?.(session)).then((changed: boolean | undefined) => {
+        if (changed) {
+          this.persist()
+          this.broadcastSessionChange(session)
+        }
+      })
+    }
   }
 
   private closeCurrentRun(session: Session, endedAt = Date.now()): void {
@@ -696,6 +759,10 @@ export class SessionManager {
     if (!this.store) return
     this.persistDirty = true
     this.schedulePersist()
+  }
+
+  private broadcastSessionChange(session: Session): void {
+    this.broadcaster.broadcast('session:changed', this.cloneSessionValue(session))
   }
 
   private pushStatusChange(sessionId: string, status: string): void {

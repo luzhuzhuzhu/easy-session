@@ -253,13 +253,26 @@ export class CliManager {
     })
 
     const lowerCommand = command.toLowerCase()
+    const idHint = id.toLowerCase()
     const cliType: CliType =
       options?.cliType ??
-      (lowerCommand.includes('opencode')
+      (idHint.startsWith('opencode-') || lowerCommand.includes('opencode')
         ? 'opencode'
-        : lowerCommand.includes('codex')
+        : idHint.startsWith('codex-') || lowerCommand.includes('codex')
           ? 'codex'
-          : 'claude')
+          : idHint.startsWith('gemini-') || lowerCommand.includes('gemini')
+            ? 'gemini'
+            : idHint.startsWith('pi-') || lowerCommand === 'pi' || lowerCommand.endsWith('\\pi') || lowerCommand.endsWith('/pi')
+              ? 'pi'
+              : idHint.startsWith('omp-') || lowerCommand.includes('omp')
+                ? 'omp'
+                : idHint.startsWith('grok-') || lowerCommand.includes('grok')
+                  ? 'grok'
+                  : idHint.startsWith('hermes-') || lowerCommand.includes('hermes')
+                    ? 'hermes'
+                    : idHint.startsWith('terminal-') || lowerCommand.includes('terminal')
+                      ? 'terminal'
+                      : 'claude')
 
     const info: ProcessInfo = {
       id,

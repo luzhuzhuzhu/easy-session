@@ -167,15 +167,17 @@ export function setSessionNativeId(id: string, cliType: Session['type'], value: 
   return ipc.invoke<Session | null>('session:setNativeId', id, cliType, value)
 }
 
-// 会话候选列表（resume ID 选择器数据源）。目前仅 opencode 有发现能力，
-// 其他 CLI 返回空数组（UI 回退为手动输入）。
+// 会话候选列表（resume ID 选择器数据源）；不具备可靠发现能力的 CLI 返回明确状态或空数组。
 export interface NativeSessionCandidate {
   id: string
-  title: string
-  updated: number
+  title?: string
+  content?: string
+  updated?: number
+  projectPath?: string
 }
-export function getNativeIdCandidates(cliType: Session['type'], projectPath?: string): Promise<NativeSessionCandidate[]> {
-  return ipc.invoke<NativeSessionCandidate[]>('session:nativeIdCandidates', cliType, projectPath)
+
+export function getNativeIdCandidates(cliType: Session['type'], projectPath?: string, preferredPath?: string): Promise<NativeSessionCandidate[]> {
+  return ipc.invoke<NativeSessionCandidate[]>('session:nativeIdCandidates', cliType, projectPath, preferredPath)
 }
 
 export interface DetectedShell {
@@ -194,6 +196,11 @@ export function onSessionOutput(callback: (event: OutputEvent) => void): () => v
   return () => ipc.removeListener('session:output', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
 }
 
+export function onSessionChanged(callback: (session: Session) => void): () => void {
+  const handler = (_e: IpcRendererEvent, data: Session) => callback(data)
+  ipc.on('session:changed', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
+  return () => ipc.removeListener('session:changed', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
+}
 export function onSessionStatusChange(callback: (data: { sessionId: string; status: SessionStatus; lastActiveAt?: number }) => void): () => void {
   const handler = (_e: IpcRendererEvent, data: { sessionId: string; status: SessionStatus; lastActiveAt?: number }) => callback(data)
   ipc.on('session:status', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)

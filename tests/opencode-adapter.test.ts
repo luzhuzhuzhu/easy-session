@@ -1,11 +1,13 @@
 ﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocked = vi.hoisted(() => ({
-  exec: vi.fn()
+  exec: vi.fn(),
+  execFile: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
-  exec: mocked.exec
+  exec: mocked.exec,
+  execFile: mocked.execFile
 }))
 
 import { OpenCodeAdapter } from '../src/main/services/opencode-adapter'
@@ -46,7 +48,7 @@ describe('OpenCodeAdapter.findSessionIdByProjectPath', () => {
   let adapter: OpenCodeAdapter
 
   beforeEach(() => {
-    mocked.exec.mockReset()
+    mocked.execFile.mockReset()
     adapter = new OpenCodeAdapter({} as any)
   })
 
@@ -60,7 +62,7 @@ describe('OpenCodeAdapter.findSessionIdByProjectPath', () => {
       ]
     }
 
-    mocked.exec.mockImplementation((_cmd: string, _opts: unknown, cb: (...args: any[]) => void) => {
+    mocked.execFile.mockImplementation((_executable: string, _args: string[], _opts: unknown, cb: (...args: any[]) => void) => {
       cb(null, JSON.stringify(payload), '')
     })
 
@@ -83,7 +85,7 @@ describe('OpenCodeAdapter.findSessionIdByProjectPath', () => {
       ]
     }
 
-    mocked.exec.mockImplementation((_cmd: string, _opts: unknown, cb: (...args: any[]) => void) => {
+    mocked.execFile.mockImplementation((_executable: string, _args: string[], _opts: unknown, cb: (...args: any[]) => void) => {
       cb(null, JSON.stringify(payload), '')
     })
 
@@ -117,7 +119,7 @@ describe('OpenCodeAdapter.findSessionIdByProjectPath', () => {
       ]
     }
 
-    mocked.exec.mockImplementation((_cmd: string, _opts: unknown, cb: (...args: any[]) => void) => {
+    mocked.execFile.mockImplementation((_executable: string, _args: string[], _opts: unknown, cb: (...args: any[]) => void) => {
       cb(null, JSON.stringify(payload), '')
     })
 
@@ -149,7 +151,7 @@ describe('OpenCodeAdapter.findSessionIdByProjectPath', () => {
       ]
     }
 
-    mocked.exec.mockImplementation((_cmd: string, _opts: unknown, cb: (...args: any[]) => void) => {
+    mocked.execFile.mockImplementation((_executable: string, _args: string[], _opts: unknown, cb: (...args: any[]) => void) => {
       cb(null, JSON.stringify(payload), '')
     })
 
@@ -172,7 +174,7 @@ describe('OpenCodeAdapter.findSessionIdByProjectPath', () => {
       ]
     }
 
-    mocked.exec.mockImplementation((_cmd: string, _opts: unknown, cb: (...args: any[]) => void) => {
+    mocked.execFile.mockImplementation((_executable: string, _args: string[], _opts: unknown, cb: (...args: any[]) => void) => {
       cb(null, JSON.stringify(payload), '')
     })
 
@@ -205,7 +207,7 @@ describe('OpenCodeAdapter.findSessionIdByProjectPath', () => {
       }
     ]
 
-    mocked.exec.mockImplementation((_cmd: string, _opts: unknown, cb: (...args: any[]) => void) => {
+    mocked.execFile.mockImplementation((_executable: string, _args: string[], _opts: unknown, cb: (...args: any[]) => void) => {
       cb(null, JSON.stringify(payload), '')
     })
 

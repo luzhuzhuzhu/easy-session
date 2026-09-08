@@ -56,13 +56,15 @@ test.describe('collaboration layout (ENG-4 / UX-14)', () => {
     await expect(page.locator('.panel-content')).toHaveCount(5)
   })
 
-  test('monitor preset keeps members and board visible', async ({ page }) => {
+  test('monitor preset keeps members and board visible with scoped board styles', async ({ page }) => {
     await page.locator('.layout-menu-wrap > .icon-button').first().click()
     await page.locator('.layout-panel .ms-preset').nth(2).click()
     await expect(page.locator('.panel-content')).toHaveCount(2)
     // 成员栏与看板均在可见面板中
     await expect(page.locator('.agent-list')).toBeVisible()
     await expect(page.locator('.board-region')).toBeVisible()
+    await expect(page.locator('.board-grid')).toHaveCSS('display', 'grid')
+    await expect(page.locator('.board-col').first()).toHaveCSS('min-width', '146px')
   })
 
   test('preset persists to localStorage (survives restart)', async ({ page }) => {
@@ -70,8 +72,9 @@ test.describe('collaboration layout (ENG-4 / UX-14)', () => {
     await page.locator('.layout-panel .ms-preset').first().click()
     await expect(page.locator('.panel-content')).toHaveCount(2)
 
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem('easy-session:collab:dock')))
+      .not.toBeNull()
     const stored = await page.evaluate(() => window.localStorage.getItem('easy-session:collab:dock'))
-    expect(stored).toBeTruthy()
     const parsed = JSON.parse(stored as string)
     expect(JSON.stringify(parsed.root)).toContain('chat')
   })

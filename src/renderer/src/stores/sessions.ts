@@ -1,4 +1,4 @@
-﻿import { defineStore } from 'pinia'
+import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
   createSession as apiCreateSession,
@@ -11,7 +11,9 @@ import {
   startSession as apiStartSession,
   pauseSession as apiPauseSession,
   updateSessionOptions as apiUpdateSessionOptions,
+  setSessionNativeId as apiSetSessionNativeId,
   onSessionStatusChange,
+  onSessionChanged,
   type Session,
   type CreateSessionParams,
   type SessionFilter,
@@ -49,7 +51,12 @@ function toLocalSession(session: UnifiedSession): Session {
     parentId: session.parentId,
     claudeSessionId: session.claudeSessionId,
     codexSessionId: session.codexSessionId,
-    opencodeSessionId: session.opencodeSessionId
+    opencodeSessionId: session.opencodeSessionId,
+    geminiSessionId: session.geminiSessionId,
+    piSessionId: session.piSessionId,
+    ompSessionId: session.ompSessionId,
+    grokSessionId: session.grokSessionId,
+    hermesSessionId: session.hermesSessionId
   }
 }
 
@@ -76,6 +83,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const sessionCollectionVersion = ref(0)
 
   let cleanupStatus: (() => void) | null = null
+  let cleanupChanged: (() => void) | null = null
   const remoteStatusCleanups = new Map<string, () => void>()
   const resolver = getSharedGatewayResolver()
 
@@ -180,11 +188,17 @@ export const useSessionsStore = defineStore('sessions', () => {
         session.lastActiveAt = lastActiveAt
       }
     })
+    cleanupChanged = onSessionChanged((changedSession) => {
+      const index = sessions.value.findIndex((session) => session.id === changedSession.id)
+      if (index !== -1) sessions.value[index] = changedSession
+    })
   }
 
   function dispose() {
     cleanupStatus?.()
     cleanupStatus = null
+    cleanupChanged?.()
+    cleanupChanged = null
     for (const cleanup of remoteStatusCleanups.values()) {
       cleanup()
     }
@@ -575,8 +589,32 @@ export const useSessionsStore = defineStore('sessions', () => {
     sessionRef: SessionRef,
     options: Record<string, unknown>
   ) {
-    assertLocalSessionRef(sessionRef, '修改会话启动参数')
-    return updateSessionOptions(sessionRef.sessionId, options)
+    if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
+      return updateSessionOptions(sessionRef.sessionId, options)
+    }
+    const gateway = await resolver.resolve(sessionRef.instanceId)
+    const updated = await gateway.updateSessionOptions(sessionRef.instanceId, sessionRef.sessionId, options)
+    if (updated) upsertRemoteSession(sessionRef.instanceId, updated)
+    return updated ? toLocalSession(updated) : null
+  }
+
+  async function setNativeSessionIdRef(
+    sessionRef: SessionRef,
+    cliType: Session['type'],
+    value: string | null
+  ): Promise<UnifiedSession | null> {
+    if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
+      const updated = await apiSetSessionNativeId(sessionRef.sessionId, cliType, value)
+      if (!updated) return null
+      const index = sessions.value.findIndex((session) => session.id === sessionRef.sessionId)
+      if (index !== -1) sessions.value[index] = updated
+      return toUnifiedSession(updated)
+    }
+
+    const gateway = await resolver.resolve(sessionRef.instanceId)
+    const updated = await gateway.setNativeSessionId(sessionRef.instanceId, sessionRef.sessionId, cliType, value)
+    if (updated) upsertRemoteSession(sessionRef.instanceId, updated)
+    return updated
   }
 
   return {
@@ -613,6 +651,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     updateSessionIconRef,
     updateSessionOptions,
     updateSessionOptionsRef,
+    setNativeSessionIdRef,
     clearRemoteSessions,
     getSessionRef,
     getSessionRefByGlobalKey,

@@ -661,7 +661,7 @@ function handleSessionSettingsFromContext(): void {
   const session = contextMenu.value.session
   contextMenu.value.visible = false
   if (!session) return
-  sessionSettingsTarget.value = sessionsStore.getUnifiedSession(session.id) ?? null
+  sessionSettingsTarget.value = sessionsStore.getUnifiedSession(session.globalSessionKey) ?? null
 }
 
 function handleSessionSettingsSaved(): void {

@@ -120,6 +120,7 @@ export interface CreateSessionParams {
     | ClaudeSessionOptions
     | CodexSessionOptions
     | OpenCodeSessionOptions
+    | GeminiSessionOptions
     | TerminalSessionOptions
     | PiSessionOptions
     | GrokSessionOptions

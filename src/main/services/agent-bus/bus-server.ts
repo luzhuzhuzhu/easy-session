@@ -13,6 +13,10 @@ import { randomUUID } from 'crypto'
 const log = createLogger('agent-bus')
 const MAX_REQUEST_BYTES = 256 * 1024
 
+export function buildWindowsBusPipePath(id = randomUUID()): string {
+  return `\\\\.\\pipe\\easysession-bus-${id.replace(/-/g, '')}`
+}
+
 export interface AgentBusEnv {
   EASYSESSION_BUS_PIPE: string
   EASYSESSION_BUS_TOKEN: string
@@ -74,9 +78,8 @@ export class AgentBusServer {
       } catch {
         /* Windows 下 chmod 能力有限，忽略 */
       }
-      // SEC-11：pipe 名用纯随机串——不再嵌 token 前缀，防止本机其他用户枚举
-      // pipe 名得到 token 片段。连接鉴权仍需完整 token，双保险。
-      this.pipePath = `\\.\pipe\easysession-bus-${randomUUID().replace(/-/g, '')}`
+      // SEC-11：pipe 名使用随机串，不包含鉴权 token；连接仍需完整 token。
+      this.pipePath = buildWindowsBusPipePath()
     } else {
       const shimFile = join(this.shimDir, 'es')
       await fs.writeFile(shimFile, buildPosixShim(), 'utf-8')

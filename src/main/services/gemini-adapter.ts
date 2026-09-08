@@ -46,7 +46,10 @@ export class GeminiAdapter {
     args.push(...this.busArgs(custom))
     args.push(...custom)
 
-    this.cliManager.spawn(id, 'gemini', args, { cwd: projectPath || undefined })
+    const executable = options?.cliPath?.trim() || 'gemini'
+    this.cliManager.spawn(id, executable, args, {
+      cwd: projectPath || undefined
+    })
     return id
   }
 

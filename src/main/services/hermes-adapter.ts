@@ -47,7 +47,7 @@ export class HermesAdapter {
     args.push(...custom)
 
     const executable = this.resolveExecutable(options)
-    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined })
+    this.cliManager.spawn(id, executable, args, { cwd: projectPath || undefined, cliType: 'hermes' })
     return id
   }
 

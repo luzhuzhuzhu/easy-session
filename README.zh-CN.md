@@ -11,7 +11,7 @@
 <p align="center">原生终端，统一管理，远程可达</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.8.0-blue" alt="Version" />
+  <img src="https://img.shields.io/badge/version-0.8.2-blue" alt="Version" />
   <img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-green" alt="License" />
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform" />
   <img src="https://img.shields.io/badge/Electron-33-47848F?logo=electron" alt="Electron" />

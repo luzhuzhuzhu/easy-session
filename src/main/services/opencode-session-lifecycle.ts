@@ -27,8 +27,11 @@ export class OpenCodeSessionLifecycle implements ISessionLifecycle {
 
   create(id: string, name: string, params: CreateSessionParams): OpenCodeSession {
     const options = (params.options || {}) as OpenCodeSessionOptions
-    const opencodeSessionId = options.sessionId || null
-    const opencodeSessionIdSource: OpenCodeSession['opencodeSessionIdSource'] = options.sessionId ? 'user' : null
+    const normalizedSessionId = typeof options.sessionId === 'string' ? options.sessionId.trim() : ''
+    if (normalizedSessionId) options.sessionId = normalizedSessionId
+    else delete options.sessionId
+    const opencodeSessionId = normalizedSessionId || null
+    const opencodeSessionIdSource: OpenCodeSession['opencodeSessionIdSource'] = normalizedSessionId ? 'user' : null
     const now = Date.now()
 
     let processId: string | null = null
