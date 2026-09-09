@@ -1,0 +1,155 @@
+@mixin shell {
+  .panel-content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .panel-toolbar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+    min-height: 28px;
+    padding: 5px 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+  }
+
+  .count {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .section-label {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+
+  .empty {
+    margin: 10px 0;
+    padding: 0 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .empty.compact {
+    min-height: 10px;
+    margin: 0;
+    text-align: center;
+    opacity: 0.55;
+  }
+}
+
+@mixin form-controls {
+  select,
+  textarea {
+    width: 100%;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font: inherit;
+  }
+
+  select {
+    height: 32px;
+    padding: 0 8px;
+  }
+
+  textarea {
+    height: 32px;
+    min-height: 32px;
+    max-height: 86px;
+    padding: 7px 9px;
+    resize: vertical;
+    line-height: 1.25;
+  }
+}
+
+@mixin action-buttons {
+  .primary-button,
+  .secondary-button,
+  .danger-button,
+  .tiny-button {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: border-color 120ms ease, color 120ms ease, background 120ms ease, transform 120ms ease;
+  }
+
+  .primary-button:hover:not(:disabled),
+  .secondary-button:hover:not(:disabled),
+  .danger-button:hover:not(:disabled),
+  .tiny-button:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+  }
+
+  .primary-button:disabled,
+  .secondary-button:disabled,
+  .danger-button:disabled,
+  .tiny-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .primary-button {
+    height: 32px;
+    padding: 0 12px;
+    border-color: var(--accent-primary);
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+    font-weight: 750;
+    white-space: nowrap;
+  }
+
+  .secondary-button,
+  .danger-button,
+  .tiny-button {
+    height: 28px;
+    padding: 0 9px;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .danger-button {
+    color: var(--status-error);
+  }
+
+  .small {
+    height: 26px;
+  }
+}
+
+@mixin status-colors {
+  .st-done,
+  .st-review {
+    color: var(--status-success);
+  }
+
+  .st-failed,
+  .st-rejected,
+  .st-cancelled,
+  .st-expired {
+    color: var(--status-error);
+  }
+
+  .st-blocked {
+    color: var(--status-warning);
+  }
+
+  .st-in_progress,
+  .st-accepted,
+  .st-created,
+  .st-delivered {
+    color: var(--accent-primary);
+  }
+}

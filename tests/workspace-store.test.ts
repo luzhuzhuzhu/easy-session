@@ -458,4 +458,48 @@ describe('workspace store', () => {
 
     expect(workspaceStore.resolvedTabs['tab-remote']?.availability).toBe('offline')
   })
+
+  it('persists the final live split ratio as cloneable data without adding undo history', async () => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2,
+      root: {
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.5,
+        first: {
+          type: 'leaf',
+          paneId: 'pane-1',
+          activeTabId: null,
+          tabs: []
+        },
+        second: {
+          type: 'leaf',
+          paneId: 'pane-2',
+          activeTabId: null,
+          tabs: []
+        }
+      },
+      tabs: {},
+      activePaneId: 'pane-1'
+    })
+    workspaceApi.updateWorkspaceLayout.mockImplementationOnce(async (layout) => structuredClone(layout))
+
+    const workspaceStore = useWorkspaceStore()
+    await workspaceStore.load()
+
+    workspaceStore.updateSplitRatioLive('root', 0.6)
+    workspaceStore.updateSplitRatioLive('root', 0.7)
+
+    expect(workspaceStore.undoDepth).toBe(0)
+    expect(workspaceApi.updateWorkspaceLayout).not.toHaveBeenCalled()
+
+    workspaceStore.commitSplitRatio()
+    expect(() => workspaceStore.flushPersist()).not.toThrow()
+
+    expect(workspaceApi.updateWorkspaceLayout).toHaveBeenCalledTimes(1)
+    const persisted = workspaceApi.updateWorkspaceLayout.mock.calls[0][0]
+    expect(() => structuredClone(persisted)).not.toThrow()
+    expect(persisted.root).toMatchObject({ type: 'split', ratio: 0.7 })
+    expect(workspaceStore.undoDepth).toBe(0)
+  })
 })

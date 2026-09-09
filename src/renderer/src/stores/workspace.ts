@@ -1,4 +1,4 @@
-import { computed, ref, toRaw } from 'vue'
+import { computed, ref, toRaw, triggerRef } from 'vue'
 import { defineStore } from 'pinia'
 import {
   getWorkspaceLayout,
@@ -19,11 +19,7 @@ const PERSIST_DEBOUNCE_MS = 200
 const HISTORY_LIMIT = 20
 
 function cloneLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
-  const raw = toRaw(layout)
-  if (typeof structuredClone === 'function') {
-    return structuredClone(raw) as WorkspaceLayoutState
-  }
-  return JSON.parse(JSON.stringify(raw)) as WorkspaceLayoutState
+  return JSON.parse(JSON.stringify(toRaw(layout))) as WorkspaceLayoutState
 }
 
 function layoutEquals(a: WorkspaceLayoutState, b: WorkspaceLayoutState): boolean {
@@ -729,8 +725,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     if (current.type !== 'split') return
     current.ratio = clampRatio(ratio)
-    // 就地改后用同树新外层对象触发响应式：直接复用 mutate 的 layout.value 赋值语义
-    layout.value = { ...layout.value }
+    triggerRef(layout)
   }
 
   function commitSplitRatio(): void {

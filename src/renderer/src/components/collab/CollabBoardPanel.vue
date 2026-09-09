@@ -302,6 +302,11 @@ defineEmits<{
   white-space: nowrap;
 }
 
+.task-meta span:last-child {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .card-archive {
   position: absolute;
   top: 6px;
