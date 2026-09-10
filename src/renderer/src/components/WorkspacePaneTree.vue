@@ -85,18 +85,27 @@
     :class="{
       focused: activePaneId === node.paneId,
       'drop-active': paneDropActive,
-      'drop-split': !!edgeDropDirection
+      'drop-split': dropPlacement && dropPlacement !== 'center'
     }"
+    :data-pane-id="node.paneId"
+    :data-drop-kind="paneDropKind || undefined"
+    :data-drop-placement="dropPlacement || undefined"
+    :data-drop-active="paneDropActive ? 'true' : 'false'"
     @mousedown="handleFocusPane"
     @dragover.prevent="handlePaneDragOver"
     @dragleave="clearEdgeDrop"
     @drop="handlePaneEdgeDrop"
     @contextmenu.prevent="openPaneMenu"
   >
-    <div v-if="edgeDropDirection" class="edge-drop-indicator" :class="edgeDropDirection"></div>
-    <div v-if="paneDropActive" class="pane-drop-copy" :class="{ split: !!edgeDropDirection }">
+    <div v-if="dropPlacement" class="edge-drop-indicator" :class="dropPlacement" aria-hidden="true"></div>
+    <div
+      v-if="paneDropActive"
+      class="pane-drop-copy"
+      :class="[dropPlacement, { split: dropPlacement !== 'center' }]"
+    >
       {{ paneDropLabel }}
     </div>
+    <span class="sr-only" aria-live="polite">{{ paneDropLiveStatus }}</span>
 
     <div class="pane-content">
       <div
@@ -312,7 +321,8 @@ import { useRouter } from 'vue-router'
 import type {
   WorkspaceLayoutNode,
   WorkspaceSplitDirection,
-  WorkspaceTabState
+  WorkspaceTabState,
+  WorkspaceDropPlacement
 } from '@/api/workspace'
 import TerminalOutput from '@/components/TerminalOutput.vue'
 import { cliTypeBadgeLetter } from '@shared/cli-types'
@@ -325,6 +335,7 @@ import { useMenuKeyboard } from '@/composables/useMenuKeyboard'
 import { useInstancesStore } from '@/stores/instances'
 import type { SessionRef, UnifiedSession } from '@/models/unified-resource'
 import type { WorkspaceResolvedTabState } from '@/stores/workspace'
+import { getWorkspaceDropPlacement } from '@/utils/workspace-drop'
 
 defineOptions({ name: 'WorkspacePaneTree' })
 const { t } = useI18n()
@@ -349,7 +360,7 @@ const emit = defineEmits<{
   'close-pane': [paneId: string]
   'close-tab': [payload: { paneId: string; tabId: string }]
   'move-tab': [payload: { fromPaneId: string; toPaneId: string; tabId: string; toIndex?: number }]
-  'split-and-move-tab': [payload: { sourcePaneId: string; targetPaneId: string; tabId: string; direction: WorkspaceSplitDirection }]
+  'split-and-move-tab': [payload: { sourcePaneId: string; targetPaneId: string; tabId: string; placement: Exclude<WorkspaceDropPlacement, 'center'> }]
   'close-other-tabs': [payload: { paneId: string; tabId: string }]
   'close-tabs-right': [payload: { paneId: string; tabId: string }]
   'toggle-tab-pin': [tabId: string]
@@ -357,7 +368,7 @@ const emit = defineEmits<{
   'resize-split-live': [payload: { path: string; ratio: number }]
   'resize-split-commit': []
   'even-split-pane': [paneId: string]
-  'open-session-drop': [payload: { sessionRef: SessionRef; targetPaneId: string; direction?: WorkspaceSplitDirection }]
+  'open-session-drop': [payload: { sessionRef: SessionRef; targetPaneId: string; placement: WorkspaceDropPlacement }]
   'undo-layout': []
   'reset-layout': []
   'start-session': [sessionRef: SessionRef]
@@ -370,7 +381,7 @@ const emit = defineEmits<{
   'swap-pane-tabs': [payload: { fromPaneId: string; toPaneId: string }]
 }>()
 
-const edgeDropDirection = ref<WorkspaceSplitDirection | null>(null)
+const dropPlacement = ref<WorkspaceDropPlacement | null>(null)
 const paneDropActive = ref(false)
 const paneDropKind = ref<'pane' | 'tab' | 'session' | null>(null)
 const paneMenu = ref({ visible: false, x: 0, y: 0 })
@@ -530,11 +541,15 @@ const activePaneZoomPercent = computed<number>(() => {
   return props.paneZoomPercentById[props.node.paneId] ?? 100
 })
 const paneDropLabel = computed(() => {
-  if (paneDropKind.value === 'pane') return t('session.dropSwapPane')
-  if (edgeDropDirection.value === 'horizontal') return t('session.dropSplitRight')
-  if (edgeDropDirection.value === 'vertical') return t('session.dropSplitBottom')
-  return t('session.dropOpenInPane')
+  if (!dropPlacement.value) return ''
+  if (paneDropKind.value === 'pane' && dropPlacement.value === 'center') {
+    return t('session.dropSwapPane')
+  }
+  return t(`session.dropPlacement.${dropPlacement.value}`)
 })
+const paneDropLiveStatus = computed(() =>
+  paneDropActive.value ? paneDropLabel.value : ''
+)
 
 const offlinePaneTitle = computed(() => {
   const instance = activeTabInstance.value
@@ -595,14 +610,18 @@ function handleSetPaneZoom(percent: number): void {
 
 function handleHeaderDragStart(e: DragEvent): void {
   if (props.node.type !== 'leaf') return
-  if (!e.dataTransfer) return
+  if (!e.dataTransfer || !props.node.activeTabId) return
   e.dataTransfer.effectAllowed = 'move'
-  e.dataTransfer.setData(PANE_HEADER_MIME, JSON.stringify({ paneId: props.node.paneId }))
+  e.dataTransfer.setData(PANE_HEADER_MIME, JSON.stringify({
+    paneId: props.node.paneId,
+    activeTabId: props.node.activeTabId
+  }))
   draggingHeaderPaneId = props.node.paneId
 }
 
 function handleHeaderDragEnd(): void {
   draggingHeaderPaneId = null
+  resetPaneDropState()
 }
 
 let detachResizeListeners: (() => void) | null = null
@@ -694,7 +713,7 @@ function startSplitResize(e: MouseEvent): void {
 }
 
 type WorkspaceDragPayload =
-  | { type: 'pane'; paneId: string }
+  | { type: 'pane'; paneId: string; activeTabId: string }
   | { type: 'tab'; paneId: string; tabId: string }
   | { type: 'session'; sessionRef: SessionRef }
 
@@ -712,9 +731,9 @@ function readWorkspaceDragPayload(e: DragEvent): WorkspaceDragPayload | null {
   const headerRaw = e.dataTransfer?.getData(PANE_HEADER_MIME)
   if (headerRaw) {
     try {
-      const parsed = JSON.parse(headerRaw) as { paneId?: string }
-      if (typeof parsed.paneId === 'string' && parsed.paneId) {
-        return { type: 'pane', paneId: parsed.paneId }
+      const parsed = JSON.parse(headerRaw) as { paneId?: string; activeTabId?: string }
+      if (typeof parsed.paneId === 'string' && parsed.paneId && typeof parsed.activeTabId === 'string' && parsed.activeTabId) {
+        return { type: 'pane', paneId: parsed.paneId, activeTabId: parsed.activeTabId }
       }
     } catch {
       // ignore invalid payload
@@ -759,20 +778,8 @@ function readWorkspaceDragPayload(e: DragEvent): WorkspaceDragPayload | null {
   return null
 }
 
-function applyEdgeDropDirection(host: HTMLElement, clientX: number, clientY: number): void {
-  const rect = host.getBoundingClientRect()
-  const edgeSize = 24
-  const x = clientX - rect.left
-  const y = clientY - rect.top
-  if (x >= rect.width - edgeSize) {
-    edgeDropDirection.value = 'horizontal'
-    return
-  }
-  if (y >= rect.height - edgeSize) {
-    edgeDropDirection.value = 'vertical'
-    return
-  }
-  edgeDropDirection.value = null
+function applyDropPlacement(host: HTMLElement, clientX: number, clientY: number): void {
+  dropPlacement.value = getWorkspaceDropPlacement(host.getBoundingClientRect(), clientX, clientY)
 }
 
 function flushPendingEdgeUpdate(): void {
@@ -780,7 +787,7 @@ function flushPendingEdgeUpdate(): void {
   if (!pendingEdgeUpdate) return
   const { host, clientX, clientY } = pendingEdgeUpdate
   pendingEdgeUpdate = null
-  applyEdgeDropDirection(host, clientX, clientY)
+  applyDropPlacement(host, clientX, clientY)
 }
 
 function queueEdgeUpdate(host: HTMLElement, clientX: number, clientY: number): void {
@@ -798,17 +805,9 @@ function handlePaneDragOver(e: DragEvent): void {
     return
   }
 
-  if (kind === 'pane') {
-    // 拖动分窗信息栏：整个目标分窗（含终端区域）都是交换目标，悬停在自己身上不响应
-    if (draggingHeaderPaneId === props.node.paneId) {
-      resetPaneDropState()
-      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none'
-      return
-    }
-    paneDropKind.value = 'pane'
-    paneDropActive.value = true
-    edgeDropDirection.value = null
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  if (kind === 'pane' && draggingHeaderPaneId === props.node.paneId && paneTabs.value.length === 1) {
+    resetPaneDropState()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'none'
     return
   }
 
@@ -826,7 +825,7 @@ function resetPaneDropState(): void {
     edgeRaf = 0
   }
   pendingEdgeUpdate = null
-  edgeDropDirection.value = null
+  dropPlacement.value = null
   paneDropActive.value = false
   paneDropKind.value = null
 }
@@ -848,43 +847,46 @@ function handlePaneEdgeDrop(e: DragEvent): void {
     return
   }
 
+  const host = e.currentTarget as HTMLElement | null
+  if (host) applyDropPlacement(host, e.clientX, e.clientY)
+  const placement = dropPlacement.value ?? 'center'
+
   if (payload.type === 'pane') {
-    if (payload.paneId !== props.node.paneId) {
+    if (placement === 'center' && payload.paneId !== props.node.paneId) {
       emit('swap-pane-tabs', { fromPaneId: payload.paneId, toPaneId: props.node.paneId })
+    }
+    if (placement !== 'center' && payload.activeTabId) {
+      emit('split-and-move-tab', {
+        sourcePaneId: payload.paneId,
+        targetPaneId: props.node.paneId,
+        tabId: payload.activeTabId,
+        placement
+      })
     }
     draggingHeaderPaneId = null
     resetPaneDropState()
     return
   }
 
-  if (edgeDropDirection.value) {
-    if (payload.type === 'tab') {
-      emit('split-and-move-tab', {
-        sourcePaneId: payload.paneId,
-        targetPaneId: props.node.paneId,
-        tabId: payload.tabId,
-        direction: edgeDropDirection.value
-      })
-    } else {
-      emit('open-session-drop', {
-        sessionRef: payload.sessionRef,
-        targetPaneId: props.node.paneId,
-        direction: edgeDropDirection.value
-      })
-    }
+  if (payload.type === 'tab' && placement !== 'center') {
+    emit('split-and-move-tab', {
+      sourcePaneId: payload.paneId,
+      targetPaneId: props.node.paneId,
+      tabId: payload.tabId,
+      placement
+    })
+  } else if (payload.type === 'tab') {
+    emit('move-tab', {
+      fromPaneId: payload.paneId,
+      toPaneId: props.node.paneId,
+      tabId: payload.tabId
+    })
   } else {
-    if (payload.type === 'tab') {
-      emit('move-tab', {
-        fromPaneId: payload.paneId,
-        toPaneId: props.node.paneId,
-        tabId: payload.tabId
-      })
-    } else {
-      emit('open-session-drop', {
-        sessionRef: payload.sessionRef,
-        targetPaneId: props.node.paneId
-      })
-    }
+    emit('open-session-drop', {
+      sessionRef: payload.sessionRef,
+      targetPaneId: props.node.paneId,
+      placement
+    })
   }
   resetPaneDropState()
 }
@@ -929,9 +931,9 @@ function handlePaneMenuResetLayout(): void {
 
 onBeforeUnmount(() => {
   clearResizeListeners()
-  if (edgeRaf) {
-    window.cancelAnimationFrame(edgeRaf)
-    edgeRaf = 0
+  resetPaneDropState()
+  if (props.node.type === 'leaf' && draggingHeaderPaneId === props.node.paneId) {
+    draggingHeaderPaneId = null
   }
   document.removeEventListener('pointerdown', handleGlobalPointerDown)
 })
@@ -1024,6 +1026,7 @@ watch(
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
+  container-type: inline-size;
   overflow: hidden;
   position: relative;
   transition: border-color 140ms ease, box-shadow 140ms ease;
@@ -1413,56 +1416,145 @@ watch(
   text-align: center;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .edge-drop-indicator {
   position: absolute;
   pointer-events: none;
-  z-index: 3;
-  border: 2px solid color-mix(in srgb, var(--accent-primary) 75%, transparent);
-  border-radius: var(--radius-sm);
-  transition: opacity 120ms ease;
+  z-index: 20;
+  border: 2px solid color-mix(in srgb, var(--accent-primary) 82%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+  box-shadow: inset 0 0 20px color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  transition: inset 120ms ease, width 120ms ease, height 120ms ease, opacity 120ms ease;
 
-  &.horizontal {
-    top: 4px;
-    bottom: 4px;
-    right: 4px;
-    width: 28%;
+  &.center {
+    inset: 10px;
   }
 
-  &.vertical {
-    left: 4px;
-    right: 4px;
-    bottom: 4px;
-    height: 28%;
+  &.left,
+  &.right {
+    top: 10px;
+    bottom: 10px;
+    width: calc(50% - 14px);
+  }
+
+  &.left {
+    left: 10px;
+  }
+
+  &.right {
+    right: 10px;
+  }
+
+  &.top,
+  &.bottom {
+    left: 10px;
+    right: 10px;
+    height: calc(50% - 14px);
+  }
+
+  &.top {
+    top: 10px;
+  }
+
+  &.bottom {
+    bottom: 10px;
   }
 }
 
 .pane-drop-copy {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 4;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
   max-width: min(72%, 260px);
-  transform: translate(-50%, -50%);
-  padding: 7px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent-primary) 48%, var(--border-color));
-  background: color-mix(in srgb, var(--bg-primary) 90%, var(--accent-primary) 10%);
+  min-height: 30px;
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 58%, var(--border-color));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-primary) 88%, var(--accent-primary) 12%);
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 700;
   line-height: 1.35;
   text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  user-select: none;
   pointer-events: none;
   box-shadow: var(--shadow-md);
+  transform: translate(-50%, -50%);
+  transition: left 120ms ease, top 120ms ease, color 120ms ease, background 120ms ease;
+
+  &.center {
+    left: 50%;
+    top: 50%;
+  }
+
+  &.left,
+  &.right {
+    top: 50%;
+    max-width: calc(50% - 28px);
+  }
+
+  &.left {
+    left: 25%;
+  }
+
+  &.right {
+    left: 75%;
+  }
+
+  &.top,
+  &.bottom {
+    left: 50%;
+  }
+
+  &.top {
+    top: 25%;
+  }
+
+  &.bottom {
+    top: 75%;
+  }
 
   &.split {
+    background: color-mix(in srgb, var(--bg-primary) 82%, var(--accent-primary) 18%);
     color: var(--accent-primary);
+  }
+}
+
+@container (max-width: 320px) {
+  .pane-drop-copy {
+    max-width: calc(100% - 24px);
+    padding-inline: 8px;
+
+    &.left,
+    &.right {
+      left: 50%;
+      max-width: calc(100% - 24px);
+    }
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .split-child,
   .workspace-pane,
-  .edge-drop-indicator {
+  .edge-drop-indicator,
+  .pane-drop-copy {
     transition: none !important;
   }
 }

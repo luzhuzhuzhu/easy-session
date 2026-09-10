@@ -1,6 +1,7 @@
 import { ipc } from './ipc'
 
 export type WorkspaceSplitDirection = 'horizontal' | 'vertical'
+export type WorkspaceDropPlacement = 'center' | 'left' | 'right' | 'top' | 'bottom'
 
 export interface WorkspaceTabState {
   id: string

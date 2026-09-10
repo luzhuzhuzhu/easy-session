@@ -68,6 +68,15 @@ import { useInstancesStore } from '../src/renderer/src/stores/instances'
 import { useSessionsStore } from '../src/renderer/src/stores/sessions'
 import { useSettingsStore } from '../src/renderer/src/stores/settings'
 import { useWorkspaceStore } from '../src/renderer/src/stores/workspace'
+import type { WorkspaceLayoutState } from '../src/renderer/src/api/workspace'
+
+function leaf(paneId: string, tabs: string[] = [], activeTabId: string | null = tabs[0] ?? null) {
+  return { type: 'leaf' as const, paneId, tabs, activeTabId }
+}
+
+function sessionTab(id: string, sessionId: string, pinned = false) {
+  return { id, resourceType: 'session' as const, instanceId: 'local', sessionId, globalSessionKey: `local:${sessionId}`, pinned, createdAt: 1 }
+}
 
 describe('workspace store', () => {
   beforeEach(() => {
@@ -457,6 +466,125 @@ describe('workspace store', () => {
     await workspaceStore.load()
 
     expect(workspaceStore.resolvedTabs['tab-remote']?.availability).toBe('offline')
+  })
+
+  it('keeps a center drop onto the same pane as a no-op', async () => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2,
+      root: leaf('pane', ['one', 'two'], 'one'),
+      tabs: { one: sessionTab('one', 'one'), two: sessionTab('two', 'two') },
+      activePaneId: 'pane'
+    } satisfies WorkspaceLayoutState)
+    const store = useWorkspaceStore()
+    await store.load()
+
+    store.moveTabToPane({ fromPaneId: 'pane', toPaneId: 'pane', tabId: 'one' })
+
+    expect(store.layout.root).toMatchObject({ tabs: ['one', 'two'], activeTabId: 'one' })
+    expect(store.undoDepth).toBe(0)
+    expect(workspaceApi.updateWorkspaceLayout).not.toHaveBeenCalled()
+  })
+
+  it('opens a session atomically at center without replacing target tabs', async () => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2,
+      root: {
+        type: 'split', direction: 'horizontal', ratio: 0.5,
+        first: leaf('source', ['moving'], 'moving'),
+        second: leaf('target', ['kept'], 'kept')
+      },
+      tabs: { moving: sessionTab('moving', 'moving', true), kept: sessionTab('kept', 'kept') },
+      activePaneId: 'source'
+    } satisfies WorkspaceLayoutState)
+    const store = useWorkspaceStore()
+    await store.load()
+
+    store.openSessionRefAtPlacement({ instanceId: 'local', sessionId: 'moving', globalSessionKey: 'local:moving' }, 'target', 'center')
+
+    expect(store.layout.root).toMatchObject({
+      first: { tabs: [], activeTabId: null },
+      second: { tabs: ['kept', 'moving'], activeTabId: 'moving' }
+    })
+    expect(store.layout.tabs.moving.pinned).toBe(true)
+    expect(store.undoDepth).toBe(1)
+    store.flushPersist()
+    expect(workspaceApi.updateWorkspaceLayout).toHaveBeenCalledTimes(1)
+    expect(store.undoLayoutChange()).toBe(true)
+    expect(store.layout.root).toMatchObject({ first: { tabs: ['moving'] }, second: { tabs: ['kept'] } })
+  })
+
+  it.each([
+    ['left', 'horizontal', true],
+    ['right', 'horizontal', false],
+    ['top', 'vertical', true],
+    ['bottom', 'vertical', false]
+  ] as const)('opens at root %s with the new pane in the requested order', async (placement, direction, newFirst) => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2, root: leaf('target', ['kept']), tabs: { kept: sessionTab('kept', 'kept') }, activePaneId: 'target'
+    } satisfies WorkspaceLayoutState)
+    const store = useWorkspaceStore()
+    await store.load()
+
+    store.openSessionRefAtPlacement({ instanceId: 'local', sessionId: 'new', globalSessionKey: 'local:new' }, 'target', placement)
+
+    expect(store.layout.root.type).toBe('split')
+    if (store.layout.root.type !== 'split') return
+    expect(store.layout.root.direction).toBe(direction)
+    const created = newFirst ? store.layout.root.first : store.layout.root.second
+    const existing = newFirst ? store.layout.root.second : store.layout.root.first
+    expect(created).toMatchObject({ type: 'leaf', tabs: [expect.any(String)] })
+    expect(existing).toMatchObject({ type: 'leaf', paneId: 'target', tabs: ['kept'] })
+  })
+
+  it('splits a nested target and moves a tab with one mutation', async () => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2,
+      root: { type: 'split', direction: 'horizontal', ratio: 0.5, first: leaf('source', ['moving', 'other'], 'moving'), second: leaf('target', ['kept']) },
+      tabs: { moving: sessionTab('moving', 'moving'), other: sessionTab('other', 'other'), kept: sessionTab('kept', 'kept') },
+      activePaneId: 'source'
+    } satisfies WorkspaceLayoutState)
+    const store = useWorkspaceStore()
+    await store.load()
+
+    store.splitPaneAndMoveTab({ targetPaneId: 'target', sourcePaneId: 'source', tabId: 'moving', placement: 'top' })
+
+    expect(store.layout.root).toMatchObject({
+      first: { tabs: ['other'], activeTabId: 'other' },
+      second: { type: 'split', direction: 'vertical', first: { tabs: ['moving'] }, second: { paneId: 'target', tabs: ['kept'] } }
+    })
+    expect(store.undoDepth).toBe(1)
+  })
+
+  it('does not edge-split the only tab onto its own pane, but allows a multi-tab split', async () => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2, root: leaf('pane', ['one']), tabs: { one: sessionTab('one', 'one') }, activePaneId: 'pane'
+    } satisfies WorkspaceLayoutState)
+    const store = useWorkspaceStore()
+    await store.load()
+    store.openSessionRefAtPlacement({ instanceId: 'local', sessionId: 'one', globalSessionKey: 'local:one' }, 'pane', 'left')
+    expect(store.layout.root.type).toBe('leaf')
+    expect(store.undoDepth).toBe(0)
+
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2, root: leaf('pane', ['one', 'two']), tabs: { one: sessionTab('one', 'one'), two: sessionTab('two', 'two') }, activePaneId: 'pane'
+    } satisfies WorkspaceLayoutState)
+    await store.load()
+    store.openSessionRefAtPlacement({ instanceId: 'local', sessionId: 'one', globalSessionKey: 'local:one' }, 'pane', 'right')
+    expect(store.layout.root).toMatchObject({ type: 'split', first: { paneId: 'pane', tabs: ['two'] }, second: { tabs: ['one'] } })
+  })
+
+  it('keeps invalid placement operations as no-ops and accepts empty source panes', async () => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2, root: { type: 'split', direction: 'horizontal', ratio: 0.5, first: leaf('empty'), second: leaf('target', ['kept']) },
+      tabs: { kept: sessionTab('kept', 'kept') }, activePaneId: 'target'
+    } satisfies WorkspaceLayoutState)
+    const store = useWorkspaceStore()
+    await store.load()
+    const before = JSON.parse(JSON.stringify(store.layout)) as WorkspaceLayoutState
+    store.openSessionRefAtPlacement({ instanceId: 'local', sessionId: 'new', globalSessionKey: 'local:new' }, 'missing', 'left')
+    store.splitPaneAndMoveTab({ targetPaneId: 'target', sourcePaneId: 'empty', tabId: 'missing', placement: 'left' })
+    expect(store.layout).toEqual(before)
+    expect(store.undoDepth).toBe(0)
   })
 
   it('persists the final live split ratio as cloneable data without adding undo history', async () => {

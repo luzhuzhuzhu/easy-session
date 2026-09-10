@@ -7,6 +7,10 @@ import { RemoteInstanceManager } from './remote-instance-manager'
 import type { RemoteCapabilitiesResponse } from '../remote/types'
 import type { RemoteInstanceRecord } from './remote-instance-types'
 import type { CliType } from '../../shared/cli-types'
+import {
+  normalizeNativeSessionDiscoveryPayload,
+  type NativeSessionDiscoveryResult
+} from '../../shared/native-session-candidates'
 type RemoteProjectPromptCliType = 'claude' | 'codex'
 
 
@@ -580,13 +584,25 @@ class RemoteGatewayClient {
     }
   }
 
-  async getNativeIdCandidates(cliType: CliType, projectPath?: string, preferredPath?: string): Promise<Array<{ id: string; title: string; updated: number }>> {
+  async getNativeIdCandidates(cliType: CliType, projectPath?: string, preferredPath?: string): Promise<NativeSessionDiscoveryResult> {
     const query = new URLSearchParams({ cliType })
     if (projectPath) query.set('projectPath', projectPath)
     if (preferredPath) query.set('preferredPath', preferredPath)
-    return this.requestJson<Array<{ id: string; title: string; updated: number }>>(
-      `/api/sessions/native-id-candidates?${query.toString()}`
-    )
+    try {
+      const payload = await this.requestJson<unknown>(
+        `/api/sessions/native-id-candidates?${query.toString()}`
+      )
+      return normalizeNativeSessionDiscoveryPayload(payload)
+    } catch (error) {
+      if (this.isHttpStatus(error, 404)) {
+        return {
+          status: 'unsupported',
+          candidates: [],
+          message: 'The remote instance does not support native session discovery'
+        }
+      }
+      throw error
+    }
   }
 
   subscribeOutput(sessionId: string, listener: (event: RemoteGatewayOutputEvent) => void): () => void {

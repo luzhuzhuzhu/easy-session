@@ -5,6 +5,10 @@ import type { OutputLine, SessionOutputManager } from '../services/session-outpu
 import type { Session, SessionFilter } from '../services/session-types'
 import type { CliType } from '../../shared/cli-types'
 import type {
+  NativeSessionCandidatePayload,
+  NativeSessionDiscoveryResult
+} from '../../shared/native-session-candidates'
+import type {
   RemoteServiceEnvOverrides,
   RemoteServiceTokenMode
 } from '../services/remote-service-settings-types'
@@ -26,19 +30,7 @@ export interface RemoteRuntimeConfig {
   baseUrl: string
 }
 
-export interface NativeSessionCandidate {
-  id: string
-  title?: string
-  content?: string
-  updated?: number
-  projectPath?: string
-}
-
-export interface NativeSessionCandidatesResponse {
-  supported: boolean
-  candidates: NativeSessionCandidate[]
-  error?: string
-}
+export type NativeSessionCandidatesResponse = NativeSessionDiscoveryResult
 
 export interface RemoteDependencies {
   sessionManager: SessionManager
@@ -49,13 +41,13 @@ export interface RemoteDependencies {
     projectPath: string,
     preferredPath?: string,
     maxCount?: number
-  ) => Promise<NativeSessionCandidate[]>
+  ) => Promise<NativeSessionCandidatePayload[] | NativeSessionDiscoveryResult>
   openCodeAdapter?: {
     collectSessionCandidatesByPath(
       projectPath: string,
       preferredPath?: string,
       maxCount?: number
-    ): Promise<NativeSessionCandidate[]>
+    ): Promise<NativeSessionCandidatePayload[]>
   }
 }
 

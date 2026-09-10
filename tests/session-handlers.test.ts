@@ -13,6 +13,8 @@ import { registerSessionHandlers } from '../src/main/ipc/session-handlers'
 
 describe('session-handlers', () => {
   let sessionManager: any
+  let openCodeAdapter: any
+  let codexAdapter: any
 
   beforeEach(() => {
     handlers.clear()
@@ -35,7 +37,9 @@ describe('session-handlers', () => {
       }
     }
 
-    registerSessionHandlers(sessionManager)
+    openCodeAdapter = { collectSessionCandidatesByPath: vi.fn() }
+    codexAdapter = { collectSessionCandidatesByPath: vi.fn() }
+    registerSessionHandlers(sessionManager, undefined, openCodeAdapter, codexAdapter)
   })
 
   it('should register required handlers', () => {
@@ -52,7 +56,8 @@ describe('session-handlers', () => {
       'session:output:clear',
       'session:resize',
       'session:rename',
-      'session:restart'
+      'session:restart',
+      'session:nativeIdCandidates'
     ]
 
     for (const channel of expected) {
@@ -82,6 +87,42 @@ describe('session-handlers', () => {
     const result = await handlers.get('session:start')!({}, 's1')
     expect(result).toEqual({ id: 's1' })
     expect(sessionManager.startSession).toHaveBeenCalledWith('s1')
+  })
+
+  it('session:nativeIdCandidates returns a discovery envelope', async () => {
+    openCodeAdapter.collectSessionCandidatesByPath.mockResolvedValue([
+      { id: 'ses-1', title: 'Resume me', titleSource: 'session-title' }
+    ])
+
+    const result = await handlers.get('session:nativeIdCandidates')!(
+      {},
+      'opencode',
+      ' D:/repo ',
+      ' C:/tools/opencode.exe '
+    )
+
+    expect(result).toEqual({
+      status: 'ready',
+      candidates: [{ id: 'ses-1', title: 'Resume me', titleSource: 'session-title' }]
+    })
+    expect(openCodeAdapter.collectSessionCandidatesByPath).toHaveBeenCalledWith(
+      'D:/repo',
+      'C:/tools/opencode.exe',
+      40
+    )
+  })
+
+  it('session:nativeIdCandidates returns unsupported for a non-discoverable CLI', async () => {
+    const result = await handlers.get('session:nativeIdCandidates')!({}, 'terminal', 'D:/repo')
+
+    expect(result).toMatchObject({ status: 'unsupported', candidates: [] })
+  })
+
+  it('session:nativeIdCandidates returns empty when projectPath is absent', async () => {
+    const result = await handlers.get('session:nativeIdCandidates')!({}, 'codex', '  ')
+
+    expect(result).toEqual({ status: 'empty', candidates: [] })
+    expect(codexAdapter.collectSessionCandidatesByPath).not.toHaveBeenCalled()
   })
 
   it('session:pause should call pauseSession', async () => {

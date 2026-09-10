@@ -1,11 +1,19 @@
 import { exec } from 'child_process'
 import { existsSync } from 'fs'
-import { readdir, stat, open } from 'fs/promises'
+import { readdir, stat } from 'fs/promises'
 import { homedir } from 'os'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import { CliManager } from './cli-manager'
 import { normalizeCustomCliArgs } from './cli-args'
+import {
+  candidateTimestamp,
+  cleanCandidateText,
+  findJsonLine,
+  parseJsonLines,
+  readBoundedPrefix,
+  type NativeSessionTitleSource
+} from './native-session-candidate-utils'
 import type {
   CodexApprovalMode,
   CodexPermissionsMode,
@@ -73,40 +81,76 @@ export class CodexAdapter {
 
   getConfigPaths(): { global: string } {
     return {
-      global: join(homedir(), '.codex', 'config.json')
+      global: join(this.codexRoot(), 'config.json')
     }
+  }
+
+  private codexRoot(): string {
+    return process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
   }
 
   async collectSessionCandidatesByPath(
     projectPath: string,
     maxCount = 40
-  ): Promise<Array<{ id: string; title: string; updated: number; projectPath: string }>> {
-    const root = join(homedir(), '.codex', 'sessions')
+  ): Promise<Array<{ id: string; title: string; content?: string; titleSource: NativeSessionTitleSource; updated: number; projectPath: string }>> {
+    const codexRoot = this.codexRoot()
+    const root = join(codexRoot, 'sessions')
     if (!existsSync(root)) return []
 
+    const limit = Math.min(100, Math.max(1, Math.trunc(maxCount) || 40))
     const normalizedProjectPath = this.normalizePath(projectPath)
-    const files = await this.collectRecentSessionFiles(root)
-    const candidates: Array<{ id: string; title: string; updated: number; projectPath: string }> = []
-    const seen = new Set<string>()
-
-    for (const file of files) {
-      const meta = await this.readSessionMeta(file.path)
-      if (!meta || this.normalizePath(meta.cwd) !== normalizedProjectPath || seen.has(meta.id)) continue
-      seen.add(meta.id)
-      candidates.push({
-        id: meta.id,
-        title: 'Codex session',
-        updated: meta.startedAt ?? file.mtimeMs,
-        projectPath: meta.cwd
-      })
-      if (candidates.length >= Math.max(1, maxCount)) break
+    const [files, indexRecords, historyRecords] = await Promise.all([
+      this.collectRecentSessionFiles(root),
+      this.readOptionalJsonl(join(codexRoot, 'session_index.jsonl'), 512 * 1024),
+      this.readOptionalJsonl(join(codexRoot, 'history.jsonl'), 1024 * 1024)
+    ])
+    const indexById = new Map<string, { title: string; updated: number }>()
+    for (const record of indexRecords) {
+      const id = this.stringField(record, ['id', 'session_id', 'sessionId'])
+      if (!id) continue
+      const title = cleanCandidateText(this.stringField(record, ['thread_name', 'threadName']), 120)
+      const updated = Math.max(...['updated_at', 'updatedAt', 'timestamp', 'ts'].map((key) => candidateTimestamp(record[key])))
+      const previous = indexById.get(id)
+      if (!previous || updated >= previous.updated) indexById.set(id, { title: title || previous?.title || '', updated })
+    }
+    const historyById = new Map<string, { content: string; updated: number }>()
+    for (const record of historyRecords) {
+      const id = this.stringField(record, ['session_id', 'sessionId', 'id'])
+      if (!id) continue
+      const content = cleanCandidateText(this.stringField(record, ['text', 'content']))
+      const updated = Math.max(...['ts', 'timestamp', 'updated_at', 'updatedAt'].map((key) => candidateTimestamp(record[key])))
+      const previous = historyById.get(id)
+      if (!previous) historyById.set(id, { content, updated })
+      else historyById.set(id, { content: previous.content || content, updated: Math.max(previous.updated, updated) })
     }
 
-    return candidates.sort((a, b) => b.updated - a.updated)
+    const candidates: Array<{ id: string; title: string; content?: string; titleSource: NativeSessionTitleSource; updated: number; projectPath: string }> = []
+    const seen = new Set<string>()
+    for (const file of files) {
+      const session = await this.readSessionCandidate(file.path)
+      if (!session || this.normalizePath(session.cwd) !== normalizedProjectPath || seen.has(session.id)) continue
+      seen.add(session.id)
+      const index = indexById.get(session.id)
+      const history = historyById.get(session.id)
+      const content = session.content || history?.content || ''
+      const title = index?.title || content || 'Codex session'
+      candidates.push({
+        id: session.id,
+        title,
+        content: content || undefined,
+        titleSource: index?.title ? 'session-title' : content ? 'first-user-message' : 'fallback',
+        updated: Math.max(session.startedAt ?? 0, file.mtimeMs, index?.updated ?? 0, history?.updated ?? 0),
+        projectPath: session.cwd
+      })
+    }
+
+    return candidates
+      .sort((a, b) => b.updated - a.updated || a.id.localeCompare(b.id))
+      .slice(0, limit)
   }
 
   async findSessionIdByProjectPath(projectPath: string, targetStartMs?: number, maxSkewMs = 120_000): Promise<string | null> {
-    const root = join(homedir(), '.codex', 'sessions')
+    const root = join(this.codexRoot(), 'sessions')
     if (!existsSync(root)) return null
 
     // Never fall back to "latest". We only accept an exact start-time anchored match.
@@ -193,41 +237,59 @@ export class CodexAdapter {
     return files.slice(0, 600)
   }
 
+  private async readOptionalJsonl(filePath: string, maxBytes: number): Promise<Record<string, unknown>[]> {
+    try {
+      return parseJsonLines(await readBoundedPrefix(filePath, maxBytes))
+    } catch {
+      return []
+    }
+  }
+
+  private stringField(record: Record<string, unknown>, fields: readonly string[]): string {
+    return fields
+      .map((field) => typeof record[field] === 'string' ? record[field].trim() : '')
+      .find(Boolean) || ''
+  }
+
+  private isSubagentSource(source: unknown): boolean {
+    if (typeof source === 'string') return /subagent|guardian/i.test(source)
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return false
+    return Object.keys(source as Record<string, unknown>).some((key) => /subagent|guardian/i.test(key)) ||
+      Object.values(source as Record<string, unknown>).some((value) => this.isSubagentSource(value))
+  }
+
+  private codexUserContent(record: Record<string, unknown>): string {
+    if (record.type !== 'response_item' || !record.payload || typeof record.payload !== 'object') return ''
+    const payload = record.payload as Record<string, unknown>
+    if (payload.type !== 'message' || payload.role !== 'user' || !Array.isArray(payload.content)) return ''
+    return cleanCandidateText(payload.content.map((part) => {
+      if (!part || typeof part !== 'object') return ''
+      const item = part as Record<string, unknown>
+      return item.type === 'input_text' && typeof item.text === 'string' ? item.text : ''
+    }).filter(Boolean).join(' '))
+  }
+
+  private async readSessionCandidate(filePath: string): Promise<{ id: string; cwd: string; startedAt?: number; content: string } | null> {
+    try {
+      const meta = await this.readSessionMeta(filePath)
+      if (!meta) return null
+      const userRecord = await findJsonLine(filePath, (record) => Boolean(this.codexUserContent(record)), 1024 * 1024)
+      return { ...meta, content: userRecord ? this.codexUserContent(userRecord) : '' }
+    } catch {
+      return null
+    }
+  }
+
   private async readSessionMeta(filePath: string): Promise<{ id: string; cwd: string; startedAt?: number } | null> {
     try {
-      // session_meta 永远在首行且远小于 4KB：只读文件头部，避免为取一行读入
-      // 整个（可达数十 MB 的）jsonl——发现扫描最多 600 个文件，全量读会拖垮主进程。
-      const handle = await open(filePath, 'r')
-      let head: string
-      try {
-        const buf = Buffer.alloc(4096)
-        const { bytesRead } = await handle.read(buf, 0, buf.length, 0)
-        head = buf.subarray(0, bytesRead).toString('utf8')
-      } finally {
-        await handle.close()
-      }
-
-      const firstLine = head.split(/\r?\n/, 1)[0]
-      if (!firstLine) return null
-
-      const parsed = JSON.parse(firstLine) as {
-        type?: string
-        payload?: { id?: string; cwd?: string; timestamp?: string }
-      }
-      if (parsed.type !== 'session_meta') return null
-
-      const id = parsed.payload?.id
-      const cwd = parsed.payload?.cwd
-      if (!id || !cwd) return null
-
-      let startedAt: number | undefined
-      const ts = parsed.payload?.timestamp
-      if (typeof ts === 'string') {
-        const epoch = Date.parse(ts)
-        if (Number.isFinite(epoch)) startedAt = epoch
-      }
-
-      return { id, cwd, startedAt }
+      const first = parseJsonLines(await readBoundedPrefix(filePath, 64 * 1024))[0]
+      if (first?.type !== 'session_meta' || !first.payload || typeof first.payload !== 'object') return null
+      const payload = first.payload as Record<string, unknown>
+      const id = typeof payload.id === 'string' ? payload.id.trim() : ''
+      const cwd = typeof payload.cwd === 'string' ? payload.cwd.trim() : ''
+      if (!id || !cwd || this.isSubagentSource(payload.source)) return null
+      const timestamp = candidateTimestamp(payload.timestamp)
+      return { id, cwd, startedAt: timestamp || undefined }
     } catch {
       return null
     }

@@ -1,5 +1,5 @@
 import { io, type Socket } from 'socket.io-client'
-import type { OutputLine, SessionFilter, NativeSessionCandidate } from '../api/local-session'
+import type { OutputLine, SessionFilter } from '../api/local-session'
 import type { Project, ProjectPromptCliType, ProjectPromptFile } from '../api/local-project'
 import { ipc } from '../api/ipc'
 import {
@@ -21,6 +21,10 @@ import type {
   GatewayUpdateProjectParams
 } from './types'
 import type { CliType } from '@shared/cli-types'
+import {
+  normalizeNativeSessionDiscoveryPayload,
+  type NativeSessionDiscoveryResult
+} from '@shared/native-session-candidates'
 
 interface RemoteSessionDto {
   id: string
@@ -396,9 +400,20 @@ export class RemoteGateway implements Gateway {
           body: JSON.stringify({ cliType: args[1], value: args[2] ?? null })
         })
       case 'getNativeIdCandidates':
-        return this.requestJsonDirect<T>(
-          `/api/sessions/native-id-candidates?cliType=${encodeURIComponent(String(args[0]))}${args[1] ? `&projectPath=${encodeURIComponent(String(args[1]))}` : ''}${args[2] ? `&preferredPath=${encodeURIComponent(String(args[2]))}` : ''}`
-        )
+        try {
+          return await this.requestJsonDirect<T>(
+            `/api/sessions/native-id-candidates?cliType=${encodeURIComponent(String(args[0]))}${args[1] ? `&projectPath=${encodeURIComponent(String(args[1]))}` : ''}${args[2] ? `&preferredPath=${encodeURIComponent(String(args[2]))}` : ''}`
+          )
+        } catch (error) {
+          if (this.isHttpStatus(error, 404)) {
+            return {
+              status: 'unsupported',
+              candidates: [],
+              message: 'The remote instance does not support native session discovery'
+            } as T
+          }
+          throw error
+        }
       case 'writeRaw':
         try {
           await this.emitAckDirect('session:write', { sessionId: args[0], data: args[1] })
@@ -586,9 +601,10 @@ export class RemoteGateway implements Gateway {
     return session ? toUnifiedSession(session, { instanceId, source: 'remote' }) : null
   }
 
-  async getNativeIdCandidates(instanceId: string, cliType: CliType, projectPath?: string, preferredPath?: string): Promise<NativeSessionCandidate[]> {
+  async getNativeIdCandidates(instanceId: string, cliType: CliType, projectPath?: string, preferredPath?: string): Promise<NativeSessionDiscoveryResult> {
     this.assertInstance(instanceId)
-    return this.invoke<Array<{ id: string; title?: string; content?: string; updated?: number; projectPath?: string }>>('getNativeIdCandidates', cliType, projectPath, preferredPath)
+    const payload = await this.invoke<unknown>('getNativeIdCandidates', cliType, projectPath, preferredPath)
+    return normalizeNativeSessionDiscoveryPayload(payload)
   }
 
   async listProjects(instanceId: string): Promise<UnifiedProject[]> {

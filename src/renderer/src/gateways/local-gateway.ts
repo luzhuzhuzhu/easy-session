@@ -30,6 +30,7 @@ import {
   updateProject,
   writeProjectPrompt
 } from '../api/local-project'
+import { normalizeNativeSessionDiscoveryPayload } from '@shared/native-session-candidates'
 import { subscribeSessionOutput } from '../services/session-output-stream'
 import {
   buildGlobalSessionKey,
@@ -255,7 +256,8 @@ export class LocalGateway implements Gateway {
 
   async getNativeIdCandidates(instanceId: string, cliType: Session['type'], projectPath?: string, preferredPath?: string) {
     assertLocalInstance(instanceId)
-    return getNativeIdCandidates(cliType, projectPath, preferredPath)
+    const payload = await getNativeIdCandidates(cliType, projectPath, preferredPath)
+    return normalizeNativeSessionDiscoveryPayload(payload)
   }
 
   async clearOutput(instanceId: string, sessionId: string): Promise<void> {

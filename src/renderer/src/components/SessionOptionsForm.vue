@@ -256,13 +256,21 @@
           input-id="opencode-session-id"
           :can-pick="canShowCandidatePicker"
           :picker-open="showCandidates"
-          :loading="candidatesLoading"
-          :error="candidatesError"
+          :status="candidateStatus"
+          :status-message="candidateStatusMessage"
           :candidates="candidates"
-          :pick-label="$t('session.dialog.pickCandidate')"
+          :description="candidateDescription"
+          :pick-label="candidatePickLabel"
+          :close-label="$t('session.dialog.closeCandidates')"
           :loading-label="$t('session.dialog.candidatesLoading')"
-          :empty-label="$t('session.dialog.candidatesEmpty')"
-          :error-label="$t('session.dialog.candidatesError')"
+          :empty-label="candidateEmptyLabel"
+          :unsupported-label="candidateUnsupportedLabel"
+          :error-label="candidateErrorLabel"
+          :retry-label="$t('session.dialog.candidatesRetry')"
+          :search-label="$t('session.dialog.candidatesSearchLabel')"
+          :search-placeholder="$t('session.dialog.candidatesSearchPlaceholder')"
+          :search-empty-label="$t('session.dialog.candidatesSearchEmpty')"
+          :list-label="$t('session.dialog.candidatesListLabel')"
           :continue-label="$t('session.dialog.opencodeContinueLast')"
           :conflict-label="$t('session.dialog.opencodeConflictHint')"
           :auto-selected-label="$t('session.dialog.candidateAutoSelected')"
@@ -271,6 +279,7 @@
           @update:model-value="resumeIdEdited = true"
           @update:continue-last="opencodeOptions.continueLast = $event"
           @toggle-picker="toggleCandidates"
+          @retry="retryCandidates"
           @select="applyCandidate"
         />
         <div class="form-group">
@@ -359,13 +368,21 @@
       :input-id="`${props.cliType}-resume-id`"
       :can-pick="canShowCandidatePicker"
       :picker-open="showCandidates"
-      :loading="candidatesLoading"
-      :error="candidatesError"
+      :status="candidateStatus"
+      :status-message="candidateStatusMessage"
       :candidates="candidates"
-      :pick-label="$t('session.dialog.pickCandidate')"
+      :description="candidateDescription"
+      :pick-label="candidatePickLabel"
+      :close-label="$t('session.dialog.closeCandidates')"
       :loading-label="$t('session.dialog.candidatesLoading')"
-      :empty-label="$t('session.dialog.candidatesEmpty')"
-      :error-label="$t('session.dialog.candidatesError')"
+      :empty-label="candidateEmptyLabel"
+      :unsupported-label="candidateUnsupportedLabel"
+      :error-label="candidateErrorLabel"
+      :retry-label="$t('session.dialog.candidatesRetry')"
+      :search-label="$t('session.dialog.candidatesSearchLabel')"
+      :search-placeholder="$t('session.dialog.candidatesSearchPlaceholder')"
+      :search-empty-label="$t('session.dialog.candidatesSearchEmpty')"
+      :list-label="$t('session.dialog.candidatesListLabel')"
       :continue-label="$t('session.dialog.idContinueLast')"
       :conflict-label="$t('session.dialog.resumeConflictHint')"
       :auto-selected-label="$t('session.dialog.candidateAutoSelected')"
@@ -374,6 +391,7 @@
       :continue-last="false"
       @update:model-value="resumeIdEdited = true"
       @toggle-picker="toggleCandidates"
+      @retry="retryCandidates"
       @select="applyCandidate"
     />
 
@@ -423,13 +441,21 @@
         :input-id="`${props.cliType}-resume-id`"
         :can-pick="canShowCandidatePicker"
         :picker-open="showCandidates"
-        :loading="candidatesLoading"
-        :error="candidatesError"
+        :status="candidateStatus"
+        :status-message="candidateStatusMessage"
         :candidates="candidates"
-        :pick-label="$t('session.dialog.pickCandidate')"
+        :description="candidateDescription"
+        :pick-label="candidatePickLabel"
+        :close-label="$t('session.dialog.closeCandidates')"
         :loading-label="$t('session.dialog.candidatesLoading')"
-        :empty-label="$t('session.dialog.candidatesEmpty')"
-        :error-label="$t('session.dialog.candidatesError')"
+        :empty-label="candidateEmptyLabel"
+        :unsupported-label="candidateUnsupportedLabel"
+        :error-label="candidateErrorLabel"
+        :retry-label="$t('session.dialog.candidatesRetry')"
+        :search-label="$t('session.dialog.candidatesSearchLabel')"
+        :search-placeholder="$t('session.dialog.candidatesSearchPlaceholder')"
+        :search-empty-label="$t('session.dialog.candidatesSearchEmpty')"
+        :list-label="$t('session.dialog.candidatesListLabel')"
         :continue-label="$t('session.dialog.idContinueLast')"
         :conflict-label="$t('session.dialog.resumeConflictHint')"
         :auto-selected-label="$t('session.dialog.candidateAutoSelected')"
@@ -439,6 +465,7 @@
         @update:model-value="resumeIdEdited = true"
         @update:continue-last="idResumeOptions.continueLast = $event"
         @toggle-picker="toggleCandidates"
+        @retry="retryCandidates"
         @select="applyCandidate"
       />
 
@@ -610,6 +637,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import {
+  normalizeNativeSessionDiscoveryPayload,
+  type NativeSessionCandidate,
+  type NativeSessionDiscoveryResult
+} from '@shared/native-session-candidates'
 import type { CliType } from '@shared/cli-types'
 import { useSettingsStore } from '@/stores/settings'
 import { useToast } from '@/composables/useToast'
@@ -751,10 +783,11 @@ const idResumeOptions = reactive({
   resumeId: '',
   continueLast: false
 })
-const candidates = ref<Array<{ id: string; title?: string; content?: string; updated?: number; projectPath?: string }>>([])
-const candidatesLoading = ref(false)
+const candidates = ref<NativeSessionCandidate[]>([])
+const candidateStatus = ref<NativeSessionDiscoveryResult['status'] | 'loading'>('empty')
+const candidateStatusMessage = ref('')
+const candidatesLoading = computed(() => candidateStatus.value === 'loading')
 const showCandidates = ref(false)
-const candidatesError = ref(false)
 const resumeIdEdited = ref(false)
 const autoSelectedCandidateId = ref('')
 const candidatesLoaded = ref(false)
@@ -768,12 +801,40 @@ const hasInitialResumeBinding = computed(() => {
   return !!(props.initialNativeId?.trim() || (typeof optionId === 'string' && optionId.trim()))
 })
 
+const isLocalCandidateSource = computed(() => props.instanceId === LOCAL_INSTANCE_ID)
+const candidateDescription = computed(() => t(
+  isLocalCandidateSource.value
+    ? 'session.dialog.candidatesLocalDescription'
+    : 'session.dialog.candidatesRemoteDescription'
+))
+const candidatePickLabel = computed(() => t(
+  isLocalCandidateSource.value
+    ? 'session.dialog.pickLocalCandidate'
+    : 'session.dialog.pickRemoteCandidate'
+))
+const candidateEmptyLabel = computed(() => t(
+  isLocalCandidateSource.value
+    ? 'session.dialog.candidatesLocalEmpty'
+    : 'session.dialog.candidatesRemoteEmpty'
+))
+const candidateUnsupportedLabel = computed(() => t(
+  isLocalCandidateSource.value
+    ? 'session.dialog.candidatesLocalUnsupported'
+    : 'session.dialog.candidatesRemoteUnsupported'
+))
+const candidateErrorLabel = computed(() => t(
+  isLocalCandidateSource.value
+    ? 'session.dialog.candidatesLocalError'
+    : 'session.dialog.candidatesRemoteError'
+))
+
 function resetCandidateState(): void {
   candidateRequestSeq += 1
   candidateRequestKey = ''
   candidates.value = []
   showCandidates.value = false
-  candidatesError.value = false
+  candidateStatus.value = 'empty'
+  candidateStatusMessage.value = ''
   candidatesLoaded.value = false
   autoSelectedCandidateId.value = ''
 }
@@ -784,14 +845,24 @@ function toggleCandidates(): void {
   if (showCandidates.value && !candidatesLoaded.value) void loadCandidates()
 }
 
+function retryCandidates(): void {
+  if (!canShowCandidatePicker.value || candidatesLoading.value) return
+  candidatesLoaded.value = false
+  void loadCandidates()
+}
+
+function normalizeDiscoveryResult(value: unknown): NativeSessionDiscoveryResult {
+  return normalizeNativeSessionDiscoveryPayload(value)
+}
+
 async function loadCandidates(): Promise<void> {
   if (!canShowCandidatePicker.value) return
   const requestKey = `${props.instanceId}:${props.cliType}:${props.projectPath}`
   if (candidatesLoading.value && requestKey === candidateRequestKey) return
   const requestSeq = ++candidateRequestSeq
   candidateRequestKey = requestKey
-  candidatesLoading.value = true
-  candidatesError.value = false
+  candidateStatus.value = 'loading'
+  candidateStatusMessage.value = ''
   try {
     const gateway = await getSharedGatewayResolver().resolve(props.instanceId)
     const configuredKey = `${props.cliType}Path` as keyof typeof settingsStore.settings
@@ -807,9 +878,12 @@ async function loadCandidates(): Promise<void> {
       configuredPath
     )
     if (requestSeq !== candidateRequestSeq || requestKey !== candidateRequestKey) return
-    candidates.value = result
+    const discovery = normalizeDiscoveryResult(result)
+    candidates.value = discovery.candidates
+    candidateStatus.value = discovery.status
+    candidateStatusMessage.value = discovery.message || ''
     candidatesLoaded.value = true
-    if (!resumeIdEdited.value && !hasInitialResumeBinding.value && candidates.value.length === 1) {
+    if (discovery.status === 'ready' && !resumeIdEdited.value && !hasInitialResumeBinding.value && candidates.value.length === 1) {
       const [candidate] = candidates.value
       if (candidate) {
         if (props.cliType === 'opencode') opencodeOptions.sessionId = candidate.id
@@ -820,12 +894,9 @@ async function loadCandidates(): Promise<void> {
   } catch {
     if (requestSeq !== candidateRequestSeq || requestKey !== candidateRequestKey) return
     candidates.value = []
-    candidatesError.value = true
+    candidateStatus.value = 'error'
+    candidateStatusMessage.value = ''
     candidatesLoaded.value = true
-  } finally {
-    if (requestSeq === candidateRequestSeq && requestKey === candidateRequestKey) {
-      candidatesLoading.value = false
-    }
   }
 }
 
@@ -1187,8 +1258,6 @@ watch(
   () => {
     snapshotsByType.clear()
     resetCandidateState()
-    candidatesLoading.value = false
-    candidatesError.value = false
     resumeIdEdited.value = false
     optionsBaseline.value = null
     resetFromOptions()

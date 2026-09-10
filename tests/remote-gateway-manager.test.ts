@@ -31,6 +31,80 @@ describe('RemoteGatewayManager', () => {
     vi.restoreAllMocks()
   })
 
+  it.each([
+    {
+      name: 'legacy bare array',
+      payload: [{
+        id: 'legacy-1',
+        title: ' Legacy title ',
+        content: ' Full prompt ',
+        updated: 1_789_000_000_000,
+        projectPath: ' D:/repo '
+      }]
+    },
+    {
+      name: 'new discovery envelope',
+      payload: {
+        status: 'ready',
+        candidates: [{
+          id: 'new-1',
+          title: ' Summary title ',
+          titleSource: 'summary',
+          content: ' Full content ',
+          updated: 1_790_000_000_000,
+          projectPath: ' D:/new-repo '
+        }]
+      }
+    }
+  ])('normalizes $name from the remote REST bridge', async ({ payload }) => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      data: payload,
+      requestId: 'candidate-request'
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    const manager = new RemoteGatewayManager({
+      getInstance: vi.fn(() => createRemoteInstance('https://remote.example.com')),
+      getToken: vi.fn(() => 't'.repeat(64))
+    } as any)
+
+    const result = await manager.invoke({
+      instanceId: 'remote-1',
+      method: 'getNativeIdCandidates',
+      args: ['claude', 'D:/repo', 'C:/bin/claude.exe']
+    })
+
+    expect(result).toMatchObject({ status: 'ready' })
+    expect((result as any).candidates[0]).toMatchObject({
+      content: expect.any(String),
+      updated: expect.any(Number),
+      projectPath: expect.any(String),
+      titleSource: expect.stringMatching(/^(session-title|summary)$/)
+    })
+  })
+
+  it('maps a missing candidate endpoint to unsupported', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      code: 'NOT_FOUND',
+      message: 'Not found',
+      requestId: 'candidate-request'
+    }), { status: 404, headers: { 'Content-Type': 'application/json' } })))
+
+    const manager = new RemoteGatewayManager({
+      getInstance: vi.fn(() => createRemoteInstance('https://remote.example.com')),
+      getToken: vi.fn(() => 't'.repeat(64))
+    } as any)
+
+    await expect(manager.invoke({
+      instanceId: 'remote-1',
+      method: 'getNativeIdCandidates',
+      args: ['claude', 'D:/repo']
+    })).resolves.toEqual({
+      status: 'unsupported',
+      candidates: [],
+      message: 'The remote instance does not support native session discovery'
+    })
+  })
+
   it('turns trycloudflare DNS failures into actionable errors', async () => {
     vi.stubGlobal(
       'fetch',

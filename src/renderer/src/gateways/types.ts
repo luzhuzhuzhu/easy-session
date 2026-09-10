@@ -1,7 +1,7 @@
 import type { OutputEvent, OutputLine, SessionFilter, SessionStatus } from '../api/session'
 import type { ProjectPromptCliType, ProjectPromptFile } from '../api/project'
 import type { CliType } from '@shared/cli-types'
-import type { NativeSessionCandidate } from '../api/local-session'
+import type { NativeSessionDiscoveryResult } from '@shared/native-session-candidates'
 import type {
   InstanceCapabilities,
   UnifiedProject,
@@ -71,7 +71,7 @@ export interface SessionGateway {
   getCapabilities(instanceId: string): Promise<GatewayCapabilitySnapshot>
   updateSessionOptions(instanceId: string, sessionId: string, options: Record<string, unknown>): Promise<UnifiedSession | null>
   setNativeSessionId(instanceId: string, sessionId: string, cliType: CliType, value: string | null): Promise<UnifiedSession | null>
-  getNativeIdCandidates(instanceId: string, cliType: CliType, projectPath?: string, preferredPath?: string): Promise<NativeSessionCandidate[]>
+  getNativeIdCandidates(instanceId: string, cliType: CliType, projectPath?: string, preferredPath?: string): Promise<NativeSessionDiscoveryResult>
 }
 
 export interface ProjectGateway {

@@ -44,6 +44,32 @@ E:\\easy-session>opencode
   })
 })
 
+describe('OpenCodeAdapter.collectSessionCandidatesByPath', () => {
+  let adapter: OpenCodeAdapter
+
+  beforeEach(() => {
+    mocked.execFile.mockReset()
+    adapter = new OpenCodeAdapter({} as any)
+  })
+
+  it('unifies sessionId fields, uses maximum update time and enforces maxCount', async () => {
+    mocked.execFile.mockImplementation((_executable: string, args: string[], _opts: unknown, cb: (...args: any[]) => void) => {
+      expect(args).toContain('2')
+      cb(null, JSON.stringify({ sessions: [
+        { sessionId: 'ses_one', title: 'First', directory: 'E:/easy-session', created: 1_700_000_000, updated: 1_700_000_100 },
+        { sessionID: 'ses_two', title: 'Second', directory: 'E:/easy-session', time: { created: 1_600_000_000, updated: 1_800_000_000 } },
+        { id: 'ses_three', title: 'Third', directory: 'E:/easy-session', updated: 1_900_000_000 }
+      ] }), '')
+    })
+
+    const result = await adapter.collectSessionCandidatesByPath('E:/easy-session', undefined, 2)
+    expect(result).toEqual([
+      expect.objectContaining({ id: 'ses_three', title: 'Third', updated: 1_900_000_000_000 }),
+      expect.objectContaining({ id: 'ses_two', title: 'Second', updated: 1_800_000_000_000 })
+    ])
+  })
+})
+
 describe('OpenCodeAdapter.findSessionIdByProjectPath', () => {
   let adapter: OpenCodeAdapter
 

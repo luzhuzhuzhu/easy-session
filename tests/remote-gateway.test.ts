@@ -1,4 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { getLocalCandidatesMock } = vi.hoisted(() => ({
+  getLocalCandidatesMock: vi.fn()
+}))
+
+vi.mock('../src/renderer/src/api/local-session', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/renderer/src/api/local-session')>()
+  return {
+    ...original,
+    getNativeIdCandidates: getLocalCandidatesMock
+  }
+})
+
+import { LocalGateway } from '../src/renderer/src/gateways/local-gateway'
 import { RemoteGateway } from '../src/renderer/src/gateways/remote-gateway'
 import type { RemoteInstance } from '../src/renderer/src/models/unified-resource'
 
@@ -99,7 +113,32 @@ describe('RemoteGateway', () => {
   beforeEach(() => {
     ioMock.mockClear()
     socketRegistry.clear()
+    getLocalCandidatesMock.mockReset()
     vi.unstubAllGlobals()
+  })
+
+  it('normalizes the transitional local IPC discovery payload', async () => {
+    getLocalCandidatesMock.mockResolvedValue([{
+      id: ' local-1 ',
+      title: ' Local title ',
+      titleSource: 'summary',
+      content: ' Local full content ',
+      updated: 1_788_000_000_000,
+      projectPath: ' D:/local-repo '
+    }])
+
+    const gateway = new LocalGateway()
+    await expect(gateway.getNativeIdCandidates('local', 'claude', 'D:/local-repo')).resolves.toEqual({
+      status: 'ready',
+      candidates: [{
+        id: 'local-1',
+        title: 'Local title',
+        titleSource: 'summary',
+        content: 'Local full content',
+        updated: 1_788_000_000_000,
+        projectPath: 'D:/local-repo'
+      }]
+    })
   })
 
   it('supports multiple session subscriptions on the same remote instance without output mixing', async () => {
@@ -316,6 +355,78 @@ describe('RemoteGateway', () => {
     expect(projectSessions[0]?.projectId).toBe('p1')
     expect(createdSession.sessionId).toBe('s2')
     expect(startedSession?.status).toBe('running')
+  })
+
+  it.each([
+    {
+      name: 'legacy bare array',
+      payload: [{
+        id: 'legacy-1',
+        title: ' Legacy title ',
+        content: ' Full legacy prompt ',
+        updated: 1_789_000_000_000,
+        projectPath: ' D:/repo '
+      }],
+      expectedTitleSource: 'session-title'
+    },
+    {
+      name: 'new discovery envelope',
+      payload: {
+        status: 'ready',
+        candidates: [{
+          id: 'new-1',
+          title: ' Summary title ',
+          titleSource: 'summary',
+          content: ' Full prompt ',
+          updated: 1_790_000_000_000,
+          projectPath: ' D:/new-repo '
+        }]
+      },
+      expectedTitleSource: 'summary'
+    }
+  ])('normalizes $name on the direct REST path', async ({ payload, expectedTitleSource }) => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      data: payload,
+      requestId: 'candidate-request'
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    const gateway = new RemoteGateway(
+      createRemoteInstance('remote-1', 'https://remote-1.example.com'),
+      't'.repeat(64)
+    )
+    const result = await gateway.getNativeIdCandidates(
+      'remote-1',
+      'claude',
+      'D:/repo',
+      'C:/bin/claude.exe'
+    )
+
+    expect(result.status).toBe('ready')
+    expect(result.candidates[0]).toMatchObject({
+      content: expect.any(String),
+      updated: expect.any(Number),
+      projectPath: expect.any(String),
+      titleSource: expectedTitleSource
+    })
+  })
+
+  it('maps a missing direct REST candidate endpoint to unsupported', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      code: 'NOT_FOUND',
+      message: 'Not found',
+      requestId: 'candidate-request'
+    }), { status: 404, headers: { 'Content-Type': 'application/json' } })))
+
+    const gateway = new RemoteGateway(
+      createRemoteInstance('remote-1', 'https://remote-1.example.com'),
+      't'.repeat(64)
+    )
+
+    await expect(gateway.getNativeIdCandidates('remote-1', 'claude', 'D:/repo')).resolves.toEqual({
+      status: 'unsupported',
+      candidates: [],
+      message: 'The remote instance does not support native session discovery'
+    })
   })
 
   it('returns false instead of throwing when writing to a stopped remote session', async () => {

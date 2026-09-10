@@ -22,6 +22,7 @@ import type { Session } from '../services/session-types'
 import { buildRemoteCapabilityMap } from './capabilities'
 import { renderLoginPage, renderSessionsPage } from './web'
 import { isCliType, type CliType } from '../../shared/cli-types'
+import { normalizeNativeSessionDiscoveryPayload } from '../../shared/native-session-candidates'
 import { createLogger } from '../services/logger'
 
 const moduleRequire = createRequire(import.meta.url)
@@ -713,22 +714,26 @@ export function registerRemoteRoutes(
       const projectPathRaw = req.query.projectPath
       const projectPath = typeof projectPathRaw === 'string' ? projectPathRaw.trim() : ''
       if (!projectPath) {
-        sendSuccess(res, getRequestId(req), [])
+        sendSuccess(res, getRequestId(req), normalizeNativeSessionDiscoveryPayload([]))
         return
       }
       const preferredPathRaw = req.query.preferredPath
       const preferredPath = typeof preferredPathRaw === 'string' ? preferredPathRaw.trim() : undefined
       if (deps.nativeSessionCandidates) {
         const candidates = await deps.nativeSessionCandidates(cliTypeRaw, projectPath, preferredPath, 40)
-        sendSuccess(res, getRequestId(req), candidates)
+        sendSuccess(res, getRequestId(req), normalizeNativeSessionDiscoveryPayload(candidates))
         return
       }
       if (cliTypeRaw !== 'opencode' || !deps.openCodeAdapter) {
-        sendSuccess(res, getRequestId(req), [])
+        sendSuccess(res, getRequestId(req), {
+          status: 'unsupported',
+          candidates: [],
+          message: `Native session discovery is unsupported for ${cliTypeRaw}`
+        })
         return
       }
       const candidates = await deps.openCodeAdapter.collectSessionCandidatesByPath(projectPath, preferredPath, 40)
-      sendSuccess(res, getRequestId(req), candidates)
+      sendSuccess(res, getRequestId(req), normalizeNativeSessionDiscoveryPayload(candidates))
     })
   )
 

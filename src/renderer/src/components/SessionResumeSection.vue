@@ -23,10 +23,11 @@
         v-if="canPick"
         type="button"
         class="pick-button"
-        :disabled="loading"
+        :aria-expanded="pickerOpen"
+        :aria-controls="panelId"
         @click="$emit('toggle-picker')"
       >
-        {{ loading ? loadingLabel : pickLabel }}
+        {{ pickerOpen ? closeLabel : pickLabel }}
       </button>
     </div>
 
@@ -43,22 +44,49 @@
       {{ conflictLabel }}
     </p>
 
-    <div v-if="pickerOpen" class="picker-panel" aria-live="polite">
-      <p v-if="loading" class="state-message">{{ loadingLabel }}</p>
-      <p v-else-if="error" class="state-message error">{{ errorLabel }}</p>
-      <p v-else-if="candidates.length === 0" class="state-message">{{ emptyLabel }}</p>
-      <ul v-else class="candidate-list">
-        <li v-for="candidate in candidates" :key="candidate.id">
-          <button type="button" class="candidate-item" @click="$emit('select', candidate.id)">
-            <strong>{{ candidate.title || candidate.id }}</strong>
+    <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ liveStatusText }}</p>
+
+    <div v-if="pickerOpen" :id="panelId" class="picker-panel">
+      <div v-if="status === 'ready' && candidates.length" class="search-row">
+        <label class="sr-only" :for="searchId">{{ searchLabel }}</label>
+        <input
+          :id="searchId"
+          v-model="searchQuery"
+          type="search"
+          class="form-input candidate-search"
+          :placeholder="searchPlaceholder"
+          autocomplete="off"
+        />
+      </div>
+
+      <p v-if="status === 'loading'" class="state-message">{{ loadingLabel }}</p>
+      <div v-else-if="status === 'error'" class="state-block error" role="alert">
+        <p class="state-message">{{ statusMessage || errorLabel }}</p>
+        <button type="button" class="retry-button" @click="$emit('retry')">{{ retryLabel }}</button>
+      </div>
+      <p v-else-if="status === 'unsupported'" class="state-message">{{ statusMessage || unsupportedLabel }}</p>
+      <p v-else-if="status === 'empty' || candidates.length === 0" class="state-message">{{ statusMessage || emptyLabel }}</p>
+      <p v-else-if="filteredCandidates.length === 0" class="state-message">{{ searchEmptyLabel }}</p>
+      <ul v-else class="candidate-list" :aria-label="listLabel">
+        <li v-for="candidate in filteredCandidates" :key="candidate.id">
+          <button
+            type="button"
+            class="candidate-item"
+            :class="{ selected: candidate.id === modelValue }"
+            :aria-pressed="candidate.id === modelValue"
+            :title="candidateTooltip(candidate)"
+            @click="$emit('select', candidate.id)"
+          >
+            <strong class="candidate-title">{{ candidate.title || candidate.id }}</strong>
+            <span
+              v-if="candidate.content && normalized(candidate.content) !== normalized(candidate.title || '')"
+              class="candidate-content"
+            >{{ candidate.content }}</span>
             <span class="candidate-meta">
-              <span>{{ candidate.id }}</span>
-              <span v-if="candidate.content && candidate.content !== candidate.title" class="candidate-content">
-                {{ candidate.content }}
-              </span>
-              <span v-if="candidate.projectPath">{{ candidate.projectPath }}</span>
               <span v-if="candidate.updated">{{ formatUpdated(candidate.updated) }}</span>
+              <code>{{ shortId(candidate.id) }}</code>
             </span>
+            <span v-if="candidate.projectPath" class="candidate-path">{{ candidate.projectPath }}</span>
           </button>
         </li>
       </ul>
@@ -69,15 +97,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import type { NativeSessionCandidate, NativeSessionDiscoveryResult } from '@shared/native-session-candidates'
 
-interface Candidate {
-  id: string
-  title?: string
-  content?: string
-  updated?: number
-  projectPath?: string
-}
+type DiscoveryStatus = NativeSessionDiscoveryResult['status'] | 'loading'
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -90,13 +113,20 @@ const props = withDefaults(defineProps<{
   showContinue?: boolean
   canPick?: boolean
   pickerOpen?: boolean
-  loading?: boolean
-  error?: boolean
-  candidates?: Candidate[]
+  status?: DiscoveryStatus
+  statusMessage?: string
+  candidates?: NativeSessionCandidate[]
   pickLabel: string
+  closeLabel: string
   loadingLabel: string
   emptyLabel: string
+  unsupportedLabel: string
   errorLabel: string
+  retryLabel: string
+  searchLabel: string
+  searchPlaceholder: string
+  searchEmptyLabel: string
+  listLabel: string
   continueLabel: string
   conflictLabel: string
   autoSelectedLabel: string
@@ -107,8 +137,8 @@ const props = withDefaults(defineProps<{
   showContinue: false,
   canPick: false,
   pickerOpen: false,
-  loading: false,
-  error: false,
+  status: 'empty',
+  statusMessage: '',
   candidates: () => [],
   autoSelected: false,
   description: ''
@@ -119,16 +149,59 @@ const emit = defineEmits<{
   'update:continueLast': [value: boolean]
   'toggle-picker': []
   select: [id: string]
+  retry: []
 }>()
 
-const title = computed(() => props.title)
+const searchQuery = ref('')
+const panelId = computed(() => `${props.inputId}-candidate-panel`)
+const searchId = computed(() => `${props.inputId}-candidate-search`)
+const filteredCandidates = computed(() => {
+  const query = normalized(searchQuery.value)
+  if (!query) return props.candidates
+  return props.candidates.filter((candidate) =>
+    [candidate.title, candidate.content, candidate.id, candidate.projectPath]
+      .some((value) => normalized(value || '').includes(query))
+  )
+})
+const liveStatusText = computed(() => {
+  if (!props.pickerOpen) return ''
+  if (props.status === 'loading') return props.loadingLabel
+  if (props.status === 'error') return props.statusMessage || props.errorLabel
+  if (props.status === 'unsupported') return props.statusMessage || props.unsupportedLabel
+  if (props.status === 'empty' || props.candidates.length === 0) return props.statusMessage || props.emptyLabel
+  if (filteredCandidates.value.length === 0) return props.searchEmptyLabel
+  return props.listLabel
+})
+
+watch(() => props.pickerOpen, (open) => {
+  if (!open) searchQuery.value = ''
+})
+
+function normalized(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+}
 
 function handleInput(event: Event): void {
   emit('update:modelValue', (event.target as HTMLInputElement).value)
 }
 
 function formatUpdated(updated: number): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(updated)
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(updated)
+}
+
+function shortId(id: string): string {
+  if (id.length <= 14) return id
+  return `${id.slice(0, 8)}…${id.slice(-4)}`
+}
+
+function candidateTooltip(candidate: NativeSessionCandidate): string {
+  return [
+    candidate.title || candidate.id,
+    candidate.content && normalized(candidate.content) !== normalized(candidate.title || '') ? candidate.content : '',
+    candidate.updated ? formatUpdated(candidate.updated) : '',
+    candidate.id,
+    candidate.projectPath || ''
+  ].filter(Boolean).join('\n')
 }
 </script>
 
@@ -167,14 +240,8 @@ h4 {
   line-height: 1.4;
 }
 
-.section-description {
-  margin-top: 2px;
-}
-
-.field-label {
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-}
+.section-description { margin-top: 2px; }
+.field-label { color: var(--text-secondary); font-size: var(--font-size-xs); }
 
 .resume-row {
   display: grid;
@@ -183,7 +250,8 @@ h4 {
   align-items: center;
 }
 
-.pick-button {
+.pick-button,
+.retry-button {
   min-height: 32px;
   padding: 0 var(--spacing-sm);
   border: 1px solid var(--border-color);
@@ -196,15 +264,11 @@ h4 {
   white-space: nowrap;
 }
 
-.pick-button:hover:not(:disabled) {
+.pick-button:hover,
+.retry-button:hover {
   border-color: var(--border-light);
   background: var(--bg-hover);
   color: var(--text-primary);
-}
-
-.pick-button:disabled {
-  cursor: wait;
-  opacity: 0.55;
 }
 
 .continue-label {
@@ -217,19 +281,25 @@ h4 {
 }
 
 .conflict-hint,
-.state-message.error {
+.state-block.error .state-message {
   margin: 0;
   color: var(--status-warning);
   font-size: var(--font-size-xs);
 }
 
 .picker-panel {
-  max-height: 220px;
+  max-height: 300px;
   overflow-y: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background: var(--bg-primary);
 }
+
+.search-row { position: sticky; top: 0; z-index: 1; padding: 8px; background: var(--bg-primary); }
+.candidate-search { width: 100%; }
+.state-message { padding: 12px; }
+.state-block { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; }
+.state-block .state-message { padding: 0; }
 
 .candidate-list {
   display: flex;
@@ -243,10 +313,11 @@ h4 {
 .candidate-item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   width: 100%;
-  padding: 8px var(--spacing-sm);
+  padding: 9px var(--spacing-sm);
   border: 0;
+  border-left: 3px solid transparent;
   background: transparent;
   color: var(--text-primary);
   cursor: pointer;
@@ -255,31 +326,32 @@ h4 {
 }
 
 .candidate-item:hover,
-.candidate-item:focus-visible {
-  outline: none;
-  background: var(--bg-hover);
-}
+.candidate-item:focus-visible { outline: none; background: var(--bg-hover); }
+.candidate-item.selected { border-left-color: var(--accent-primary); background: color-mix(in srgb, var(--accent-primary) 10%, transparent); }
 
-.candidate-item strong,
-.candidate-meta span {
+.candidate-title,
+.candidate-path,
+.candidate-meta span,
+.candidate-meta code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.candidate-item strong {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
+.candidate-title { font-size: var(--font-size-sm); font-weight: 600; }
+.candidate-content {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.candidate-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-}
+.candidate-meta { display: flex; gap: 8px; color: var(--text-muted); font-size: var(--font-size-xs); }
+.candidate-meta code { color: inherit; font-family: var(--font-mono); }
+.candidate-path { color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; }
 
 .auto-badge {
   flex: 0 0 auto;
@@ -291,13 +363,10 @@ h4 {
   white-space: nowrap;
 }
 
-@media (max-width: 640px) {
-  .resume-row {
-    grid-template-columns: 1fr;
-  }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
-  .pick-button {
-    width: 100%;
-  }
+@media (max-width: 640px) {
+  .resume-row { grid-template-columns: 1fr; }
+  .pick-button { width: 100%; }
 }
 </style>

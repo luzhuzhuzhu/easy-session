@@ -345,12 +345,39 @@ describe('remote routes', () => {
       )
       expect(resp.status).toBe(200)
       const body = await resp.json()
-      expect(body.data).toEqual([{ id: 'oc-1', title: 'Demo session', updated: 1700000000000 }])
+      expect(body.data).toEqual({
+        status: 'ready',
+        candidates: [{
+          id: 'oc-1',
+          title: 'Demo session',
+          titleSource: 'session-title',
+          updated: 1700000000000
+        }]
+      })
       expect((deps.openCodeAdapter?.collectSessionCandidatesByPath as any).mock.calls[0]).toEqual([
         'D:/repo/demo',
         'C:/Program Files/opencode.exe',
         40
       ])
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('returns an unsupported discovery envelope when no collector exists', async () => {
+    const server = await startServer(buildApp())
+    try {
+      const resp = await fetch(
+        `${server.baseUrl}/api/sessions/native-id-candidates?cliType=claude&projectPath=D%3A%2Frepo%2Fdemo`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      expect(resp.status).toBe(200)
+      const body = await resp.json()
+      expect(body.data).toEqual({
+        status: 'unsupported',
+        candidates: [],
+        message: 'Native session discovery is unsupported for claude'
+      })
     } finally {
       await server.close()
     }

@@ -160,8 +160,13 @@ export function getProbeableCliIds(): string[] {
   return CLI_REGISTRY.filter((entry) => !!entry.settingsPathKey).map((entry) => entry.id)
 }
 
-export function hasNativeSessionCandidates(id: string): boolean {
+export function supportsNativeSessionDiscovery(id: string): boolean {
   return getCliRegistryEntry(id)?.discovery.nativeSessionCandidates === true
+}
+
+/** @deprecated Prefer supportsNativeSessionDiscovery for capability checks. */
+export function hasNativeSessionCandidates(id: string): boolean {
+  return supportsNativeSessionDiscovery(id)
 }
 
 export function getCliDiscoveryCapabilities(id: string): CliDiscoveryCapabilities | undefined {
