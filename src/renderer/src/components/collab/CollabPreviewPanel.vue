@@ -17,3 +17,27 @@ defineProps<{
   hasTargetSession: boolean
 }>()
 </script>
+
+<style scoped lang="scss">
+@use './panel-mixins' as panel;
+
+@include panel.shell;
+
+.preview-region {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.preview-region :slotted(.collab-terminal) {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+}
+</style>

@@ -21,7 +21,12 @@ async function seedCollabSnapshot(page: Page): Promise<void> {
           statusSince: Date.now() - 1000, history: []
         }
       ],
-      messages: [],
+      messages: [
+        {
+          id: 'message-1', from: 'agent-1', fromName: 'Claude-001', to: 'user', kind: 'message',
+          body: 'Seeded collaboration message', createdAt: Date.now() - 2000
+        }
+      ],
       ready: true,
       error: null
     }
@@ -65,6 +70,32 @@ test.describe('collaboration layout (ENG-4 / UX-14)', () => {
     await expect(page.locator('.board-region')).toBeVisible()
     await expect(page.locator('.board-grid')).toHaveCSS('display', 'grid')
     await expect(page.locator('.board-col').first()).toHaveCSS('min-width', '146px')
+  })
+
+  test('all panels keep their nested flex/grid and overflow layout after reset and selection', async ({ page }) => {
+    await page.locator('.layout-menu-wrap > .icon-button').first().click()
+    await page.locator('.layout-panel .ms-all').last().click()
+    await expect(page.locator('.panel-content')).toHaveCount(5)
+    await page.locator('.ms-backdrop').click({ position: { x: 1, y: 1 } })
+
+    await page.locator('.task-card').first().click()
+    await page.locator('.agent-row').first().click()
+
+    await expect(page.locator('.agent-list')).toHaveCSS('display', 'flex')
+    await expect(page.locator('.agent-row').first()).toHaveCSS('display', 'grid')
+
+    await expect(page.locator('.detail-region')).toHaveCSS('overflow-y', 'auto')
+    await expect(page.locator('.manual-status-row')).toHaveCSS('display', 'grid')
+
+    await expect(page.locator('.preview-region')).toHaveCSS('display', 'flex')
+
+    await expect(page.locator('.chat-region')).toHaveCSS('display', 'flex')
+    await expect(page.locator('.chat-composer')).toHaveCSS('display', 'grid')
+    await expect(page.locator('.chat-input')).toHaveCSS('min-height', '48px')
+
+    await expect(page.locator('.board-grid')).toHaveCSS('display', 'grid')
+    await expect(page.locator('.board-col').first()).toHaveCSS('min-width', '146px')
+    await expect(page.locator('.task-meta span').last()).toHaveCSS('white-space', 'nowrap')
   })
 
   test('preset persists to localStorage (survives restart)', async ({ page }) => {

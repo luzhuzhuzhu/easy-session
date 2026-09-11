@@ -1,4 +1,4 @@
-import type { RemoteCapabilityMap } from './types'
+﻿import type { RemoteCapabilityMap } from './types'
 
 // passthroughOnly 语义澄清：它只关闭「生命周期管理」类能力（项目/会话的增删启停），
 // 而 sessionInput/sessionResize/sessionSubscribe/sessionOutputHistory 始终开放 ——
@@ -26,6 +26,7 @@ export function buildRemoteCapabilityMap(passthroughOnly: boolean): RemoteCapabi
     sessionPause: lifecycleAllowed,
     sessionRestart: lifecycleAllowed,
     sessionDestroy: lifecycleAllowed,
+    sessionArchive: lifecycleAllowed,
     projectPromptRead: true,
     projectPromptWrite: lifecycleAllowed,
     localPathOpen: false

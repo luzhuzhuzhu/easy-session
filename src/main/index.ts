@@ -39,7 +39,7 @@ import { RemoteServiceManager } from './services/remote-service-manager'
 import { CloudflareTunnelManager } from './services/cloudflare-tunnel-manager'
 import { RemoteNetworkSettingsManager } from './services/remote-network-settings-manager'
 import { RemoteGatewayManager } from './services/remote-gateway-manager'
-import { candidateCollectorFor } from './services/native-session-candidates'
+import { discoverNativeSessions } from './services/native-session-discovery'
 
 import { SessionOutputManager } from './services/session-output'
 import { AgentBus } from './services/agent-bus'
@@ -735,16 +735,16 @@ app.whenReady().then(async () => {
         projectManager,
         outputManager,
         openCodeAdapter,
-        nativeSessionCandidates: async (cliType, projectPath, preferredPath, maxCount) => {
-          if (cliType === 'opencode') {
-            return openCodeAdapter.collectSessionCandidatesByPath(projectPath, preferredPath, maxCount)
-          }
-          if (cliType === 'codex') {
-            return codexAdapter.collectSessionCandidatesByPath(projectPath, maxCount)
-          }
-          const collector = candidateCollectorFor(cliType)
-          return collector ? collector(projectPath, preferredPath, maxCount) : []
-        }
+        // RemoteDependencies still accepts the legacy candidate-array provider type while
+        // the route forwards provider results opaquely; keep runtime on the shared envelope.
+        nativeSessionCandidates: (cliType, projectPath, preferredPath, maxCount) =>
+          discoverNativeSessions(
+            cliType,
+            projectPath,
+            preferredPath,
+            { openCodeAdapter, codexAdapter },
+            maxCount
+          ) as Promise<never>
       },
       userData
     )

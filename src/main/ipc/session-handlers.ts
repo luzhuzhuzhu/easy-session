@@ -6,7 +6,7 @@ import type { CreateSessionParams, SessionFilter, Session } from '../services/se
 import { CLI_REGISTRY } from './cli-registry'
 import type { OpenCodeAdapter } from '../services/opencode-adapter'
 import type { CodexAdapter } from '../services/codex-adapter'
-import { candidateCollectorFor } from '../services/native-session-candidates'
+import { discoverNativeSessions } from '../services/native-session-discovery'
 import { isCliType } from '../../shared/cli-types'
 
 // session:create 的形状校验：用 zod 取代「不校验直接强转持久化」。
@@ -137,6 +137,12 @@ export function registerSessionHandlers(
     sessionManager.resizeTerminal(id, cols, rows)
   })
 
+  ipcMain.handle('session:setArchived', (_event, id: string, archived: boolean) => {
+    assertString(id, 'id')
+    if (typeof archived !== 'boolean') throw new Error('参数 archived 必须为布尔值')
+    return sessionManager.setSessionArchived(id, archived)
+  })
+
   ipcMain.handle('session:rename', (_event, id: string, name: string) => {
     assertString(id, 'id')
     assertString(name, 'name')
@@ -185,20 +191,10 @@ export function registerSessionHandlers(
 
   // 会话候选列表：返回明确的 discovery 状态，避免把“不支持扫描”伪装成空结果。
   ipcMain.handle('session:nativeIdCandidates', async (_event, cliType: string, projectPath?: string, preferredPath?: string) => {
-    if (!isCliType(cliType) || cliType === 'terminal') {
-      throw new Error('参数 cliType 必须为支持 resume 的 CLI 类型')
-    }
-    const normalizedPath = typeof projectPath === 'string' && projectPath.trim() ? projectPath.trim() : undefined
-    const normalizedPreferredPath = typeof preferredPath === 'string' && preferredPath.trim() ? preferredPath.trim() : undefined
-    if (!normalizedPath) return []
-    if (cliType === 'opencode' && openCodeAdapter) {
-      return openCodeAdapter.collectSessionCandidatesByPath(normalizedPath, normalizedPreferredPath, 40)
-    }
-    if (cliType === 'codex' && codexAdapter) {
-      return codexAdapter.collectSessionCandidatesByPath(normalizedPath, 40)
-    }
-    const collector = candidateCollectorFor(cliType)
-    return collector ? collector(normalizedPath, normalizedPreferredPath, 40) : []
+    return discoverNativeSessions(cliType, projectPath, preferredPath, {
+      openCodeAdapter,
+      codexAdapter
+    })
   })
 
   ipcMain.handle('terminal:detectShells', () => {

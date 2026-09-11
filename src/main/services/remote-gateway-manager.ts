@@ -1,4 +1,4 @@
-import { type WebContents, webContents } from 'electron'
+﻿import { type WebContents, webContents } from 'electron'
 import { io, type Socket } from 'socket.io-client'
 import type { Project } from './project-types'
 import type { SessionFilter, SessionStatus } from './session-types'
@@ -7,6 +7,10 @@ import { RemoteInstanceManager } from './remote-instance-manager'
 import type { RemoteCapabilitiesResponse } from '../remote/types'
 import type { RemoteInstanceRecord } from './remote-instance-types'
 import type { CliType } from '../../shared/cli-types'
+import {
+  normalizeNativeSessionDiscoveryPayload,
+  type NativeSessionDiscoveryResult
+} from '../../shared/native-session-candidates'
 type RemoteProjectPromptCliType = 'claude' | 'codex'
 
 
@@ -91,6 +95,7 @@ export type RemoteGatewayInvokeMethod =
   | 'pauseSession'
   | 'restartSession'
   | 'destroySession'
+  | 'setSessionArchived'
   | 'listSessions'
   | 'getSession'
   | 'getOutputHistory'
@@ -430,6 +435,19 @@ class RemoteGatewayClient {
     }
   }
 
+  async setSessionArchived(sessionId: string, archived: boolean): Promise<RemoteSessionDto | null> {
+    try {
+      return await this.requestJson<RemoteSessionDto>(`/api/sessions/${sessionId}/archive`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived })
+      })
+    } catch (error) {
+      if (this.isHttpStatus(error, 404)) return null
+      throw error
+    }
+  }
+
   async getCapabilities(): Promise<RemoteCapabilitiesResponse> {
     return this.requestJson<RemoteCapabilitiesResponse>('/api/capabilities')
   }
@@ -580,13 +598,25 @@ class RemoteGatewayClient {
     }
   }
 
-  async getNativeIdCandidates(cliType: CliType, projectPath?: string, preferredPath?: string): Promise<Array<{ id: string; title: string; updated: number }>> {
+  async getNativeIdCandidates(cliType: CliType, projectPath?: string, preferredPath?: string): Promise<NativeSessionDiscoveryResult> {
     const query = new URLSearchParams({ cliType })
     if (projectPath) query.set('projectPath', projectPath)
     if (preferredPath) query.set('preferredPath', preferredPath)
-    return this.requestJson<Array<{ id: string; title: string; updated: number }>>(
-      `/api/sessions/native-id-candidates?${query.toString()}`
-    )
+    try {
+      const payload = await this.requestJson<unknown>(
+        `/api/sessions/native-id-candidates?${query.toString()}`
+      )
+      return normalizeNativeSessionDiscoveryPayload(payload)
+    } catch (error) {
+      if (this.isHttpStatus(error, 404)) {
+        return {
+          status: 'unsupported',
+          candidates: [],
+          message: 'The remote instance does not support native session discovery'
+        }
+      }
+      throw error
+    }
   }
 
   subscribeOutput(sessionId: string, listener: (event: RemoteGatewayOutputEvent) => void): () => void {
@@ -766,6 +796,8 @@ export class RemoteGatewayManager {
         return client.restartSession(args[0] as string)
       case 'destroySession':
         return client.destroySession(args[0] as string)
+      case 'setSessionArchived':
+        return client.setSessionArchived(args[0] as string, args[1] as boolean)
       case 'listSessions':
         return client.listSessions(args[0] as SessionFilter | undefined)
       case 'getSession':

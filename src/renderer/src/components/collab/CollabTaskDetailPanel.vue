@@ -177,3 +177,166 @@ function latestTaskText(task: AgentTask): string {
   return hit?.text || ''
 }
 </script>
+
+<style scoped lang="scss">
+@use './panel-mixins' as panel;
+
+@include panel.shell;
+@include panel.form-controls;
+@include panel.action-buttons;
+@include panel.status-colors;
+
+.detail-tools {
+  justify-content: flex-end;
+}
+
+.detail-region {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.detail-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.detail-content h3 {
+  margin: 7px 0 3px;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.task-id {
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs);
+}
+
+.task-status {
+  flex-shrink: 0;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+
+.detail-flow {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.task-note,
+.result-box {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+}
+
+.task-note span,
+.result-box span {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+}
+
+.task-note p,
+.result-box p {
+  max-height: 180px;
+  margin: 5px 0 0;
+  overflow-y: auto;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.task-actions,
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.manual-status {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+}
+
+.manual-status-row {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.manual-status-row label {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.manual-status-row select {
+  height: 28px;
+  font-size: 12px;
+}
+
+.manual-status textarea {
+  height: 44px;
+  min-height: 44px;
+  margin-top: 6px;
+  resize: vertical;
+}
+
+.inline-form textarea {
+  flex-basis: 100%;
+  height: 62px;
+}
+
+.history {
+  margin-top: 10px;
+}
+
+.history ol {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history li {
+  display: grid;
+  grid-template-columns: 38px 64px minmax(0, 1fr);
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
+}
+
+.history li span {
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.history time {
+  color: var(--text-muted);
+}
+</style>

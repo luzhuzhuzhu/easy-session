@@ -274,7 +274,7 @@ function normalizeLayout(input: unknown): { layout: WorkspaceLayoutState; migrat
 
   const usedTabs = new Set<string>()
   for (const leaf of leaves) {
-    const filtered = leaf.tabs.filter((tabId) => !!normalized.tabs[tabId])
+    const filtered = leaf.tabs.filter((tabId) => !!normalized.tabs[tabId] && !usedTabs.has(tabId))
     if (filtered.length !== leaf.tabs.length) {
       migrated = true
     }

@@ -88,6 +88,7 @@ export function useSessionInteractionState(options: UseSessionInteractionStateOp
   const showIconPicker = ref(false)
   const iconPickerSessionId = ref<string | null>(null)
   const refreshingRemoteData = ref(false)
+  let reloadGeneration = 0
 
   const iconEmojiList = SESSION_EMOJI_LIST
 
@@ -246,7 +247,7 @@ export function useSessionInteractionState(options: UseSessionInteractionStateOp
 
   async function reloadSessionTree(config?: { showToast?: boolean }): Promise<void> {
     const showToast = config?.showToast ?? false
-    const wasRefreshing = refreshingRemoteData.value
+    const generation = ++reloadGeneration
     refreshingRemoteData.value = true
 
     try {
@@ -255,17 +256,18 @@ export function useSessionInteractionState(options: UseSessionInteractionStateOp
         options.sessionsStore.fetchAllSessions(),
         options.projectsStore.fetchAllProjects()
       ])
+      if (generation !== reloadGeneration) return
       options.reconcileWorkspaceSessions()
       options.applyRouteSessionSelection()
       if (showToast) {
         options.toast.success(options.t('toast.remoteRefreshed'))
       }
     } catch (error: unknown) {
-      if (showToast) {
+      if (generation === reloadGeneration && showToast) {
         options.toast.error(options.t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
       }
     } finally {
-      if (!wasRefreshing) {
+      if (generation === reloadGeneration) {
         refreshingRemoteData.value = false
       }
     }

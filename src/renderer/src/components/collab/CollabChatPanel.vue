@@ -117,3 +117,140 @@ defineExpose({
   }
 })
 </script>
+
+<style scoped lang="scss">
+@use './panel-mixins' as panel;
+
+@include panel.shell;
+@include panel.form-controls;
+@include panel.action-buttons;
+
+.chat-region {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.chat-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  margin-bottom: 6px;
+  padding-right: 2px;
+  overflow-y: auto;
+}
+
+.chat-msg {
+  align-self: flex-start;
+  max-width: 86%;
+  padding: 6px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-primary);
+}
+
+.chat-msg.mine {
+  align-self: flex-end;
+  border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--border-color));
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-primary));
+}
+
+.chat-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.chat-msg strong {
+  color: var(--text-secondary);
+}
+
+.chat-msg time {
+  margin-left: auto;
+}
+
+.chat-msg p {
+  margin: 3px 0 0;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.chat-composer {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 6px;
+}
+
+.chat-input {
+  height: 48px;
+  min-height: 48px;
+  max-height: 110px;
+}
+
+.cmd-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-card, var(--bg-secondary));
+  box-shadow: var(--shadow-lg);
+}
+
+.cmd-item {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.cmd-item.active,
+.cmd-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.cmd-item b {
+  color: var(--accent-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+}
+
+.cmd-arg {
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs);
+}
+
+.cmd-desc {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+</style>

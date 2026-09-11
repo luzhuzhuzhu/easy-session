@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 const workspaceApi = vi.hoisted(() => ({
@@ -29,6 +29,7 @@ const remoteInstanceApi = vi.hoisted(() => ({
 const sessionApi = vi.hoisted(() => ({
   createSession: vi.fn(),
   destroySession: vi.fn(),
+  setSessionArchived: vi.fn(),
   listSessions: vi.fn(async () => []),
   sendInput: vi.fn(),
   clearOutput: vi.fn(),
@@ -582,4 +583,101 @@ describe('sessions store', () => {
       globalSessionKey: 'remote-1:session-remote-2'
     })
   })
+
+  it('ignores a stale session refresh that finishes after a newer refresh', async () => {
+    let resolveFirst!: (value: any[]) => void
+    let resolveSecond!: (value: any[]) => void
+    sessionApi.listSessions
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve }))
+
+    const store = useSessionsStore()
+    const first = store.fetchSessions()
+    const second = store.fetchSessions()
+    await vi.waitUntil(() => typeof resolveSecond === 'function')
+
+    resolveSecond([{
+      id: 'new', name: 'New', icon: null, type: 'codex', projectPath: 'D:/repo',
+      status: 'running', createdAt: 2, lastActiveAt: 2, processId: 'p2', options: {}, parentId: null
+    }])
+    await second
+    resolveFirst([{
+      id: 'old', name: 'Old', icon: null, type: 'codex', projectPath: 'D:/repo',
+      status: 'idle', createdAt: 1, lastActiveAt: 1, processId: null, options: {}, parentId: null
+    }])
+    await first
+
+    expect(store.sessions.map((session) => session.id)).toEqual(['new'])
+  })
+
+
+  it('archives a stopped local session without destroying it and closes its workspace tabs', async () => {
+    sessionApi.setSessionArchived.mockResolvedValue({
+      id: 'session-local', name: 'Local', icon: null, type: 'codex', projectPath: 'D:/repo',
+      status: 'stopped', createdAt: 1, lastActiveAt: 2, processId: null, options: {}, parentId: null,
+      archivedAt: 123
+    })
+    const store = useSessionsStore()
+    store.sessions = [{
+      id: 'session-local', name: 'Local', icon: null, type: 'codex', projectPath: 'D:/repo',
+      status: 'stopped', createdAt: 1, lastActiveAt: 2, processId: null, options: {}, parentId: null
+    }]
+    const workspaceStore = useWorkspaceStore()
+    await workspaceStore.load()
+    const ref = { instanceId: 'local', sessionId: 'session-local', globalSessionKey: 'local:session-local' }
+    workspaceStore.openSessionRefInActivePane(ref)
+
+    await store.setSessionArchivedRef(ref, true)
+
+    expect(sessionApi.destroySession).not.toHaveBeenCalled()
+    expect(store.sessions[0].archivedAt).toBe(123)
+    expect(Object.keys(workspaceStore.layout.tabs)).toHaveLength(0)
+  })
+
+
+  it('archives a stopped remote session through its gateway and closes its workspace tabs', async () => {
+    remoteInstanceApi.getRemoteInstanceToken.mockResolvedValue('t'.repeat(64))
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      data: {
+        id: 'remote-session', name: 'Remote', icon: null, type: 'codex', projectPath: 'D:/repo',
+        status: 'stopped', createdAt: 1, lastActiveAt: 2, processId: null, options: {}, parentId: null,
+        archivedAt: 456
+      },
+      requestId: 'archive-request'
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    const instancesStore = useInstancesStore()
+    instancesStore.remoteInstances = [{
+      id: 'remote-1', type: 'remote', name: 'Remote', baseUrl: 'https://remote.example.com',
+      enabled: true, authRef: 'remote-1', status: 'online', lastCheckedAt: null, passthroughOnly: false,
+      capabilities: {
+        projectsList: true, projectRead: true, projectCreate: true, projectUpdate: true,
+        projectRemove: true, projectOpen: true, projectSessionsList: true, projectDetect: true,
+        sessionsList: true, sessionSubscribe: true, sessionInput: true, sessionResize: true,
+        sessionOutputHistory: true, sessionCreate: true, sessionStart: true, sessionPause: true,
+        sessionRestart: true, sessionDestroy: true, sessionArchive: true, projectPromptRead: true,
+        projectPromptWrite: true, localPathOpen: false
+      },
+      lastError: null, latencyMs: 1
+    }]
+
+    const store = useSessionsStore()
+    store.remoteSessionsByInstance = {
+      'remote-1': [{
+        instanceId: 'remote-1', sessionId: 'remote-session', globalSessionKey: 'remote-1:remote-session',
+        name: 'Remote', icon: null, type: 'codex', projectPath: 'D:/repo', status: 'stopped',
+        createdAt: 1, lastActiveAt: 2, processId: null, options: {}, parentId: null, source: 'remote'
+      }]
+    }
+    const workspaceStore = useWorkspaceStore()
+    await workspaceStore.load()
+    const ref = { instanceId: 'remote-1', sessionId: 'remote-session', globalSessionKey: 'remote-1:remote-session' }
+    workspaceStore.openSessionRefInActivePane(ref)
+
+    await store.setSessionArchivedRef(ref, true)
+
+    expect(store.remoteSessionsByInstance['remote-1'][0].archivedAt).toBe(456)
+    expect(Object.keys(workspaceStore.layout.tabs)).toHaveLength(0)
+  })
+
 })

@@ -175,4 +175,27 @@ describe('instances store', () => {
     expect(store.remoteInstanceIndex['remote-1']?.status).toBe('offline')
     expect(store.remoteInstanceIndex['remote-1']?.lastError).toContain('Cloudflare Quick Tunnel')
   })
+
+  it('keeps the newest instance refresh and loading state during overlapping requests', async () => {
+    let resolveFirst!: (value: RemoteInstance[]) => void
+    let resolveSecond!: (value: RemoteInstance[]) => void
+    remoteApi.listRemoteInstances
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve }))
+
+    const store = useInstancesStore()
+    const first = store.fetchInstances()
+    const second = store.fetchInstances()
+    await vi.waitUntil(() => typeof resolveSecond === 'function')
+
+    resolveFirst([createRemoteInstance({ name: 'old' })])
+    await first
+    expect(store.loading).toBe(true)
+
+    resolveSecond([createRemoteInstance({ name: 'new' })])
+    await second
+    expect(store.remoteInstances[0]?.name).toBe('new')
+    expect(store.loading).toBe(false)
+  })
+
 })

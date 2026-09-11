@@ -3,20 +3,13 @@ import { open, readFile, readdir, stat } from 'fs/promises'
 import { homedir } from 'os'
 import { basename, join, resolve } from 'path'
 import type { CliType } from '../../shared/cli-types'
-
-export interface NativeSessionDiscoveryResult {
-  status: 'ready' | 'empty' | 'unsupported' | 'error'
-  candidates: NativeSessionCandidate[]
-  message?: string
-}
-
-export interface NativeSessionCandidate {
-  id: string
-  title?: string
-  content?: string
-  updated?: number
-  projectPath?: string
-}
+import type { NativeSessionCandidate } from '../../shared/native-session-candidates'
+import {
+  candidateTimestamp,
+  cleanCandidateText,
+  parseJsonLines,
+  readBoundedText
+} from './native-session-candidate-utils'
 
 const MAX_FILES = 600
 const MAX_PREFIX_BYTES = 64 * 1024
@@ -89,17 +82,7 @@ async function listProjectJsonlFiles(root: string): Promise<string[]> {
 }
 
 function parseLines(prefix: string): Record<string, unknown>[] {
-  const records: Record<string, unknown>[] = []
-  for (const line of prefix.split(/\r?\n/)) {
-    if (!line.trim()) continue
-    try {
-      const value = JSON.parse(line) as unknown
-      if (value && typeof value === 'object' && !Array.isArray(value)) records.push(value as Record<string, unknown>)
-    } catch {
-      // A bounded prefix can end in the middle of a JSON line; ignore malformed lines.
-    }
-  }
-  return records
+  return parseJsonLines(prefix)
 }
 
 function textFromMessage(message: unknown): string {
@@ -118,24 +101,12 @@ function textFromMessage(message: unknown): string {
     .join(' ')
 }
 
-function cleanPrompt(value: string): string {
-  return value
-    .replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/gi, '')
-    .replace(/<command-name>[\s\S]*?<\/command-name>/gi, '')
-    .replace(/<command-message>[\s\S]*?<\/command-message>/gi, '')
-    .replace(/\[easysession[^\]]*\][\s\S]*/i, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 120)
+function cleanPrompt(value: string, maxCodePoints = 120): string {
+  return cleanCandidateText(value, maxCodePoints)
 }
 
 function parseUpdated(value: unknown): number {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string') {
-    const parsed = Date.parse(value)
-    if (Number.isFinite(parsed)) return parsed
-  }
-  return 0
+  return candidateTimestamp(value)
 }
 
 function geminiRoot(): string {
@@ -177,10 +148,22 @@ async function readGeminiProjectPath(bucketPath: string, root: string): Promise<
 
 async function parseGeminiSessionFile(filePath: string): Promise<Record<string, unknown> | null> {
   if (filePath.toLowerCase().endsWith('.jsonl')) {
-    return parseLines(await readPrefix(filePath)).find((record) => typeof record.sessionId === 'string') || null
+    const records = parseLines(await readPrefix(filePath))
+    const ids = new Set(records.map((record) => typeof record.sessionId === 'string' ? record.sessionId.trim() : '').filter(Boolean))
+    if (ids.size !== 1) return null
+    const messages = records.flatMap((record) => {
+      if (Array.isArray(record.messages)) return record.messages
+      return record.type === 'user' ? [record] : []
+    })
+    return {
+      sessionId: [...ids][0],
+      messages,
+      startTime: records.map((record) => record.startTime).find((value) => parseUpdated(value) > 0),
+      lastUpdated: Math.max(...records.flatMap((record) => [parseUpdated(record.lastUpdated), parseUpdated(record.timestamp)]))
+    }
   }
   try {
-    const value = JSON.parse(await readFile(filePath, 'utf8')) as unknown
+    const value = JSON.parse(await readBoundedText(filePath, 1024 * 1024)) as unknown
     return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
   } catch {
     return null
@@ -235,6 +218,7 @@ export async function collectGeminiSessionCandidates(
           id,
           title: title || 'Gemini session',
           content: content || undefined,
+          titleSource: content ? 'first-user-message' : 'fallback',
           updated: Math.max(fileUpdated, parseUpdated(record?.lastUpdated), parseUpdated(record?.startTime)),
           projectPath: cwd
         })
@@ -248,12 +232,42 @@ export async function collectGeminiSessionCandidates(
   return candidates.sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0))
 }
 
+export interface ClaudeSessionCandidatePaths {
+  configRoot?: string
+  projectsRoot?: string
+  historyPath?: string
+}
+
+function claudeConfigRoot(): string {
+  return process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
+}
+
+export function collectClaudeSessionCandidates(
+  projectPath: string,
+  projectsRoot?: string,
+  historyPath?: string
+): Promise<NativeSessionCandidate[]>
+export function collectClaudeSessionCandidates(
+  projectPath: string,
+  paths?: ClaudeSessionCandidatePaths
+): Promise<NativeSessionCandidate[]>
 export async function collectClaudeSessionCandidates(
   projectPath: string,
-  claudeRoot = join(homedir(), '.claude', 'projects')
+  projectsRootOrPaths?: string | ClaudeSessionCandidatePaths,
+  injectedHistoryPath?: string
 ): Promise<NativeSessionCandidate[]> {
+  const usesLegacyPaths = typeof projectsRootOrPaths === 'string' || injectedHistoryPath !== undefined
+  const configRoot = typeof projectsRootOrPaths === 'object'
+    ? projectsRootOrPaths.configRoot?.trim() || claudeConfigRoot()
+    : claudeConfigRoot()
+  const projectsRoot = usesLegacyPaths
+    ? typeof projectsRootOrPaths === 'string' ? projectsRootOrPaths : join(configRoot, 'projects')
+    : projectsRootOrPaths?.projectsRoot?.trim() || join(configRoot, 'projects')
+  const historyPath = usesLegacyPaths
+    ? injectedHistoryPath || join(projectsRoot, '..', 'history.jsonl')
+    : projectsRootOrPaths?.historyPath?.trim() || join(configRoot, 'history.jsonl')
   const target = normalizePath(projectPath)
-  const files = await listProjectJsonlFiles(claudeRoot)
+  const files = await listProjectJsonlFiles(projectsRoot)
   const candidates: NativeSessionCandidate[] = []
   const seen = new Set<string>()
 
@@ -277,26 +291,60 @@ export async function collectClaudeSessionCandidates(
     if (!cwd || normalizePath(cwd) !== target) continue
 
     const summary = records.find((record) => typeof record.summary === 'string')?.summary as string | undefined
+    const aiTitleRecord = records.find((record) => record.type === 'ai-title' || typeof record.aiTitle === 'string')
+    const aiTitle = typeof aiTitleRecord?.aiTitle === 'string'
+      ? aiTitleRecord.aiTitle
+      : typeof aiTitleRecord?.title === 'string' ? aiTitleRecord.title : ''
     const prompt = records
       .filter((record) => record.type === 'user' && record.isMeta !== true)
-      .map((record) => cleanPrompt(textFromMessage(record.message)))
+      .map((record) => cleanPrompt(textFromMessage(record.message), 240))
       .find(Boolean)
     const recordUpdated = records
       .map((record) => parseUpdated(record.timestamp))
       .filter((value) => value > 0)
       .pop() || 0
-    const content = cleanPrompt(prompt || '')
+    const content = cleanPrompt(prompt || '', 240)
+    const title = cleanPrompt(summary || aiTitle || content) || 'Claude session'
     candidates.push({
       id,
-      title: cleanPrompt(summary || content) || 'Claude session',
+      title,
       content: content || undefined,
+      titleSource: summary ? 'summary' : aiTitle ? 'session-title' : content ? 'first-user-message' : 'fallback',
       updated: Math.max(updated, recordUpdated),
       projectPath: cwd
     })
     seen.add(id)
   }
 
-  return candidates.sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0))
+  try {
+    const history = parseLines(await readPrefix(historyPath, 512 * 1024))
+    for (const record of history) {
+      const id = typeof record.sessionId === 'string' ? record.sessionId.trim() :
+        typeof record.session_id === 'string' ? record.session_id.trim() : ''
+      const cwd = typeof record.project === 'string' ? record.project.trim() :
+        typeof record.projectPath === 'string' ? record.projectPath.trim() :
+          typeof record.cwd === 'string' ? record.cwd.trim() : ''
+      if (!id || seen.has(id) || !cwd || normalizePath(cwd) !== target) continue
+      const content = cleanPrompt(
+        typeof record.display === 'string' ? record.display : typeof record.text === 'string' ? record.text : '',
+        240
+      )
+      const title = cleanPrompt(content) || 'Claude session'
+      candidates.push({
+        id,
+        title,
+        content: content || undefined,
+        titleSource: content ? 'first-user-message' : 'fallback',
+        updated: Math.max(parseUpdated(record.timestamp), parseUpdated(record.ts)),
+        projectPath: cwd
+      })
+      seen.add(id)
+    }
+  } catch {
+    // History is an optional fallback source.
+  }
+
+  return candidates.sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0) || a.id.localeCompare(b.id))
 }
 
 function piRoot(): string {
@@ -365,10 +413,12 @@ async function collectPiFamily(
         .filter((record) => record.type === 'message' || record.type === 'user' || record.role === 'user')
         .map((record) => cleanPrompt(textFromMessage(record.message ?? record.content)))
         .find(Boolean)
+      const cleanedTitle = cleanPrompt(title)
       candidates.push({
         id,
-        title: title || content || `${cliType === 'pi' ? 'Pi' : 'OMP'} session`,
+        title: cleanedTitle || content || `${cliType === 'pi' ? 'Pi' : 'OMP'} session`,
         content: content || undefined,
+        titleSource: cleanedTitle ? 'session-title' : content ? 'first-user-message' : 'fallback',
         updated: Math.max(updated, parseUpdated(header.timestamp)),
         projectPath: cwd
       })
@@ -418,7 +468,6 @@ async function openReadonlySqlite(filePath: string): Promise<ReadonlySqliteDatab
   return database
 }
 
-const HERMES_CONTENT_JSON_PREFIX = '\0json:'
 const HERMES_REQUIRED_SESSION_COLUMNS = ['id', 'title', 'cwd', 'started_at', 'last_activity_at']
 const HERMES_REQUIRED_MESSAGE_COLUMNS = ['id', 'session_id', 'role', 'content', 'timestamp', 'active']
 
@@ -439,18 +488,23 @@ function assertHermesSchema(database: ReadonlySqliteDatabase): void {
 
 function flattenHermesContent(value: unknown): string {
   if (typeof value !== 'string') return ''
-  if (!value.startsWith(HERMES_CONTENT_JSON_PREFIX)) return value
+  const normalized = value.replace(/^\x00+/, '')
+  const rawJson = normalized.startsWith('json:')
+    ? normalized.slice('json:'.length)
+    : normalized.trim().startsWith('[') || normalized.trim().startsWith('{') ? normalized : ''
+  if (!rawJson) return normalized
   try {
-    const decoded = JSON.parse(value.slice(HERMES_CONTENT_JSON_PREFIX.length)) as unknown
+    const decoded = JSON.parse(rawJson) as unknown
     if (typeof decoded === 'string') return decoded
-    if (!Array.isArray(decoded)) return ''
-    return decoded.map((part) => {
-      if (typeof part === 'string') return part
-      if (!part || typeof part !== 'object') return ''
-      const record = part as { text?: unknown; content?: unknown }
+    const flatten = (item: unknown): string => {
+      if (typeof item === 'string') return item
+      if (!item || typeof item !== 'object') return ''
+      if (Array.isArray(item)) return item.map(flatten).filter(Boolean).join(' ')
+      const record = item as { text?: unknown; content?: unknown }
       if (typeof record.text === 'string') return record.text
-      return typeof record.content === 'string' ? record.content : ''
-    }).filter(Boolean).join(' ')
+      return flatten(record.content)
+    }
+    return flatten(decoded)
   } catch {
     return ''
   }
@@ -478,9 +532,9 @@ export async function collectHermesSessionCandidates(
       : "RTRIM(s.cwd, '/') = ?"
     const rows = database.prepare(`
       SELECT s.id, s.title, s.cwd, s.started_at, s.last_activity_at,
-        (SELECT m.content FROM messages m
+        (SELECT HEX(m.content) FROM messages m
           WHERE m.session_id = s.id AND m.role = 'user' AND m.active = 1
-          ORDER BY m.id ASC LIMIT 1) AS first_user_content,
+          ORDER BY m.id ASC LIMIT 1) AS first_user_content_hex,
         (SELECT MAX(m.timestamp) FROM messages m
           WHERE m.session_id = s.id AND m.active = 1) AS last_message_at
       FROM sessions s
@@ -497,12 +551,18 @@ export async function collectHermesSessionCandidates(
       const id = typeof row.id === 'string' ? row.id.trim() : ''
       const cwd = typeof row.cwd === 'string' ? row.cwd.trim() : ''
       if (!id || !cwd || seen.has(id) || normalizePath(cwd) !== target) continue
-      const content = cleanPrompt(flattenHermesContent(row.first_user_content))
-      const title = cleanPrompt(typeof row.title === 'string' ? row.title : '') || content || 'Hermes session'
+      const hermesHex = typeof row.first_user_content_hex === 'string' ? row.first_user_content_hex : ''
+      const rawHermesContent = hermesHex && /^[0-9a-f]+$/i.test(hermesHex)
+        ? Buffer.from(hermesHex, 'hex').toString('utf8')
+        : row.first_user_content
+      const content = cleanPrompt(flattenHermesContent(rawHermesContent))
+      const storedTitle = cleanPrompt(typeof row.title === 'string' ? row.title : '')
+      const title = storedTitle || content || 'Hermes session'
       candidates.push({
         id,
         title,
-        content: content || title,
+        content: content || (storedTitle ? undefined : title),
+        titleSource: storedTitle ? 'session-title' : content ? 'first-user-message' : 'fallback',
         updated: Math.max(
           hermesTimestampMs(row.last_activity_at),
           hermesTimestampMs(row.last_message_at),
@@ -592,7 +652,7 @@ export function parseGrokSessionListOutput(output: string, projectPath: string):
     if (!UUID_PATTERN.test(id) || !GROK_STATUS_VALUES.has(match.groups.status.toLowerCase()) || !updated || !title || seen.has(id)) {
       throw new Error('Invalid Grok session list row')
     }
-    candidates.push({ id, title, content: title, updated, projectPath })
+    candidates.push({ id, title: cleanPrompt(title), titleSource: 'summary', updated, projectPath })
     seen.add(id)
     index += splitSummary ? 2 : 1
   }

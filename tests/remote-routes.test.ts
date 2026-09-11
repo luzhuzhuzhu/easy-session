@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
 import express from 'express'
 import { createServer } from 'http'
 import cors from 'cors'
@@ -120,6 +120,12 @@ describe('remote routes', () => {
         startSession: vi.fn(async (id: string) => (id === 's1' ? sessions[0] : null)),
         pauseSession: vi.fn((id: string) => (id === 's1' ? { ...sessions[0], status: 'stopped' } : null)),
         restartSession: vi.fn(async (id: string) => (id === 's1' ? sessions[0] : null)),
+        setSessionArchived: vi.fn((id: string, archived: boolean) => {
+          const session = sessions.find((item) => item.id === id)
+          if (!session || (archived && session.status === 'running')) return null
+          session.archivedAt = archived ? 123 : undefined
+          return session
+        }),
         destroySession: vi.fn((id: string) => id === 's1')
       } as any,
       openCodeAdapter: {
@@ -206,6 +212,7 @@ describe('remote routes', () => {
       expect(capBody.data.serverVersion).toBe(routeOptions.serverVersion)
       expect(capBody.data.capabilities.sessionInput).toBe(true)
       expect(capBody.data.capabilities.sessionCreate).toBe(false)
+      expect(capBody.data.capabilities.sessionArchive).toBe(false)
       expect(capBody.data.capabilities.projectRead).toBe(true)
       expect(capBody.data.capabilities.projectCreate).toBe(false)
       expect(capBody.data.capabilities.projectSessionsList).toBe(true)
@@ -345,12 +352,39 @@ describe('remote routes', () => {
       )
       expect(resp.status).toBe(200)
       const body = await resp.json()
-      expect(body.data).toEqual([{ id: 'oc-1', title: 'Demo session', updated: 1700000000000 }])
+      expect(body.data).toEqual({
+        status: 'ready',
+        candidates: [{
+          id: 'oc-1',
+          title: 'Demo session',
+          titleSource: 'session-title',
+          updated: 1700000000000
+        }]
+      })
       expect((deps.openCodeAdapter?.collectSessionCandidatesByPath as any).mock.calls[0]).toEqual([
         'D:/repo/demo',
         'C:/Program Files/opencode.exe',
         40
       ])
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('returns an unsupported discovery envelope when no collector exists', async () => {
+    const server = await startServer(buildApp())
+    try {
+      const resp = await fetch(
+        `${server.baseUrl}/api/sessions/native-id-candidates?cliType=claude&projectPath=D%3A%2Frepo%2Fdemo`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      expect(resp.status).toBe(200)
+      const body = await resp.json()
+      expect(body.data).toEqual({
+        status: 'unsupported',
+        candidates: [],
+        message: 'Native session discovery is unsupported for claude'
+      })
     } finally {
       await server.close()
     }
@@ -521,6 +555,37 @@ describe('remote routes', () => {
       const body = await resp.json()
       expect(body.code).toBe('PROJECT_ALREADY_EXISTS')
       expect((deps.projectManager.addProject as any).mock.calls.length).toBe(0)
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('should archive a stopped session when lifecycle operations are enabled', async () => {
+    ;(deps.sessionManager.getSession as any).mockReturnValue({
+      id: 's1', name: 'Claude-001', icon: null, type: 'claude', projectPath: 'D:/repo/demo',
+      status: 'stopped', createdAt: 1, lastActiveAt: 2, processId: null, options: {}, parentId: null
+    })
+    const archived = {
+      id: 's1', name: 'Claude-001', icon: null, type: 'claude', projectPath: 'D:/repo/demo',
+      status: 'stopped', createdAt: 1, lastActiveAt: 2, processId: null, options: {}, parentId: null,
+      archivedAt: 123
+    }
+    ;(deps.sessionManager.setSessionArchived as any).mockReturnValue(archived)
+
+    const server = await startServer(buildApp(false))
+    try {
+      const resp = await fetch(`${server.baseUrl}/api/sessions/s1/archive`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ archived: true })
+      })
+      expect(resp.status).toBe(200)
+      const body = await resp.json()
+      expect(body.data.archivedAt).toBe(123)
+      expect((deps.sessionManager.setSessionArchived as any)).toHaveBeenCalledWith('s1', true)
     } finally {
       await server.close()
     }

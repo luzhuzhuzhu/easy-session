@@ -74,6 +74,30 @@ export const useProjectsStore = defineStore('projects', () => {
   const projectCollectionVersion = ref(0)
   const resolver = getSharedGatewayResolver()
   const unifiedProjectCache = new Map<string, UnifiedProject>()
+  const fetchGenerationByInstance = new Map<string, number>()
+  let pendingFetchCount = 0
+
+  function beginProjectFetch(instanceId: string): number {
+    const generation = (fetchGenerationByInstance.get(instanceId) ?? 0) + 1
+    fetchGenerationByInstance.set(instanceId, generation)
+    pendingFetchCount += 1
+    loading.value = true
+    return generation
+  }
+
+  function finishProjectFetch(): void {
+    pendingFetchCount = Math.max(0, pendingFetchCount - 1)
+    loading.value = pendingFetchCount > 0
+  }
+
+  function isCurrentProjectFetch(instanceId: string, generation: number): boolean {
+    return fetchGenerationByInstance.get(instanceId) === generation
+  }
+
+  function invalidateProjectFetch(instanceId: string): void {
+    fetchGenerationByInstance.set(instanceId, (fetchGenerationByInstance.get(instanceId) ?? 0) + 1)
+  }
+
 
   function bumpProjectCollectionVersion(): void {
     projectCollectionVersion.value += 1
@@ -175,10 +199,12 @@ export const useProjectsStore = defineStore('projects', () => {
   })
 
   async function fetchProjects() {
-    loading.value = true
+    const generation = beginProjectFetch(LOCAL_INSTANCE_ID)
     try {
       const gateway = await resolver.resolve(LOCAL_INSTANCE_ID)
-      projects.value = (await gateway.listProjects(LOCAL_INSTANCE_ID)).map((project) => ({
+      const fetched = await gateway.listProjects(LOCAL_INSTANCE_ID)
+      if (!isCurrentProjectFetch(LOCAL_INSTANCE_ID, generation)) return
+      projects.value = fetched.map((project) => ({
         id: project.projectId,
         name: project.name,
         path: project.path,
@@ -187,8 +213,10 @@ export const useProjectsStore = defineStore('projects', () => {
         pathExists: project.pathExists
       }))
       bumpProjectCollectionVersion()
+    } catch (error) {
+      if (isCurrentProjectFetch(LOCAL_INSTANCE_ID, generation)) throw error
     } finally {
-      loading.value = false
+      finishProjectFetch()
     }
   }
 
@@ -198,22 +226,37 @@ export const useProjectsStore = defineStore('projects', () => {
       return unifiedProjects.value.filter((project) => project.instanceId === LOCAL_INSTANCE_ID)
     }
 
-    const gateway = await resolver.resolve(instanceId)
-    const remoteProjects = await gateway.listProjects(instanceId)
-    const instancesStore = useInstancesStore()
-    instancesStore.markRemoteFetchSuccess(instanceId)
-    remoteProjectsByInstance.value = {
-      ...remoteProjectsByInstance.value,
-      [instanceId]: remoteProjects
-    }
-    bumpProjectCollectionVersion()
+    const generation = beginProjectFetch(instanceId)
     try {
-      const capabilitySnapshot = await gateway.getCapabilities(instanceId)
-      instancesStore.syncRemoteCapabilities(instanceId, capabilitySnapshot)
-    } catch {
-      // 不让 capability 同步失败影响远程项目主链
+      const gateway = await resolver.resolve(instanceId)
+      const remoteProjects = await gateway.listProjects(instanceId)
+      if (!isCurrentProjectFetch(instanceId, generation)) {
+        return remoteProjectsByInstance.value[instanceId] ?? []
+      }
+      const instancesStore = useInstancesStore()
+      instancesStore.markRemoteFetchSuccess(instanceId)
+      remoteProjectsByInstance.value = {
+        ...remoteProjectsByInstance.value,
+        [instanceId]: remoteProjects
+      }
+      bumpProjectCollectionVersion()
+      try {
+        const capabilitySnapshot = await gateway.getCapabilities(instanceId)
+        if (isCurrentProjectFetch(instanceId, generation)) {
+          instancesStore.syncRemoteCapabilities(instanceId, capabilitySnapshot)
+        }
+      } catch {
+        // Capability refresh must not fail the project collection refresh.
+      }
+      return remoteProjects
+    } catch (error) {
+      if (!isCurrentProjectFetch(instanceId, generation)) {
+        return remoteProjectsByInstance.value[instanceId] ?? []
+      }
+      throw error
+    } finally {
+      finishProjectFetch()
     }
-    return remoteProjects
   }
 
   async function fetchAllProjects(instanceIds?: string[]): Promise<UnifiedProject[]> {
@@ -228,26 +271,27 @@ export const useProjectsStore = defineStore('projects', () => {
       if (targetSet.has(existingInstanceId)) continue
       clearRemoteProjects(existingInstanceId)
     }
-    loading.value = true
-    try {
-      await Promise.allSettled(
-        targets.map(async (instanceId) => {
+    await Promise.allSettled(
+      targets.map(async (instanceId) => {
           try {
             await fetchProjectsForInstance(instanceId)
           } catch (error) {
             useInstancesStore().markRemoteFetchFailure(instanceId, error)
             // 保留该实例上次已知数据，不让单个远程故障拖垮整页聚合
           }
-        })
-      )
-      return unifiedProjects.value
-    } finally {
-      loading.value = false
-    }
+      })
+    )
+    return unifiedProjects.value
   }
 
   function clearRemoteProjects(instanceId?: string): void {
     if (!instanceId) {
+      for (const remoteInstanceId of new Set([
+        ...Object.keys(remoteProjectsByInstance.value),
+        ...fetchGenerationByInstance.keys()
+      ])) {
+        if (remoteInstanceId !== LOCAL_INSTANCE_ID) invalidateProjectFetch(remoteInstanceId)
+      }
       remoteProjectsByInstance.value = {}
       resolver.invalidate()
       bumpProjectCollectionVersion()
@@ -255,6 +299,7 @@ export const useProjectsStore = defineStore('projects', () => {
     }
 
     if (instanceId === LOCAL_INSTANCE_ID) return
+    invalidateProjectFetch(instanceId)
     const next = { ...remoteProjectsByInstance.value }
     delete next[instanceId]
     remoteProjectsByInstance.value = next

@@ -20,12 +20,16 @@ function writeJsonl(filePath: string, records: unknown[]): void {
 
 describe('native session candidates', () => {
   let root: string
+  let previousClaudeConfigDir: string | undefined
 
   beforeEach(() => {
     root = join(process.cwd(), '.tmp-native-candidates', randomUUID())
+    previousClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
   })
 
   afterEach(() => {
+    if (previousClaudeConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR
+    else process.env.CLAUDE_CONFIG_DIR = previousClaudeConfigDir
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -97,6 +101,68 @@ describe('native session candidates', () => {
     expect(candidateCollectorFor('gemini')).toBeTruthy()
   })
 
+  it('uses CLAUDE_CONFIG_DIR as config root with distinct projects and history paths', async () => {
+    const configRoot = join(root, 'custom-claude')
+    process.env.CLAUDE_CONFIG_DIR = configRoot
+    writeJsonl(join(configRoot, 'projects', 'D--EasySession', 'transcript.jsonl'), [
+      { type: 'user', sessionId: 'env-transcript', cwd: 'D:/EasySession', message: { content: 'Transcript from env root' } }
+    ])
+    writeJsonl(join(configRoot, 'history.jsonl'), [
+      { sessionId: 'env-history', project: 'D:/EasySession', display: 'History from env root' }
+    ])
+
+    const result = await collectClaudeSessionCandidates('D:/EasySession')
+    expect(result).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'env-transcript', title: 'Transcript from env root' }),
+      expect.objectContaining({ id: 'env-history', title: 'History from env root' })
+    ]))
+  })
+
+  it('merges Claude summary, ai-title and history fallback while filtering synthetic prompts', async () => {
+    const claudeHome = join(root, 'claude')
+    writeJsonl(join(claudeHome, 'projects', 'D--EasySession', 'summary.jsonl'), [
+      { type: 'user', sessionId: 'summary-id', cwd: 'D:/EasySession', message: { content: '<system-reminder>ignore</system-reminder>' } },
+      { type: 'ai-title', sessionId: 'summary-id', cwd: 'D:/EasySession', aiTitle: 'Generated title' },
+      { type: 'summary', sessionId: 'summary-id', cwd: 'D:/EasySession', summary: 'Authoritative summary' },
+      { type: 'user', sessionId: 'summary-id', cwd: 'D:/EasySession', message: { content: 'Real transcript prompt' } }
+    ])
+    writeJsonl(join(claudeHome, 'history.jsonl'), [
+      { sessionId: 'history-id', project: 'D:/EasySession', display: 'History display', timestamp: 1_780_000_000_000 },
+      { sessionId: 'summary-id', project: 'D:/EasySession', display: 'Duplicate history prompt', timestamp: 1_780_000_001_000 }
+    ])
+
+    const result = await collectClaudeSessionCandidates('D:/EasySession', join(claudeHome, 'projects'), join(claudeHome, 'history.jsonl'))
+    expect(result).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'summary-id', title: 'Authoritative summary', content: 'Real transcript prompt', titleSource: 'summary' }),
+      expect.objectContaining({ id: 'history-id', title: 'History display', titleSource: 'first-user-message' })
+    ]))
+    expect(new Set(result.map((candidate) => candidate.id)).size).toBe(result.length)
+  })
+
+  it('aggregates Gemini JSONL records and rejects conflicting IDs and oversized JSON', async () => {
+    const geminiRoot = join(root, 'gemini')
+    const bucket = join(geminiRoot, 'tmp', 'easy-session')
+    mkdirSync(join(bucket, 'chats'), { recursive: true })
+    writeFileSync(join(bucket, '.project_root'), 'D:/EasySession')
+    writeJsonl(join(bucket, 'chats', 'session-valid.jsonl'), [
+      { sessionId: '44444444-4444-4444-8444-444444444444', startTime: '2026-09-05T10:00:00Z' },
+      { type: 'user', content: 'Later JSONL prompt', lastUpdated: '2026-09-05T11:00:00Z' }
+    ])
+    writeJsonl(join(bucket, 'chats', 'session-conflict.jsonl'), [
+      { sessionId: '55555555-5555-4555-8555-555555555555' },
+      { sessionId: '66666666-6666-4666-8666-666666666666', type: 'user', content: 'Reject me' }
+    ])
+    writeFileSync(join(bucket, 'chats', 'session-huge.json'), JSON.stringify({
+      sessionId: '77777777-7777-4777-8777-777777777777',
+      messages: [{ type: 'user', content: 'x'.repeat(2 * 1024 * 1024) }]
+    }))
+
+    const result = await collectGeminiSessionCandidates('D:/EasySession', geminiRoot)
+    expect(result).toEqual([expect.objectContaining({
+      id: '44444444-4444-4444-8444-444444444444', title: 'Later JSONL prompt', titleSource: 'first-user-message'
+    })])
+  })
+
   it('collects Pi sessions only from valid session headers', async () => {
     writeJsonl(join(root, 'pi', 'sessions', '--D--EasySession--', 'pi-session.jsonl'), [
       { type: 'session', id: 'pi-id', timestamp: '2026-09-05T10:00:00.000Z', cwd: 'D:/EasySession' }
@@ -107,7 +173,7 @@ describe('native session candidates', () => {
 
     const result = await collectPiSessionCandidates('D:/EasySession', [join(root, 'pi')])
     expect(result).toHaveLength(1)
-    expect(result[0]).toMatchObject({ id: 'pi-id', projectPath: 'D:/EasySession', title: 'Pi session' })
+    expect(result[0]).toMatchObject({ id: 'pi-id', projectPath: 'D:/EasySession', title: 'Pi session', titleSource: 'fallback' })
   })
 
   it('uses the OMP title slot and filters by header cwd', async () => {
@@ -118,7 +184,7 @@ describe('native session candidates', () => {
 
     const result = await collectOmpSessionCandidates('D:/EasySession', [join(root, 'omp')])
     expect(result).toHaveLength(1)
-    expect(result[0]).toMatchObject({ id: 'omp-id', title: 'Release review', projectPath: 'D:/EasySession' })
+    expect(result[0]).toMatchObject({ id: 'omp-id', title: 'Release review', titleSource: 'session-title', projectPath: 'D:/EasySession' })
   })
 
   it('strictly parses Grok session table rows with required candidate fields', () => {
@@ -132,14 +198,14 @@ describe('native session candidates', () => {
       {
         id: '01991234-1234-7123-8123-123456789abc',
         title: 'Implement strict parser',
-        content: 'Implement strict parser',
+        titleSource: 'summary',
         updated: Date.parse('2026-09-05T11:22:00Z'),
         projectPath: 'D:/EasySession'
       },
       {
         id: '01981234-1234-7123-8123-123456789abc',
         title: 'Older session',
-        content: 'Older session',
+        titleSource: 'summary',
         updated: Date.parse('2026-09-04T09:30:00Z'),
         projectPath: 'D:/EasySession'
       }
@@ -212,6 +278,7 @@ describe('native session candidates', () => {
         id: 'prompt-title',
         title: 'Structured prompt',
         content: 'Structured prompt',
+        titleSource: 'first-user-message',
         updated: 800_000,
         projectPath: 'D:/EasySession/'
       },
@@ -219,6 +286,7 @@ describe('native session candidates', () => {
         id: 'matching',
         title: 'Release review',
         content: 'Implement Hermes candidates',
+        titleSource: 'session-title',
         updated: 250_000,
         projectPath: 'D:/EasySession'
       }

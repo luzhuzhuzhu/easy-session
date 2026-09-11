@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import type { AppSettings } from '@/stores/settings'
 import type { SessionRef } from '@/models/unified-resource'
-import type { WorkspaceSplitDirection } from '@/api/workspace'
+import type { WorkspaceDropPlacement, WorkspaceSplitDirection } from '@/api/workspace'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 
 type ToastLike = {
@@ -30,7 +30,8 @@ type WorkspaceStoreLike = {
     sourcePaneId: string
     targetPaneId: string
     tabId: string
-    direction: WorkspaceSplitDirection
+    placement?: Exclude<WorkspaceDropPlacement, 'center'>
+    direction?: WorkspaceSplitDirection
   }): void
   closeOtherTabs(paneId: string, tabId: string): void
   closeTabsToRight(paneId: string, tabId: string): void
@@ -40,6 +41,7 @@ type WorkspaceStoreLike = {
   commitSplitRatio(): void
   evenSplitForPane(paneId: string): void
   openSessionRefInPane(sessionRef: SessionRef, paneId: string): void
+  openSessionRefAtPlacement(sessionRef: SessionRef, paneId: string, placement: WorkspaceDropPlacement): void
   swapPaneTabs(fromPaneId: string, toPaneId: string): void
   undoLayoutChange(): boolean
   hardReset(): Promise<void>
@@ -190,7 +192,7 @@ export function useWorkspacePaneActions(options: UseWorkspacePaneActionsOptions)
     sourcePaneId: string
     targetPaneId: string
     tabId: string
-    direction: WorkspaceSplitDirection
+    placement: Exclude<WorkspaceDropPlacement, 'center'>
   }): void {
     options.workspaceStore.splitPaneAndMoveTab(payload)
     syncActiveSessionWithWorkspace()
@@ -230,19 +232,16 @@ export function useWorkspacePaneActions(options: UseWorkspacePaneActionsOptions)
   function handleOpenSessionDrop(payload: {
     sessionRef: SessionRef
     targetPaneId: string
-    direction?: WorkspaceSplitDirection
+    placement: WorkspaceDropPlacement
   }): void {
     const exists = !!options.sessionsStore.getUnifiedSession(payload.sessionRef.globalSessionKey)
     if (!exists) return
 
-    if (payload.direction) {
-      options.workspaceStore.splitPane(payload.targetPaneId, payload.direction)
-      const targetPaneId = options.workspaceStore.layout.activePaneId
-      options.workspaceStore.openSessionRefInPane(payload.sessionRef, targetPaneId)
-    } else {
-      options.workspaceStore.openSessionRefInPane(payload.sessionRef, payload.targetPaneId)
-    }
-
+    options.workspaceStore.openSessionRefAtPlacement(
+      payload.sessionRef,
+      payload.targetPaneId,
+      payload.placement
+    )
     syncActiveSessionWithWorkspace()
   }
 

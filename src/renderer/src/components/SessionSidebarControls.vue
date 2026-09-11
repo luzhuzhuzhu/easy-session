@@ -20,6 +20,7 @@
           <option value="codex">Codex</option>
           <option value="opencode">OpenCode</option>
           <option value="terminal">{{ $t('session.terminal') }}</option>
+          <option value="__archived__">{{ $t('session.archivedSessions') }}</option>
         </select>
         <div class="toolbar-actions">
         <IconButton

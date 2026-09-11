@@ -1,7 +1,8 @@
-import {
+﻿import {
   clearOutput,
   createSession,
   destroySession,
+  setSessionArchived,
   getOutputHistory,
   getSession,
   listSessions,
@@ -30,6 +31,7 @@ import {
   updateProject,
   writeProjectPrompt
 } from '../api/local-project'
+import { normalizeNativeSessionDiscoveryPayload } from '@shared/native-session-candidates'
 import { subscribeSessionOutput } from '../services/session-output-stream'
 import {
   buildGlobalSessionKey,
@@ -102,6 +104,12 @@ export class LocalGateway implements Gateway {
   async destroySession(instanceId: string, sessionId: string): Promise<boolean> {
     assertLocalInstance(instanceId)
     return destroySession(sessionId)
+  }
+
+  async setSessionArchived(instanceId: string, sessionId: string, archived: boolean): Promise<UnifiedSession | null> {
+    assertLocalInstance(instanceId)
+    const session = await setSessionArchived(sessionId, archived)
+    return session ? toUnifiedSession(session) : null
   }
 
   async listProjects(instanceId: string): Promise<UnifiedProject[]> {
@@ -255,7 +263,8 @@ export class LocalGateway implements Gateway {
 
   async getNativeIdCandidates(instanceId: string, cliType: Session['type'], projectPath?: string, preferredPath?: string) {
     assertLocalInstance(instanceId)
-    return getNativeIdCandidates(cliType, projectPath, preferredPath)
+    const payload = await getNativeIdCandidates(cliType, projectPath, preferredPath)
+    return normalizeNativeSessionDiscoveryPayload(payload)
   }
 
   async clearOutput(instanceId: string, sessionId: string): Promise<void> {

@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from 'express'
+﻿import type { Express, Request, Response } from 'express'
 import { existsSync } from 'fs'
 import { access } from 'fs/promises'
 import { createRequire } from 'module'
@@ -22,6 +22,7 @@ import type { Session } from '../services/session-types'
 import { buildRemoteCapabilityMap } from './capabilities'
 import { renderLoginPage, renderSessionsPage } from './web'
 import { isCliType, type CliType } from '../../shared/cli-types'
+import { normalizeNativeSessionDiscoveryPayload } from '../../shared/native-session-candidates'
 import { createLogger } from '../services/logger'
 
 const moduleRequire = createRequire(import.meta.url)
@@ -181,6 +182,17 @@ function parseSessionOptionsBody(body: unknown): Record<string, unknown> {
   }
 
   return candidate
+}
+
+function parseSessionArchiveBody(body: unknown): { archived: boolean } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new HttpError(400, 'BAD_REQUEST', 'Body must be an object')
+  }
+  const archived = (body as Record<string, unknown>).archived
+  if (typeof archived !== 'boolean') {
+    throw new HttpError(400, 'BAD_REQUEST', 'archived must be a boolean')
+  }
+  return { archived }
 }
 
 function parseNativeIdBody(body: unknown): { cliType: CliType; value: string | null } {
@@ -713,22 +725,26 @@ export function registerRemoteRoutes(
       const projectPathRaw = req.query.projectPath
       const projectPath = typeof projectPathRaw === 'string' ? projectPathRaw.trim() : ''
       if (!projectPath) {
-        sendSuccess(res, getRequestId(req), [])
+        sendSuccess(res, getRequestId(req), normalizeNativeSessionDiscoveryPayload([]))
         return
       }
       const preferredPathRaw = req.query.preferredPath
       const preferredPath = typeof preferredPathRaw === 'string' ? preferredPathRaw.trim() : undefined
       if (deps.nativeSessionCandidates) {
         const candidates = await deps.nativeSessionCandidates(cliTypeRaw, projectPath, preferredPath, 40)
-        sendSuccess(res, getRequestId(req), candidates)
+        sendSuccess(res, getRequestId(req), normalizeNativeSessionDiscoveryPayload(candidates))
         return
       }
       if (cliTypeRaw !== 'opencode' || !deps.openCodeAdapter) {
-        sendSuccess(res, getRequestId(req), [])
+        sendSuccess(res, getRequestId(req), {
+          status: 'unsupported',
+          candidates: [],
+          message: `Native session discovery is unsupported for ${cliTypeRaw}`
+        })
         return
       }
       const candidates = await deps.openCodeAdapter.collectSessionCandidatesByPath(projectPath, preferredPath, 40)
-      sendSuccess(res, getRequestId(req), candidates)
+      sendSuccess(res, getRequestId(req), normalizeNativeSessionDiscoveryPayload(candidates))
     })
   )
 
@@ -794,6 +810,20 @@ export function registerRemoteRoutes(
       const options = parseSessionOptionsBody(req.body)
       const session = deps.sessionManager.updateSessionOptions(id, options as Session['options'])
       if (!session) throw new HttpError(404, 'SESSION_NOT_FOUND', `Session not found: ${id}`)
+      sendSuccess(res, getRequestId(req), toRemoteSessionDto(deps, session))
+    })
+  )
+
+  app.put(
+    '/api/sessions/:id/archive',
+    withHandler(async (req, res) => {
+      assertRemoteCapability(capabilities.sessionArchive, 'Remote session archive is disabled in passthrough mode')
+      const id = getRouteParam(req, 'id')
+      const { archived } = parseSessionArchiveBody(req.body)
+      const existing = deps.sessionManager.getSession(id)
+      if (!existing) throw new HttpError(404, 'SESSION_NOT_FOUND', `Session not found: ${id}`)
+      const session = deps.sessionManager.setSessionArchived(id, archived)
+      if (!session) throw new HttpError(409, 'SESSION_RUNNING', 'Running sessions cannot be archived')
       sendSuccess(res, getRequestId(req), toRemoteSessionDto(deps, session))
     })
   )

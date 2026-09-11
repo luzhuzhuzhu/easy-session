@@ -177,6 +177,7 @@
           @start-session="handleStart"
           @pause-session="handlePause"
           @restart-session="handleRestart"
+          @archive-session="handleArchive"
           @destroy-session="handleDestroy"
           @clear-output="sessionsStore.clearSessionOutputRef($event)"
           @set-pane-zoom="handleSetPaneZoom"
@@ -207,6 +208,7 @@
       :context-session="contextMenu.session"
       :context-session-capabilities="contextSessionCapabilities"
       :context-session-passthrough-only="contextSessionPassthroughOnly"
+      :context-session-archived="!!contextMenu.session?.archivedAt"
       :show-rename-dialog="showRenameDialog"
       :rename-input="renameInput"
       :show-wake-dialog="showWakeDialog"
@@ -224,6 +226,7 @@
       @rename="handleRenameFromContext"
       @change-icon="handleChangeIconFromContext"
       @session-settings="handleSessionSettingsFromContext"
+      @archive-context="handleArchiveContext"
       @destroy-context="handleDestroyContext"
       @update:rename-input="renameInput = $event"
       @close-rename="closeRenameDialog"
@@ -400,8 +403,9 @@ const projectMetaItems = createProjectMetaProjector()
 
 const filteredSessions = computed(() => {
   const items = projectSessionItems(sessionsStore.unifiedSessions)
-  let result = items
-  if (filterType.value) {
+  const showingArchived = filterType.value === '__archived__'
+  let result = items.filter((session) => showingArchived ? !!session.archivedAt : !session.archivedAt)
+  if (filterType.value && !showingArchived) {
     result = result.filter((s) => s.type === filterType.value)
   }
   // 关键字搜索（与远程 Web 会话页同一匹配规则）：命中名称/ID/类型/状态/项目路径。
@@ -511,6 +515,12 @@ const remoteRefreshSummary = computed(() => {
   return parts.join(' · ')
 })
 
+function consumeRouteSessionSelection(): void {
+  if (!('sessionId' in route.query) && !('globalSessionKey' in route.query)) return
+  const { sessionId: _sessionId, globalSessionKey: _globalSessionKey, ...query } = route.query
+  void router.replace({ path: route.path, query })
+}
+
 function applyRouteSessionSelection() {
   const queryGlobalSessionKey =
     typeof route.query.globalSessionKey === 'string' ? route.query.globalSessionKey : ''
@@ -521,6 +531,7 @@ function applyRouteSessionSelection() {
       if (!workspaceStore.focusSessionRef(sessionRef)) {
         workspaceStore.openSessionRefInActivePane(sessionRef)
       }
+      consumeRouteSessionSelection()
       return
     }
   }
@@ -534,14 +545,22 @@ function applyRouteSessionSelection() {
       if (!workspaceStore.focusSessionRef(sessionRef)) {
         workspaceStore.openSessionInActivePane(querySessionId)
       }
+      consumeRouteSessionSelection()
       return
     }
   }
 
+  const workspaceSession = workspaceStore.activeSessionRef
+    ? sessionsStore.getUnifiedSession(workspaceStore.activeSessionRef.globalSessionKey)
+    : null
+  const activeSession = sessionsStore.activeSessionRef
+    ? sessionsStore.getUnifiedSession(sessionsStore.activeSessionRef.globalSessionKey)
+    : null
+  const firstActiveSession = sessionsStore.unifiedSessions.find((session) => !session.archivedAt) ?? null
   const fallbackSessionRef =
-    workspaceStore.activeSessionRef ??
-    sessionsStore.activeSessionRef ??
-    (sessionsStore.unifiedSessions[0] ? toSessionRef(sessionsStore.unifiedSessions[0]) : null)
+    (workspaceSession && !workspaceSession.archivedAt ? workspaceStore.activeSessionRef : null) ??
+    (activeSession && !activeSession.archivedAt ? sessionsStore.activeSessionRef : null) ??
+    (firstActiveSession ? toSessionRef(firstActiveSession) : null)
   if (!fallbackSessionRef) return
 
   sessionsStore.setActiveSessionRef(fallbackSessionRef)
@@ -925,6 +944,10 @@ async function pauseSessionByRef(sessionRef: SessionRef, showSuccess = true) {
 
 async function handleSessionClick(session: SessionListItem) {
   const sessionRef = toSessionRef(session)
+  if (session.archivedAt) {
+    await setSessionArchived(sessionRef, false)
+    return
+  }
   if (!workspaceStore.focusSessionRef(sessionRef)) {
     workspaceStore.openSessionRefInActivePane(sessionRef)
   }
@@ -947,6 +970,26 @@ async function handlePause(sessionRef: SessionRef) {
 
 async function handleRestart(sessionRef: SessionRef) {
   await restartSessionByRef(sessionRef)
+}
+
+async function setSessionArchived(sessionRef: SessionRef, archived: boolean): Promise<void> {
+  try {
+    await sessionsStore.setSessionArchivedRef(sessionRef, archived)
+    toast.success(t(archived ? 'toast.sessionArchived' : 'toast.sessionUnarchived'))
+  } catch (error: unknown) {
+    toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
+  }
+}
+
+async function handleArchive(sessionRef: SessionRef): Promise<void> {
+  await setSessionArchived(sessionRef, true)
+}
+
+async function handleArchiveContext(): Promise<void> {
+  const session = contextMenu.value.session
+  contextMenu.value.visible = false
+  if (!session) return
+  await setSessionArchived(toSessionRef(session), !session.archivedAt)
 }
 
 async function handleDestroy(sessionRef: SessionRef) {

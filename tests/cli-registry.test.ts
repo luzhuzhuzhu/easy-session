@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 // FEAT-2：CLI 注册表驱动单测——session:create schema / cli:check 白名单由注册表派生。
-import { CLI_REGISTRY, getCliRegistryEntry, getProbeableCliIds, hasNativeSessionCandidates } from '../src/main/ipc/cli-registry'
+import {
+  CLI_REGISTRY,
+  getCliRegistryEntry,
+  getProbeableCliIds,
+  hasNativeSessionCandidates,
+  supportsNativeSessionDiscovery
+} from '../src/main/ipc/cli-registry'
 import { CLI_TYPES } from '../src/shared/cli-types'
 
 describe('cli registry (FEAT-2)', () => {
@@ -31,6 +37,9 @@ describe('cli registry (FEAT-2)', () => {
     expect(hasNativeSessionCandidates('terminal')).toBe(false)
     expect(hasNativeSessionCandidates('hermes')).toBe(true)
     expect(hasNativeSessionCandidates('nope')).toBe(false)
+    expect(supportsNativeSessionDiscovery('codex')).toBe(true)
+    expect(supportsNativeSessionDiscovery('terminal')).toBe(false)
+    expect(supportsNativeSessionDiscovery('nope')).toBe(false)
   })
 
   it('lookup by id returns entries, unknown ids miss', () => {

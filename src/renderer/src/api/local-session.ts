@@ -2,8 +2,12 @@ import type { IpcRendererEvent } from 'electron'
 import { ipc } from './ipc'
 
 import type { CliType } from '@shared/cli-types'
+import type {
+  NativeSessionCandidate,
+  NativeSessionDiscoveryResult
+} from '@shared/native-session-candidates'
 
-export type { CliType }
+export type { CliType, NativeSessionCandidate, NativeSessionDiscoveryResult }
 export type SessionStatus = 'idle' | 'running' | 'stopped' | 'error'
 
 export interface Session {
@@ -21,6 +25,7 @@ export interface Session {
   processId: string | null
   options: Record<string, unknown>
   parentId: string | null
+  archivedAt?: number
   claudeSessionId?: string | null
   codexSessionId?: string | null
   opencodeSessionId?: string | null
@@ -137,6 +142,10 @@ export function clearOutput(id: string): Promise<void> {
   return ipc.invoke<void>('session:output:clear', id)
 }
 
+export function setSessionArchived(id: string, archived: boolean): Promise<Session | null> {
+  return ipc.invoke<Session | null>('session:setArchived', id, archived)
+}
+
 export function renameSession(id: string, name: string): Promise<boolean> {
   return ipc.invoke<boolean>('session:rename', id, name)
 }
@@ -168,16 +177,8 @@ export function setSessionNativeId(id: string, cliType: Session['type'], value: 
 }
 
 // 会话候选列表（resume ID 选择器数据源）；不具备可靠发现能力的 CLI 返回明确状态或空数组。
-export interface NativeSessionCandidate {
-  id: string
-  title?: string
-  content?: string
-  updated?: number
-  projectPath?: string
-}
-
-export function getNativeIdCandidates(cliType: Session['type'], projectPath?: string, preferredPath?: string): Promise<NativeSessionCandidate[]> {
-  return ipc.invoke<NativeSessionCandidate[]>('session:nativeIdCandidates', cliType, projectPath, preferredPath)
+export function getNativeIdCandidates(cliType: Session['type'], projectPath?: string, preferredPath?: string): Promise<unknown> {
+  return ipc.invoke<unknown>('session:nativeIdCandidates', cliType, projectPath, preferredPath)
 }
 
 export interface DetectedShell {

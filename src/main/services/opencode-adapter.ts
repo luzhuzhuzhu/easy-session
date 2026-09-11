@@ -3,6 +3,7 @@ import { homedir } from 'os'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import { CliManager } from './cli-manager'
+import { candidateTimestamp, cleanCandidateText } from './native-session-candidate-utils'
 import type { OpenCodeSessionOptions } from './types'
 
 const OPENCODE_SESSION_HINT_PATTERNS = [
@@ -215,8 +216,8 @@ export class OpenCodeAdapter {
               return
             }
             const obj = value as Record<string, unknown>
-            const id = typeof obj.id === 'string' ? obj.id : typeof obj.sessionID === 'string' ? obj.sessionID : null
-            const title = typeof obj.title === 'string' ? obj.title : ''
+            const id = this.sessionId(obj)
+            const title = typeof obj.title === 'string' ? cleanCandidateText(obj.title, 120) : ''
             if (id && title && !titles.has(id)) titles.set(id, title)
             Object.values(obj).forEach(walkTitles)
           }
@@ -226,11 +227,12 @@ export class OpenCodeAdapter {
           const candidates = this.collectSessionCandidates(parsed)
             .filter((item) => this.pathMatches(item.path, targetPath))
             .filter((item) => (seen.has(item.id) ? false : (seen.add(item.id), true)))
-            .sort((a, b) => b.timestamp - a.timestamp)
+            .sort((a, b) => b.updatedTimestamp - a.updatedTimestamp || a.id.localeCompare(b.id))
+            .slice(0, Math.min(100, Math.max(1, Math.trunc(maxCount) || 40)))
             .map((item) => ({
               id: item.id,
               title: titles.get(item.id) ?? 'OpenCode session',
-              updated: item.timestamp,
+              updated: item.updatedTimestamp,
               projectPath: item.path || undefined
             }))
           resolve(candidates)
@@ -291,8 +293,9 @@ export class OpenCodeAdapter {
   }
 
   private normalizePath(p: string): string {
-    const normalized = resolve(p).replace(/\\/g, '/').toLowerCase()
-    return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized
+    const normalized = resolve(p).replace(/\\/g, '/')
+    const platformNormalized = process.platform === 'win32' ? normalized.toLowerCase() : normalized
+    return platformNormalized.endsWith('/') ? platformNormalized.slice(0, -1) : platformNormalized
   }
 
   private pathMatches(candidate: string | null, target: string): boolean {
@@ -302,14 +305,7 @@ export class OpenCodeAdapter {
   }
 
   private parseTimestamp(input: unknown): number {
-    if (typeof input === 'number' && Number.isFinite(input)) return input
-    if (typeof input === 'string') {
-      const asNum = Number(input)
-      if (Number.isFinite(asNum)) return asNum
-      const asDate = Date.parse(input)
-      if (Number.isFinite(asDate)) return asDate
-    }
-    return 0
+    return candidateTimestamp(input)
   }
 
   private isWithinTimeWindow(
@@ -347,8 +343,14 @@ export class OpenCodeAdapter {
     return Math.abs(timestamp - targetStartMs)
   }
 
-  private collectSessionCandidates(input: unknown): Array<{ id: string; path: string | null; timestamp: number }> {
-    const results: Array<{ id: string; path: string | null; timestamp: number }> = []
+  private sessionId(obj: Record<string, unknown>): string {
+    return ['id', 'sessionID', 'sessionId']
+      .map((field) => typeof obj[field] === 'string' ? obj[field].trim() : '')
+      .find(Boolean) || ''
+  }
+
+  private collectSessionCandidates(input: unknown): Array<{ id: string; path: string | null; timestamp: number; updatedTimestamp: number }> {
+    const results: Array<{ id: string; path: string | null; timestamp: number; updatedTimestamp: number }> = []
 
     const walk = (value: unknown): void => {
       if (!value || typeof value !== 'object') return
@@ -360,41 +362,31 @@ export class OpenCodeAdapter {
 
       const obj = value as Record<string, unknown>
 
-      const idFields = ['id', 'sessionID', 'sessionId'] as const
-      const id = idFields
-        .map((field) => (typeof obj[field] === 'string' ? (obj[field] as string).trim() : ''))
-        .find((item) => item.length > 0) || null
+      const id = this.sessionId(obj) || null
       const pathFields = ['path', 'cwd', 'projectPath', 'project', 'directory'] as const
       const path = pathFields
         .map((field) => (typeof obj[field] === 'string' ? (obj[field] as string).trim() : ''))
         .find((item) => item.length > 0) || null
 
-      const timeFields = [
-        'startAt',
-        'startedAt',
-        'createdAt',
-        'created',
-        'timestamp',
-        'lastUsedAt',
-        'updatedAt',
-        'updated'
-      ] as const
-      const directTimestamp = timeFields
+      const startFields = ['startAt', 'startedAt', 'createdAt', 'created', 'timestamp'] as const
+      const updateFields = ['lastUsedAt', 'updatedAt', 'updated'] as const
+      const directStartTimestamp = startFields
         .map((field) => this.parseTimestamp(obj[field]))
         .find((item) => item > 0) || 0
+      const directUpdatedTimestamp = Math.max(0, ...updateFields.map((field) => this.parseTimestamp(obj[field])))
       const nestedTime =
         obj.time && typeof obj.time === 'object' && !Array.isArray(obj.time)
           ? (obj.time as Record<string, unknown>)
           : null
-      const nestedTimestamp = nestedTime
-        ? [nestedTime.created, nestedTime.started, nestedTime.updated]
-          .map((item) => this.parseTimestamp(item))
-          .find((item) => item > 0) || 0
+      const nestedStartTimestamp = nestedTime
+        ? [nestedTime.created, nestedTime.started].map((item) => this.parseTimestamp(item)).find((item) => item > 0) || 0
         : 0
-      const timestamp = directTimestamp || nestedTimestamp
+      const nestedUpdatedTimestamp = nestedTime ? this.parseTimestamp(nestedTime.updated) : 0
+      const timestamp = directStartTimestamp || nestedStartTimestamp || directUpdatedTimestamp || nestedUpdatedTimestamp
+      const updatedTimestamp = Math.max(timestamp, directUpdatedTimestamp, nestedUpdatedTimestamp)
 
       if (id && path) {
-        results.push({ id, path, timestamp })
+        results.push({ id, path, timestamp, updatedTimestamp })
       }
 
       Object.values(obj).forEach(walk)

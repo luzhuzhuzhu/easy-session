@@ -1,4 +1,4 @@
-import { computed, ref, toRaw } from 'vue'
+import { computed, ref, toRaw, triggerRef } from 'vue'
 import { defineStore } from 'pinia'
 import {
   getWorkspaceLayout,
@@ -8,7 +8,8 @@ import {
   type WorkspaceLayoutState,
   type WorkspaceTabState,
   type WorkspaceLeafNode,
-  type WorkspaceSplitDirection
+  type WorkspaceSplitDirection,
+  type WorkspaceDropPlacement
 } from '@/api/workspace'
 import { buildGlobalSessionKey, LOCAL_INSTANCE_ID, type SessionRef } from '../models/unified-resource'
 import { useInstancesStore } from './instances'
@@ -19,11 +20,7 @@ const PERSIST_DEBOUNCE_MS = 200
 const HISTORY_LIMIT = 20
 
 function cloneLayout(layout: WorkspaceLayoutState): WorkspaceLayoutState {
-  const raw = toRaw(layout)
-  if (typeof structuredClone === 'function') {
-    return structuredClone(raw) as WorkspaceLayoutState
-  }
-  return JSON.parse(JSON.stringify(raw)) as WorkspaceLayoutState
+  return JSON.parse(JSON.stringify(toRaw(layout))) as WorkspaceLayoutState
 }
 
 function layoutEquals(a: WorkspaceLayoutState, b: WorkspaceLayoutState): boolean {
@@ -167,7 +164,7 @@ function normalizeLayoutInPlace(next: WorkspaceLayoutState): WorkspaceLayoutStat
   next.tabs = normalizedTabs
 
   for (const leaf of leaves) {
-    const tabs = leaf.tabs.filter((tabId) => !!next.tabs[tabId])
+    const tabs = leaf.tabs.filter((tabId) => !!next.tabs[tabId] && !usedTabs.has(tabId))
     leaf.tabs = tabs
     if (leaf.activeTabId && !tabs.includes(leaf.activeTabId)) {
       leaf.activeTabId = tabs[0] ?? null
@@ -205,6 +202,52 @@ function genId(prefix: string): string {
 function countLeaves(node: WorkspaceLayoutNode): number {
   if (node.type === 'leaf') return 1
   return countLeaves(node.first) + countLeaves(node.second)
+}
+
+function splitSpec(
+  placementOrDirection: WorkspaceDropPlacement | WorkspaceSplitDirection
+): { direction: WorkspaceSplitDirection; newFirst: boolean } | null {
+  switch (placementOrDirection) {
+    case 'left': return { direction: 'horizontal', newFirst: true }
+    case 'right': return { direction: 'horizontal', newFirst: false }
+    case 'top': return { direction: 'vertical', newFirst: true }
+    case 'bottom': return { direction: 'vertical', newFirst: false }
+    // Legacy direction calls created the new pane second.
+    case 'horizontal': return { direction: 'horizontal', newFirst: false }
+    case 'vertical': return { direction: 'vertical', newFirst: false }
+    default: return null
+  }
+}
+
+function replaceNode(
+  draft: WorkspaceLayoutState,
+  target: WorkspaceLayoutNode,
+  replacement: WorkspaceLayoutNode
+): void {
+  const parentLink = findParentOfNode(draft.root, target)
+  if (!parentLink?.parent) {
+    draft.root = replacement
+  } else if (parentLink.parent.type === 'split') {
+    if (parentLink.isFirst) parentLink.parent.first = replacement
+    else parentLink.parent.second = replacement
+  }
+}
+
+function createSplitReplacement(
+  existing: WorkspaceLeafNode,
+  newPane: WorkspaceLeafNode,
+  spec: { direction: WorkspaceSplitDirection; newFirst: boolean }
+): WorkspaceLayoutNode {
+  const existingCopy: WorkspaceLeafNode = {
+    type: 'leaf', paneId: existing.paneId, activeTabId: existing.activeTabId, tabs: [...existing.tabs]
+  }
+  return {
+    type: 'split',
+    direction: spec.direction,
+    ratio: 0.5,
+    first: spec.newFirst ? newPane : existingCopy,
+    second: spec.newFirst ? existingCopy : newPane
+  }
 }
 
 export const useWorkspaceStore = defineStore('workspace', () => {
@@ -391,10 +434,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const found = findLeafByPaneId(draft.root, paneId)
       if (!found) return
       const tabId = ensureTabForSessionRef(draft, sessionRef)
-      const previousTabsInTarget = [...found.leaf.tabs]
 
-      // Keep one physical tab instance for one session across panes.
-      // Opening in another pane acts as move+focus, avoiding duplicated tab IDs.
+      // Keep one physical tab instance for one session across panes. Opening an
+      // already-open session moves that tab, but must not discard the target
+      // pane's existing tab stack.
       const leaves = collectLeaves(draft.root)
       for (const leaf of leaves) {
         if (!leaf.tabs.includes(tabId)) continue
@@ -404,18 +447,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         }
       }
 
-      // UX rule: one visible session per pane (no secondary tab strip in pane).
-      found.leaf.tabs = [tabId]
+      if (!found.leaf.tabs.includes(tabId)) {
+        found.leaf.tabs.push(tabId)
+      }
       found.leaf.activeTabId = tabId
       draft.activePaneId = paneId
-
-      for (const removedTabId of previousTabsInTarget) {
-        if (removedTabId === tabId) continue
-        const stillUsed = leaves.some((leaf) => leaf.tabs.includes(removedTabId))
-        if (!stillUsed) {
-          delete draft.tabs[removedTabId]
-        }
-      }
     }, { trackHistory: false })
   }
 
@@ -450,6 +486,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
   }
 
+  function detachTabFromAllPanes(draft: WorkspaceLayoutState, tabId: string): void {
+    for (const leaf of collectLeaves(draft.root)) {
+      if (leaf.tabs.includes(tabId)) detachTabFromPane(leaf, tabId)
+      ensureActiveTab(leaf)
+    }
+  }
+
   function ensureActiveTab(leaf: WorkspaceLeafNode): void {
     if (leaf.activeTabId && leaf.tabs.includes(leaf.activeTabId)) return
     leaf.activeTabId = leaf.tabs[0] ?? null
@@ -468,16 +511,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (!from.tabs.includes(params.tabId)) return
 
       const samePane = from.paneId === to.paneId
-      const sourceIndex = from.tabs.indexOf(params.tabId)
       let targetIndex = typeof params.toIndex === 'number' ? params.toIndex : to.tabs.length
 
       if (samePane) {
-        from.tabs.splice(sourceIndex, 1)
-        if (targetIndex > sourceIndex) targetIndex -= 1
-        targetIndex = Math.max(0, Math.min(targetIndex, from.tabs.length))
-        from.tabs.splice(targetIndex, 0, params.tabId)
-        from.activeTabId = params.tabId
-        draft.activePaneId = from.paneId
+        // A center drop has no explicit insertion position; keep the existing
+        // order when the tab is already in this pane.
         return
       }
 
@@ -490,38 +528,19 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
   }
 
-  function splitPane(paneId: string, direction: WorkspaceSplitDirection): void {
+  function splitPane(
+    paneId: string,
+    placementOrDirection: WorkspaceDropPlacement | WorkspaceSplitDirection
+  ): void {
     mutate((draft) => {
       const found = findLeafByPaneId(draft.root, paneId)
-      if (!found) return
+      const spec = splitSpec(placementOrDirection)
+      if (!found || !spec) return
 
       const newPaneId = genId('pane')
-      const replacement: WorkspaceLayoutNode = {
-        type: 'split',
-        direction,
-        ratio: 0.5,
-        first: {
-          type: 'leaf',
-          paneId: found.leaf.paneId,
-          activeTabId: found.leaf.activeTabId,
-          tabs: [...found.leaf.tabs]
-        },
-        second: {
-          type: 'leaf',
-          paneId: newPaneId,
-          activeTabId: null,
-          tabs: []
-        }
-      }
-
-      const parentLink = findParentOfNode(draft.root, found.leaf)
-      if (!parentLink || !parentLink.parent) {
-        draft.root = replacement
-      } else if (parentLink.parent.type === 'split') {
-        if (parentLink.isFirst) parentLink.parent.first = replacement
-        else parentLink.parent.second = replacement
-      }
-
+      replaceNode(draft, found.leaf, createSplitReplacement(found.leaf, {
+        type: 'leaf', paneId: newPaneId, activeTabId: null, tabs: []
+      }, spec))
       draft.activePaneId = newPaneId
     })
   }
@@ -530,49 +549,73 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     targetPaneId: string
     sourcePaneId: string
     tabId: string
-    direction: WorkspaceSplitDirection
+    placement?: WorkspaceDropPlacement
+    direction?: WorkspaceSplitDirection
   }): void {
     mutate((draft) => {
       const target = findLeafByPaneId(draft.root, params.targetPaneId)
       const source = findLeafByPaneId(draft.root, params.sourcePaneId)
-      if (!target || !source) return
-      if (!source.leaf.tabs.includes(params.tabId)) return
+      if (!target || !source || !source.leaf.tabs.includes(params.tabId)) return
+
+      if (params.placement === 'center') {
+        if (source.leaf !== target.leaf) {
+          detachTabFromPane(source.leaf, params.tabId)
+          ensureActiveTab(source.leaf)
+          if (!target.leaf.tabs.includes(params.tabId)) target.leaf.tabs.push(params.tabId)
+        }
+        target.leaf.activeTabId = params.tabId
+        draft.activePaneId = target.leaf.paneId
+        return
+      }
+
+      const spec = splitSpec(params.placement ?? params.direction ?? 'horizontal')
+      if (!spec) return
+      if (source.leaf === target.leaf && source.leaf.tabs.length === 1) return
+
+      detachTabFromPane(source.leaf, params.tabId)
+      ensureActiveTab(source.leaf)
 
       const newPaneId = genId('pane')
-      const replacement: WorkspaceLayoutNode = {
-        type: 'split',
-        direction: params.direction,
-        ratio: 0.5,
-        first: {
-          type: 'leaf',
-          paneId: target.leaf.paneId,
-          activeTabId: target.leaf.activeTabId,
-          tabs: [...target.leaf.tabs]
-        },
-        second: {
-          type: 'leaf',
-          paneId: newPaneId,
-          activeTabId: null,
-          tabs: []
-        }
+      const updatedTarget = findLeafByPaneId(draft.root, params.targetPaneId)?.leaf
+      if (!updatedTarget) return
+      replaceNode(draft, updatedTarget, createSplitReplacement(updatedTarget, {
+        type: 'leaf', paneId: newPaneId, activeTabId: params.tabId, tabs: [params.tabId]
+      }, spec))
+      draft.activePaneId = newPaneId
+    })
+  }
+
+  function openSessionRefAtPlacement(
+    sessionRef: SessionRef,
+    targetPaneId: string,
+    placement: WorkspaceDropPlacement
+  ): void {
+    mutate((draft) => {
+      const target = findLeafByPaneId(draft.root, targetPaneId)?.leaf
+      if (!target) return
+      const tabId = ensureTabForSessionRef(draft, sessionRef)
+      const located = findTabLocationBySessionRef(draft, sessionRef)
+
+      if (placement === 'center') {
+        detachTabFromAllPanes(draft, tabId)
+        if (!target.tabs.includes(tabId)) target.tabs.push(tabId)
+        target.activeTabId = tabId
+        draft.activePaneId = target.paneId
+        return
       }
 
-      const parentLink = findParentOfNode(draft.root, target.leaf)
-      if (!parentLink || !parentLink.parent) {
-        draft.root = replacement
-      } else if (parentLink.parent.type === 'split') {
-        if (parentLink.isFirst) parentLink.parent.first = replacement
-        else parentLink.parent.second = replacement
+      const spec = splitSpec(placement)
+      if (!spec) return
+      if (located?.leaf === target && target.tabs.length === 1) return
+      if (located) {
+        detachTabFromAllPanes(draft, tabId)
       }
-
-      const updatedSource = findLeafByPaneId(draft.root, params.sourcePaneId)?.leaf
-      const createdLeaf = findLeafByPaneId(draft.root, newPaneId)?.leaf
-      if (!updatedSource || !createdLeaf) return
-
-      detachTabFromPane(updatedSource, params.tabId)
-      createdLeaf.tabs.push(params.tabId)
-      createdLeaf.activeTabId = params.tabId
-      ensureActiveTab(updatedSource)
+      const updatedTarget = findLeafByPaneId(draft.root, targetPaneId)?.leaf
+      if (!updatedTarget) return
+      const newPaneId = genId('pane')
+      replaceNode(draft, updatedTarget, createSplitReplacement(updatedTarget, {
+        type: 'leaf', paneId: newPaneId, activeTabId: tabId, tabs: [tabId]
+      }, spec))
       draft.activePaneId = newPaneId
     })
   }
@@ -583,6 +626,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (!found || !found.parent || found.parent.type !== 'split') return
 
       const sibling = found.isFirst ? found.parent.second : found.parent.first
+      const survivor = collectLeaves(sibling)[0]
+      if (survivor) {
+        for (const tabId of found.leaf.tabs) {
+          if (!survivor.tabs.includes(tabId)) survivor.tabs.push(tabId)
+        }
+        if (found.leaf.activeTabId) survivor.activeTabId = found.leaf.activeTabId
+      }
       const parentRef = findParentOfNode(draft.root, found.parent)
 
       if (!parentRef || !parentRef.parent) {
@@ -627,6 +677,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
   }
 
+  function closeSessionRef(sessionRef: SessionRef): void {
+    mutate((draft) => {
+      const removing = new Set(
+        Object.values(draft.tabs)
+          .filter((tab) => tab.globalSessionKey === sessionRef.globalSessionKey)
+          .map((tab) => tab.id)
+      )
+      if (removing.size === 0) return
+      for (const leaf of collectLeaves(draft.root)) {
+        leaf.tabs = leaf.tabs.filter((tabId) => !removing.has(tabId))
+        ensureActiveTab(leaf)
+      }
+      for (const tabId of removing) delete draft.tabs[tabId]
+    }, { trackHistory: false })
+  }
+
   function closeTab(paneId: string, tabId: string): void {
     mutate((draft) => {
       const found = findLeafByPaneId(draft.root, paneId)
@@ -651,9 +717,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     mutate((draft) => {
       const leaf = findLeafByPaneId(draft.root, paneId)?.leaf
       if (!leaf || !leaf.tabs.includes(tabId)) return
-      const keep = new Set([tabId])
+      const keep = new Set([
+        tabId,
+        ...leaf.tabs.filter((existing) => draft.tabs[existing]?.pinned)
+      ])
       for (const existing of leaf.tabs) {
-        if (existing === tabId) continue
+        if (keep.has(existing)) continue
         const usedElsewhere = paneIdsFromRoot(draft.root)
           .filter((id) => id !== paneId)
           .some((id) => findLeafByPaneId(draft.root, id)?.leaf.tabs.includes(existing))
@@ -672,7 +741,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (!leaf) return
       const index = leaf.tabs.indexOf(tabId)
       if (index < 0) return
-      const removing = leaf.tabs.slice(index + 1)
+      const removing = leaf.tabs
+        .slice(index + 1)
+        .filter((removeId) => !draft.tabs[removeId]?.pinned)
       for (const removeId of removing) {
         const usedElsewhere = paneIdsFromRoot(draft.root)
           .filter((id) => id !== paneId)
@@ -681,8 +752,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           delete draft.tabs[removeId]
         }
       }
-      leaf.tabs = leaf.tabs.slice(0, index + 1)
-      leaf.activeTabId = leaf.tabs[index] ?? leaf.tabs[0] ?? null
+      const removingSet = new Set(removing)
+      leaf.tabs = leaf.tabs.filter((existing, existingIndex) => existingIndex <= index || !removingSet.has(existing))
+      leaf.activeTabId = tabId
     })
   }
 
@@ -729,8 +801,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     }
     if (current.type !== 'split') return
     current.ratio = clampRatio(ratio)
-    // 就地改后用同树新外层对象触发响应式：直接复用 mutate 的 layout.value 赋值语义
-    layout.value = { ...layout.value }
+    triggerRef(layout)
   }
 
   function commitSplitRatio(): void {
@@ -834,9 +905,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     moveTabToPane,
     splitPane,
     splitPaneAndMoveTab,
+    openSessionRefAtPlacement,
     swapPaneTabs,
     closePane,
     evenSplitForPane,
+    closeSessionRef,
     closeTab,
     closeOtherTabs,
     closeTabsToRight,

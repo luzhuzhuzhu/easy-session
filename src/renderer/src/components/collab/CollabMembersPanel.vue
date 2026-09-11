@@ -85,3 +85,179 @@ function isTarget(sessionId: string): boolean {
   return props.selectedTargets.includes(sessionId)
 }
 </script>
+
+<style scoped lang="scss">
+@use './panel-mixins' as panel;
+
+@include panel.shell;
+@include panel.form-controls;
+
+.rail-all-button {
+  height: 22px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.rail-all-button:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.agent-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.agent-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.agent-row:hover {
+  border-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-color));
+}
+
+.agent-row.targeted {
+  background: color-mix(in srgb, var(--accent-primary) 6%, var(--bg-primary));
+}
+
+.agent-row.selected {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-primary));
+}
+
+.agent-check {
+  display: grid;
+  place-items: center;
+}
+
+.agent-check input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.agent-main {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent-name {
+  min-width: 0;
+}
+
+.agent-name strong,
+.agent-name small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-name strong {
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.agent-name small {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.agent-avatar {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent-primary) 14%, var(--bg-tertiary));
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.agent-avatar.type-claude {
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--bg-tertiary));
+}
+
+.agent-avatar.type-codex {
+  background: color-mix(in srgb, var(--badge-codex) 18%, var(--bg-tertiary));
+}
+
+.agent-avatar.type-opencode {
+  background: color-mix(in srgb, var(--status-info) 18%, var(--bg-tertiary));
+}
+
+.agent-avatar.type-terminal {
+  background: color-mix(in srgb, var(--status-success) 18%, var(--bg-tertiary));
+}
+
+.session-emoji {
+  font-size: 16px;
+}
+
+.type-letter {
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.mode-chip,
+.badge {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+
+.mode-chip.muted {
+  color: var(--text-muted);
+}
+
+.agent-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.terminal-mode {
+  grid-column: 1 / -1;
+}
+
+.terminal-mode select {
+  height: 28px;
+  font-size: 11px;
+}
+</style>
