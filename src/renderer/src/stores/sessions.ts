@@ -1,8 +1,9 @@
-import { defineStore } from 'pinia'
+﻿import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
   createSession as apiCreateSession,
   destroySession as apiDestroySession,
+  setSessionArchived as apiSetSessionArchived,
   sendInput as apiSendInput,
   clearOutput,
   renameSession as apiRenameSession,
@@ -49,6 +50,7 @@ function toLocalSession(session: UnifiedSession): Session {
     processId: session.processId,
     options: session.options,
     parentId: session.parentId,
+    archivedAt: session.archivedAt,
     claudeSessionId: session.claudeSessionId,
     codexSessionId: session.codexSessionId,
     opencodeSessionId: session.opencodeSessionId,
@@ -85,6 +87,20 @@ export const useSessionsStore = defineStore('sessions', () => {
   let cleanupStatus: (() => void) | null = null
   let cleanupChanged: (() => void) | null = null
   const remoteStatusCleanups = new Map<string, () => void>()
+  const remoteStatusListenerPromises = new Map<string, Promise<void>>()
+  const remoteStatusListenerGeneration = new Map<string, number>()
+  let disposed = false
+  const fetchGenerationByInstance = new Map<string, number>()
+
+  function beginSessionFetch(instanceId: string): number {
+    const generation = (fetchGenerationByInstance.get(instanceId) ?? 0) + 1
+    fetchGenerationByInstance.set(instanceId, generation)
+    return generation
+  }
+
+  function isCurrentSessionFetch(instanceId: string, generation: number): boolean {
+    return fetchGenerationByInstance.get(instanceId) === generation
+  }
   const resolver = getSharedGatewayResolver()
 
   const unifiedSessions = computed<UnifiedSession[]>(() =>
@@ -135,7 +151,8 @@ export const useSessionsStore = defineStore('sessions', () => {
 
     const workspaceStore = useWorkspaceStore()
     const settingsStore = useSettingsStore()
-    const validGlobalSessionKeys = unifiedSessions.value.map((session) => session.globalSessionKey)
+    const workspaceSessions = unifiedSessions.value.filter((session) => !session.archivedAt)
+    const validGlobalSessionKeys = workspaceSessions.map((session) => session.globalSessionKey)
     const preserveInstanceIds = new Set(
       useInstancesStore().remoteInstances
         .filter((instance) => instance.status !== 'online')
@@ -153,7 +170,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const fallbackSessionRef =
       preferredSessionRef ??
       activeSessionRef.value ??
-      (unifiedSessions.value[0] ? toSessionRef(unifiedSessions.value[0]) : undefined)
+      (workspaceSessions[0] ? toSessionRef(workspaceSessions[0]) : undefined)
 
     workspaceStore.reconcileSessionRefs(validGlobalSessionKeys, {
       fallbackSessionRef: fallbackSessionRef ?? undefined,
@@ -176,6 +193,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   function ensureListeners() {
+    disposed = false
     if (cleanupStatus) return
 
     cleanupStatus = onSessionStatusChange(({ sessionId, status, lastActiveAt }) => {
@@ -195,6 +213,11 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   function dispose() {
+    disposed = true
+    for (const instanceId of remoteStatusListenerGeneration.keys()) {
+      remoteStatusListenerGeneration.set(instanceId, (remoteStatusListenerGeneration.get(instanceId) ?? 0) + 1)
+    }
+    remoteStatusListenerPromises.clear()
     cleanupStatus?.()
     cleanupStatus = null
     cleanupChanged?.()
@@ -207,26 +230,57 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   async function fetchSessions(filter?: SessionFilter) {
     ensureListeners()
+    const generation = beginSessionFetch(LOCAL_INSTANCE_ID)
     const gateway = await resolver.resolve(LOCAL_INSTANCE_ID)
-    sessions.value = (await gateway.listSessions(LOCAL_INSTANCE_ID, filter)).map((session) => toLocalSession(session))
+    let fetched: UnifiedSession[]
+    try {
+      fetched = await gateway.listSessions(LOCAL_INSTANCE_ID, filter)
+    } catch (error) {
+      if (!isCurrentSessionFetch(LOCAL_INSTANCE_ID, generation)) return
+      throw error
+    }
+    if (!isCurrentSessionFetch(LOCAL_INSTANCE_ID, generation)) return
+    sessions.value = fetched.map((session) => toLocalSession(session))
     bumpSessionCollectionVersion()
   }
 
   async function ensureRemoteStatusListener(instanceId: string): Promise<void> {
-    if (instanceId === LOCAL_INSTANCE_ID || remoteStatusCleanups.has(instanceId)) return
-    const gateway = await resolver.resolve(instanceId)
-    const cleanup = gateway.subscribeStatus(instanceId, (event) => {
-      const current = remoteSessionsByInstance.value[event.instanceId] || []
-      remoteSessionsByInstance.value = {
-        ...remoteSessionsByInstance.value,
-        [event.instanceId]: current.map((session) =>
-          session.sessionId === event.sessionId
-            ? { ...session, status: event.status }
-            : session
-        )
+    if (instanceId === LOCAL_INSTANCE_ID || remoteStatusCleanups.has(instanceId) || disposed) return
+    const pending = remoteStatusListenerPromises.get(instanceId)
+    if (pending) return pending
+
+    const generation = (remoteStatusListenerGeneration.get(instanceId) ?? 0) + 1
+    remoteStatusListenerGeneration.set(instanceId, generation)
+    const setup: Promise<void> = (async () => {
+      const gateway = await resolver.resolve(instanceId)
+      const cleanup = gateway.subscribeStatus(instanceId, (event) => {
+        const current = remoteSessionsByInstance.value[event.instanceId] || []
+        remoteSessionsByInstance.value = {
+          ...remoteSessionsByInstance.value,
+          [event.instanceId]: current.map((session) =>
+            session.sessionId === event.sessionId
+              ? { ...session, status: event.status }
+              : session
+          )
+        }
+      })
+      if (
+        disposed ||
+        remoteStatusListenerGeneration.get(instanceId) !== generation ||
+        remoteStatusCleanups.has(instanceId)
+      ) {
+        cleanup()
+        return
+      }
+      remoteStatusCleanups.set(instanceId, cleanup)
+    })().finally(() => {
+      if (remoteStatusListenerPromises.get(instanceId) === setup) {
+        remoteStatusListenerPromises.delete(instanceId)
       }
     })
-    remoteStatusCleanups.set(instanceId, cleanup)
+
+    remoteStatusListenerPromises.set(instanceId, setup)
+    return setup
   }
 
   async function fetchSessionsForInstance(instanceId: string, filter?: SessionFilter): Promise<UnifiedSession[]> {
@@ -235,9 +289,21 @@ export const useSessionsStore = defineStore('sessions', () => {
       return unifiedSessions.value.filter((session) => session.instanceId === LOCAL_INSTANCE_ID)
     }
 
+    const generation = beginSessionFetch(instanceId)
     await ensureRemoteStatusListener(instanceId)
     const gateway = await resolver.resolve(instanceId)
-    const remoteSessions = await gateway.listSessions(instanceId, filter)
+    let remoteSessions: UnifiedSession[]
+    try {
+      remoteSessions = await gateway.listSessions(instanceId, filter)
+    } catch (error) {
+      if (!isCurrentSessionFetch(instanceId, generation)) {
+        return remoteSessionsByInstance.value[instanceId] ?? []
+      }
+      throw error
+    }
+    if (!isCurrentSessionFetch(instanceId, generation)) {
+      return remoteSessionsByInstance.value[instanceId] ?? []
+    }
     const instancesStore = useInstancesStore()
     instancesStore.markRemoteFetchSuccess(instanceId)
     remoteSessionsByInstance.value = {
@@ -282,6 +348,18 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   function clearRemoteSessions(instanceId?: string): void {
     if (!instanceId) {
+      for (const remoteInstanceId of new Set([
+        ...Object.keys(remoteSessionsByInstance.value),
+        ...fetchGenerationByInstance.keys()
+      ])) {
+        if (remoteInstanceId !== LOCAL_INSTANCE_ID) {
+          fetchGenerationByInstance.set(remoteInstanceId, (fetchGenerationByInstance.get(remoteInstanceId) ?? 0) + 1)
+        }
+      }
+      for (const remoteInstanceId of remoteStatusListenerGeneration.keys()) {
+        remoteStatusListenerGeneration.set(remoteInstanceId, (remoteStatusListenerGeneration.get(remoteInstanceId) ?? 0) + 1)
+      }
+      remoteStatusListenerPromises.clear()
       remoteSessionsByInstance.value = {}
       bumpSessionCollectionVersion()
       for (const cleanup of remoteStatusCleanups.values()) {
@@ -293,6 +371,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
 
     if (instanceId === LOCAL_INSTANCE_ID) return
+    fetchGenerationByInstance.set(instanceId, (fetchGenerationByInstance.get(instanceId) ?? 0) + 1)
+    remoteStatusListenerGeneration.set(instanceId, (remoteStatusListenerGeneration.get(instanceId) ?? 0) + 1)
+    remoteStatusListenerPromises.delete(instanceId)
     const cleanup = remoteStatusCleanups.get(instanceId)
     cleanup?.()
     remoteStatusCleanups.delete(instanceId)
@@ -542,6 +623,40 @@ export const useSessionsStore = defineStore('sessions', () => {
     return updated ? toLocalSession(updated) : null
   }
 
+  async function setSessionArchivedRef(sessionRef: SessionRef, archived: boolean): Promise<Session> {
+    let updated: UnifiedSession | null
+    if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
+      const localSession = await apiSetSessionArchived(sessionRef.sessionId, archived)
+      updated = localSession ? toUnifiedSession(localSession) : null
+      if (localSession) {
+        const index = sessions.value.findIndex((session) => session.id === localSession.id)
+        if (index !== -1) sessions.value[index] = localSession
+        bumpSessionCollectionVersion()
+      }
+    } else {
+      const gateway = await resolver.resolve(sessionRef.instanceId)
+      updated = await gateway.setSessionArchived(sessionRef.instanceId, sessionRef.sessionId, archived)
+      if (updated) {
+        upsertRemoteSession(sessionRef.instanceId, updated)
+        useInstancesStore().markRemoteFetchSuccess(sessionRef.instanceId)
+      }
+    }
+
+    if (!updated) {
+      throw new Error(archived ? 'Running sessions cannot be archived' : 'Session not found')
+    }
+
+    if (archived) {
+      const { useWorkspaceStore } = await import('./workspace')
+      useWorkspaceStore().closeSessionRef(sessionRef)
+      if (activeGlobalSessionKeyState.value === sessionRef.globalSessionKey) {
+        const fallback = unifiedSessions.value.find((session) => !session.archivedAt) ?? null
+        activeGlobalSessionKeyState.value = fallback?.globalSessionKey ?? null
+      }
+    }
+    return toLocalSession(updated)
+  }
+
   async function destroySessionRef(sessionRef: SessionRef): Promise<void> {
     if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
       await destroySession(sessionRef.sessionId)
@@ -634,6 +749,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     createSessionForInstance,
     destroySession,
     destroySessionRef,
+    setSessionArchivedRef,
     startSession,
     startSessionRef,
     pauseSession,

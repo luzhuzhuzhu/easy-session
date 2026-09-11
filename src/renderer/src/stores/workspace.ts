@@ -164,7 +164,7 @@ function normalizeLayoutInPlace(next: WorkspaceLayoutState): WorkspaceLayoutStat
   next.tabs = normalizedTabs
 
   for (const leaf of leaves) {
-    const tabs = leaf.tabs.filter((tabId) => !!next.tabs[tabId])
+    const tabs = leaf.tabs.filter((tabId) => !!next.tabs[tabId] && !usedTabs.has(tabId))
     leaf.tabs = tabs
     if (leaf.activeTabId && !tabs.includes(leaf.activeTabId)) {
       leaf.activeTabId = tabs[0] ?? null
@@ -434,10 +434,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       const found = findLeafByPaneId(draft.root, paneId)
       if (!found) return
       const tabId = ensureTabForSessionRef(draft, sessionRef)
-      const previousTabsInTarget = [...found.leaf.tabs]
 
-      // Keep one physical tab instance for one session across panes.
-      // Opening in another pane acts as move+focus, avoiding duplicated tab IDs.
+      // Keep one physical tab instance for one session across panes. Opening an
+      // already-open session moves that tab, but must not discard the target
+      // pane's existing tab stack.
       const leaves = collectLeaves(draft.root)
       for (const leaf of leaves) {
         if (!leaf.tabs.includes(tabId)) continue
@@ -447,18 +447,11 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         }
       }
 
-      // UX rule: one visible session per pane (no secondary tab strip in pane).
-      found.leaf.tabs = [tabId]
+      if (!found.leaf.tabs.includes(tabId)) {
+        found.leaf.tabs.push(tabId)
+      }
       found.leaf.activeTabId = tabId
       draft.activePaneId = paneId
-
-      for (const removedTabId of previousTabsInTarget) {
-        if (removedTabId === tabId) continue
-        const stillUsed = leaves.some((leaf) => leaf.tabs.includes(removedTabId))
-        if (!stillUsed) {
-          delete draft.tabs[removedTabId]
-        }
-      }
     }, { trackHistory: false })
   }
 
@@ -633,6 +626,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (!found || !found.parent || found.parent.type !== 'split') return
 
       const sibling = found.isFirst ? found.parent.second : found.parent.first
+      const survivor = collectLeaves(sibling)[0]
+      if (survivor) {
+        for (const tabId of found.leaf.tabs) {
+          if (!survivor.tabs.includes(tabId)) survivor.tabs.push(tabId)
+        }
+        if (found.leaf.activeTabId) survivor.activeTabId = found.leaf.activeTabId
+      }
       const parentRef = findParentOfNode(draft.root, found.parent)
 
       if (!parentRef || !parentRef.parent) {
@@ -677,6 +677,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
   }
 
+  function closeSessionRef(sessionRef: SessionRef): void {
+    mutate((draft) => {
+      const removing = new Set(
+        Object.values(draft.tabs)
+          .filter((tab) => tab.globalSessionKey === sessionRef.globalSessionKey)
+          .map((tab) => tab.id)
+      )
+      if (removing.size === 0) return
+      for (const leaf of collectLeaves(draft.root)) {
+        leaf.tabs = leaf.tabs.filter((tabId) => !removing.has(tabId))
+        ensureActiveTab(leaf)
+      }
+      for (const tabId of removing) delete draft.tabs[tabId]
+    }, { trackHistory: false })
+  }
+
   function closeTab(paneId: string, tabId: string): void {
     mutate((draft) => {
       const found = findLeafByPaneId(draft.root, paneId)
@@ -701,9 +717,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     mutate((draft) => {
       const leaf = findLeafByPaneId(draft.root, paneId)?.leaf
       if (!leaf || !leaf.tabs.includes(tabId)) return
-      const keep = new Set([tabId])
+      const keep = new Set([
+        tabId,
+        ...leaf.tabs.filter((existing) => draft.tabs[existing]?.pinned)
+      ])
       for (const existing of leaf.tabs) {
-        if (existing === tabId) continue
+        if (keep.has(existing)) continue
         const usedElsewhere = paneIdsFromRoot(draft.root)
           .filter((id) => id !== paneId)
           .some((id) => findLeafByPaneId(draft.root, id)?.leaf.tabs.includes(existing))
@@ -722,7 +741,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (!leaf) return
       const index = leaf.tabs.indexOf(tabId)
       if (index < 0) return
-      const removing = leaf.tabs.slice(index + 1)
+      const removing = leaf.tabs
+        .slice(index + 1)
+        .filter((removeId) => !draft.tabs[removeId]?.pinned)
       for (const removeId of removing) {
         const usedElsewhere = paneIdsFromRoot(draft.root)
           .filter((id) => id !== paneId)
@@ -731,8 +752,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
           delete draft.tabs[removeId]
         }
       }
-      leaf.tabs = leaf.tabs.slice(0, index + 1)
-      leaf.activeTabId = leaf.tabs[index] ?? leaf.tabs[0] ?? null
+      const removingSet = new Set(removing)
+      leaf.tabs = leaf.tabs.filter((existing, existingIndex) => existingIndex <= index || !removingSet.has(existing))
+      leaf.activeTabId = tabId
     })
   }
 
@@ -887,6 +909,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     swapPaneTabs,
     closePane,
     evenSplitForPane,
+    closeSessionRef,
     closeTab,
     closeOtherTabs,
     closeTabsToRight,

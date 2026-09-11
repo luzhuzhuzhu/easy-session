@@ -22,6 +22,7 @@ export interface InstanceCapabilities {
   sessionPause: boolean
   sessionRestart: boolean
   sessionDestroy: boolean
+  sessionArchive?: boolean
   projectPromptRead: boolean
   projectPromptWrite: boolean
   localPathOpen: boolean
@@ -84,6 +85,7 @@ export interface UnifiedSession {
   processId: string | null
   options: Record<string, unknown>
   parentId: string | null
+  archivedAt?: number
   claudeSessionId?: string | null
   codexSessionId?: string | null
   opencodeSessionId?: string | null
@@ -175,6 +177,7 @@ export function createFullCapabilities(): InstanceCapabilities {
     sessionPause: true,
     sessionRestart: true,
     sessionDestroy: true,
+    sessionArchive: true,
     projectPromptRead: true,
     projectPromptWrite: true,
     localPathOpen: true
@@ -253,6 +256,7 @@ export function toUnifiedSession(
     processId: session.processId,
     options: session.options,
     parentId: session.parentId,
+    archivedAt: session.archivedAt,
     claudeSessionId: session.claudeSessionId,
     codexSessionId: session.codexSessionId,
     opencodeSessionId: session.opencodeSessionId,

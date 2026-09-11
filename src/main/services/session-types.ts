@@ -27,6 +27,7 @@ interface SessionBase {
   lastActiveAt: number
   processId: string | null
   parentId: string | null
+  archivedAt?: number
 }
 
 // Claude 专属会话类型

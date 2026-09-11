@@ -311,6 +311,9 @@ session: {
     confirmRestartTargetTitle: '重启运行中的会话：{name}',
     confirmRestartMessage: '当前 CLI 进程会被重启，正在进行的命令可能会中断。',
     confirmRestartDetails: '如果会话里有未完成的任务，请先确认可以中断。',
+    archive: '归档会话',
+    unarchive: '取消归档',
+    archivedSessions: '已归档会话',
     renameTitle: '重命名会话',
     changeIcon: '更换图标',
     sessionSettings: '会话设置',
@@ -649,6 +652,8 @@ session: {
   },
   toast: {
     sessionCreated: '会话创建成功',
+    sessionArchived: '会话已归档',
+    sessionUnarchived: '会话已取消归档',
     sessionDestroyed: '会话已销毁',
     sessionStarted: '会话已启动',
     sessionPaused: '会话已暂停',

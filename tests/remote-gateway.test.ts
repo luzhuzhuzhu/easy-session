@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getLocalCandidatesMock } = vi.hoisted(() => ({
   getLocalCandidatesMock: vi.fn()
@@ -309,6 +309,20 @@ describe('RemoteGateway', () => {
           )
         }
 
+        if (url.endsWith('/api/sessions/s2/archive') && init?.method === 'PUT') {
+          return new Response(
+            JSON.stringify({
+              data: {
+                id: 's2', name: 'created-session', icon: null, type: 'claude', projectId: 'p1',
+                projectPath: 'D:/repo/demo', status: 'stopped', createdAt: 6, lastActiveAt: 9,
+                processId: null, options: {}, parentId: null, claudeSessionId: null, archivedAt: 9
+              },
+              requestId: 'r5'
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        }
+
         if (url.endsWith('/api/sessions/s2/start') && init?.method === 'POST') {
           return new Response(
             JSON.stringify({
@@ -350,11 +364,13 @@ describe('RemoteGateway', () => {
       name: 'created-session'
     })
     const startedSession = await gateway.startSession('remote-1', 's2')
+    const archivedSession = await gateway.setSessionArchived('remote-1', 's2', true)
 
     expect(createdProject.projectId).toBe('p2')
     expect(projectSessions[0]?.projectId).toBe('p1')
     expect(createdSession.sessionId).toBe('s2')
     expect(startedSession?.status).toBe('running')
+    expect(archivedSession?.archivedAt).toBe(9)
   })
 
   it.each([
@@ -453,4 +469,19 @@ describe('RemoteGateway', () => {
     await expect(gateway.writeRaw('remote-1', 's-stopped', 'hello')).resolves.toBe(false)
     unsubscribe()
   })
+
+  it('unwraps the deleted flag for direct remote session destruction', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      data: { deleted: false },
+      requestId: 'destroy-request'
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    const gateway = new RemoteGateway(
+      createRemoteInstance('remote-1', 'https://remote-1.example.com'),
+      't'.repeat(64)
+    )
+
+    await expect(gateway.destroySession('remote-1', 'missing')).resolves.toBe(false)
+  })
+
 })

@@ -630,4 +630,113 @@ describe('workspace store', () => {
     expect(persisted.root).toMatchObject({ type: 'split', ratio: 0.7 })
     expect(workspaceStore.undoDepth).toBe(0)
   })
+  it('opens newly created sessions as tabs in the active pane without replacing existing tabs', async () => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2,
+      root: leaf('pane', ['existing'], 'existing'),
+      tabs: { existing: sessionTab('existing', 'existing') },
+      activePaneId: 'pane'
+    } satisfies WorkspaceLayoutState)
+    const store = useWorkspaceStore()
+    await store.load()
+
+    store.openSessionRefInActivePane({
+      instanceId: 'local',
+      sessionId: 'new-session',
+      globalSessionKey: 'local:new-session'
+    })
+
+    expect(store.layout.root).toMatchObject({
+      type: 'leaf',
+      paneId: 'pane',
+      tabs: ['existing', expect.any(String)],
+      activeTabId: expect.any(String)
+    })
+    if (store.layout.root.type !== 'leaf') throw new Error('expected leaf workspace')
+    expect(store.layout.tabs[store.layout.root.activeTabId!]).toMatchObject({
+      sessionId: 'new-session',
+      globalSessionKey: 'local:new-session'
+    })
+    expect(store.layout.tabs.existing).toBeTruthy()
+  })
+
+  it('removes duplicate physical tab references when loading a corrupted multi-pane layout', async () => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2,
+      root: {
+        type: 'split', direction: 'horizontal', ratio: 0.5,
+        first: leaf('left', ['shared'], 'shared'),
+        second: leaf('right', ['shared', 'right-only'], 'shared')
+      },
+      tabs: {
+        shared: sessionTab('shared', 'shared'),
+        'right-only': sessionTab('right-only', 'right-only')
+      },
+      activePaneId: 'right'
+    } satisfies WorkspaceLayoutState)
+
+    const store = useWorkspaceStore()
+    await store.load()
+
+    expect(store.layout.root).toMatchObject({
+      first: { tabs: ['shared'], activeTabId: 'shared' },
+      second: { tabs: ['right-only'], activeTabId: 'right-only' }
+    })
+  })
+
+
+  it('moves tabs into the surviving group when closing a pane', async () => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2,
+      root: {
+        type: 'split', direction: 'horizontal', ratio: 0.5,
+        first: leaf('left', ['left-tab'], 'left-tab'),
+        second: leaf('right', ['right-tab'], 'right-tab')
+      },
+      tabs: { 'left-tab': sessionTab('left-tab', 'left'), 'right-tab': sessionTab('right-tab', 'right') },
+      activePaneId: 'left'
+    } satisfies WorkspaceLayoutState)
+    const store = useWorkspaceStore()
+    await store.load()
+
+    store.closePane('left')
+
+    expect(store.layout.root).toMatchObject({
+      type: 'leaf', paneId: 'right', tabs: ['right-tab', 'left-tab'], activeTabId: 'left-tab'
+    })
+    expect(store.layout.tabs['left-tab']).toBeTruthy()
+  })
+
+  it('preserves pinned tabs when closing other tabs or tabs to the right', async () => {
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2,
+      root: leaf('pane', ['active', 'pinned', 'plain'], 'active'),
+      tabs: {
+        active: sessionTab('active', 'active'),
+        pinned: sessionTab('pinned', 'pinned', true),
+        plain: sessionTab('plain', 'plain')
+      },
+      activePaneId: 'pane'
+    } satisfies WorkspaceLayoutState)
+    const store = useWorkspaceStore()
+    await store.load()
+
+    store.closeOtherTabs('pane', 'active')
+    expect(store.layout.root).toMatchObject({ tabs: ['active', 'pinned'] })
+
+    workspaceApi.getWorkspaceLayout.mockResolvedValue({
+      version: 2,
+      root: leaf('pane', ['active', 'pinned', 'plain'], 'active'),
+      tabs: {
+        active: sessionTab('active', 'active'),
+        pinned: sessionTab('pinned', 'pinned', true),
+        plain: sessionTab('plain', 'plain')
+      },
+      activePaneId: 'pane'
+    } satisfies WorkspaceLayoutState)
+    await store.load()
+    store.closeTabsToRight('pane', 'active')
+    expect(store.layout.root).toMatchObject({ tabs: ['active', 'pinned'] })
+  })
+
 })

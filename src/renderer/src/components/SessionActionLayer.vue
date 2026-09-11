@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div
     v-if="contextMenuVisible"
     ref="contextMenuRef"
@@ -80,7 +80,16 @@
     >
       {{ $t('session.sendMessage') }}
     </MenuItem>
-    <div v-if="showDestroyAction" class="context-separator" role="separator"></div>
+    <div v-if="showArchiveAction || showDestroyAction" class="context-separator" role="separator"></div>
+    <MenuItem
+      v-if="showArchiveAction"
+      :disabled="!canArchiveContextAction"
+      :title="formatActionTitle($t(contextSessionArchived ? 'session.unarchive' : 'session.archive'), canArchiveContextAction)"
+      :label="formatActionTitle($t(contextSessionArchived ? 'session.unarchive' : 'session.archive'), canArchiveContextAction)"
+      @click="emit('archive-context')"
+    >
+      {{ $t(contextSessionArchived ? 'session.unarchive' : 'session.archive') }}
+    </MenuItem>
     <MenuItem
       v-if="showDestroyAction"
       danger
@@ -190,6 +199,7 @@ const props = defineProps<{
   contextSession: SessionTreeSessionItem | null
   contextSessionCapabilities: InstanceCapabilities | null
   contextSessionPassthroughOnly: boolean
+  contextSessionArchived: boolean
   showRenameDialog: boolean
   renameInput: string
   showWakeDialog: boolean
@@ -210,6 +220,7 @@ const emit = defineEmits<{
   'rename': []
   'change-icon': []
   'session-settings': []
+  'archive-context': []
   'destroy-context': []
   'update:renameInput': [value: string]
   'close-rename': []
@@ -227,6 +238,7 @@ const contextMenuRef = ref<HTMLElement | null>(null)
 const showStartAction = computed(() => !!props.contextSession && props.contextSession.status !== 'running')
 const showPauseAction = computed(() => !!props.contextSession && props.contextSession.status === 'running')
 const showRestartAction = computed(() => !!props.contextSession)
+const showArchiveAction = computed(() => !!props.contextSessionCapabilities?.sessionArchive)
 const showDestroyAction = computed(() => !!props.contextSession)
 const showSessionSettings = computed(() => {
   if (!props.contextSession) return false
@@ -241,6 +253,10 @@ const canUpdateSessionSettings = computed(() => {
 const canStartContextAction = computed(() => !!props.contextSessionCapabilities?.sessionStart)
 const canPauseContextAction = computed(() => !!props.contextSessionCapabilities?.sessionPause)
 const canRestartContextAction = computed(() => !!props.contextSessionCapabilities?.sessionRestart)
+const canArchiveContextAction = computed(() =>
+  !!props.contextSession && !!props.contextSessionCapabilities?.sessionArchive &&
+  (props.contextSessionArchived || props.contextSession.status !== 'running')
+)
 const canDestroyContextAction = computed(() => !!props.contextSessionCapabilities?.sessionDestroy)
 const showLifecycleGroup = computed(
   () => showStartAction.value || showPauseAction.value || showRestartAction.value

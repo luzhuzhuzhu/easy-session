@@ -137,6 +137,12 @@ export function registerSessionHandlers(
     sessionManager.resizeTerminal(id, cols, rows)
   })
 
+  ipcMain.handle('session:setArchived', (_event, id: string, archived: boolean) => {
+    assertString(id, 'id')
+    if (typeof archived !== 'boolean') throw new Error('参数 archived 必须为布尔值')
+    return sessionManager.setSessionArchived(id, archived)
+  })
+
   ipcMain.handle('session:rename', (_event, id: string, name: string) => {
     assertString(id, 'id')
     assertString(name, 'name')

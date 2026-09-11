@@ -1,4 +1,4 @@
-import { CLI_TYPES } from '../../../../shared/cli-types'
+﻿import { CLI_TYPES } from '../../../../shared/cli-types'
 
 const REMOTE_CLI_TYPES = JSON.stringify(CLI_TYPES)
 
@@ -26,7 +26,8 @@ export const sessionsScript = `
       sessionStart: false,
       sessionPause: false,
       sessionRestart: false,
-      sessionDestroy: false
+      sessionDestroy: false,
+      sessionArchive: false
     },
     controlBusyAction: '',
     lastSocketError: '',
@@ -96,7 +97,8 @@ export const sessionsScript = `
       sessionStart: !state.passthroughOnly,
       sessionPause: !state.passthroughOnly,
       sessionRestart: !state.passthroughOnly,
-      sessionDestroy: !state.passthroughOnly
+      sessionDestroy: !state.passthroughOnly,
+      sessionArchive: !state.passthroughOnly
     };
 
     cacheDom();
@@ -1502,7 +1504,8 @@ function bindInputEvents(inputEl, buttonEl) {
           sessionStart: !!remoteCapabilities.capabilities.sessionStart,
           sessionPause: !!remoteCapabilities.capabilities.sessionPause,
           sessionRestart: !!remoteCapabilities.capabilities.sessionRestart,
-          sessionDestroy: !!remoteCapabilities.capabilities.sessionDestroy
+          sessionDestroy: !!remoteCapabilities.capabilities.sessionDestroy,
+          sessionArchive: !!remoteCapabilities.capabilities.sessionArchive
         };
       }
     } catch (_error) {

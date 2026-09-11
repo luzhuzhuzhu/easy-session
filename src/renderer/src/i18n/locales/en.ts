@@ -311,6 +311,9 @@ session: {
     confirmRestartTargetTitle: 'Restart running session: {name}',
     confirmRestartMessage: 'The current CLI process will be restarted, and any running command may be interrupted.',
     confirmRestartDetails: 'If this session has unfinished work, make sure it is safe to interrupt first.',
+    archive: 'Archive session',
+    unarchive: 'Unarchive session',
+    archivedSessions: 'Archived sessions',
     renameTitle: 'Rename Session',
     changeIcon: 'Change Icon',
     sessionSettings: 'Session Settings',
@@ -649,6 +652,8 @@ session: {
   },
   toast: {
     sessionCreated: 'Session created',
+    sessionArchived: 'Session archived',
+    sessionUnarchived: 'Session unarchived',
     sessionDestroyed: 'Session destroyed',
     sessionStarted: 'Session started',
     sessionPaused: 'Session paused',

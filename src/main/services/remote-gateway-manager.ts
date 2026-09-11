@@ -1,4 +1,4 @@
-import { type WebContents, webContents } from 'electron'
+﻿import { type WebContents, webContents } from 'electron'
 import { io, type Socket } from 'socket.io-client'
 import type { Project } from './project-types'
 import type { SessionFilter, SessionStatus } from './session-types'
@@ -95,6 +95,7 @@ export type RemoteGatewayInvokeMethod =
   | 'pauseSession'
   | 'restartSession'
   | 'destroySession'
+  | 'setSessionArchived'
   | 'listSessions'
   | 'getSession'
   | 'getOutputHistory'
@@ -430,6 +431,19 @@ class RemoteGatewayClient {
       return result.deleted
     } catch (error) {
       if (this.isHttpStatus(error, 404)) return false
+      throw error
+    }
+  }
+
+  async setSessionArchived(sessionId: string, archived: boolean): Promise<RemoteSessionDto | null> {
+    try {
+      return await this.requestJson<RemoteSessionDto>(`/api/sessions/${sessionId}/archive`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived })
+      })
+    } catch (error) {
+      if (this.isHttpStatus(error, 404)) return null
       throw error
     }
   }
@@ -782,6 +796,8 @@ export class RemoteGatewayManager {
         return client.restartSession(args[0] as string)
       case 'destroySession':
         return client.destroySession(args[0] as string)
+      case 'setSessionArchived':
+        return client.setSessionArchived(args[0] as string, args[1] as boolean)
       case 'listSessions':
         return client.listSessions(args[0] as SessionFilter | undefined)
       case 'getSession':

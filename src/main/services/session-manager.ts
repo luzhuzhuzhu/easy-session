@@ -319,6 +319,7 @@ export class SessionManager {
     const session = this.sessions.get(id)
     if (!session) return null
     if (session.status === 'running' && session.processId) return session
+    delete session.archivedAt
 
     const startAt = Date.now()
     const oldProcessId = session.processId
@@ -458,6 +459,16 @@ export class SessionManager {
 
   getChildren(parentId: string): Session[] {
     return this.listSessions({ parentId })
+  }
+
+  setSessionArchived(id: string, archived: boolean): Session | null {
+    const session = this.sessions.get(id)
+    if (!session || (archived && session.status === 'running')) return null
+    if (archived) session.archivedAt = Date.now()
+    else delete session.archivedAt
+    this.persist()
+    this.broadcastSessionChange(session)
+    return this.cloneSessionValue(session)
   }
 
   renameSession(id: string, name: string): boolean {

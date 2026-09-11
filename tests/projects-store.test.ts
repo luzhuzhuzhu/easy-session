@@ -430,4 +430,29 @@ describe('projects store', () => {
     expect(store.unifiedRecentProjects[0]?.globalProjectKey).toBe('remote-1:project-remote')
     expect(store.activeGlobalProjectKey).toBe('remote-1:project-remote')
   })
+
+  it('keeps the newest project refresh result and loading state during overlapping requests', async () => {
+    let resolveFirst!: (value: any[]) => void
+    let resolveSecond!: (value: any[]) => void
+    projectApi.listProjects
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve }))
+
+    const store = useProjectsStore()
+    const first = store.fetchProjects()
+    const second = store.fetchProjects()
+    await vi.waitUntil(() => typeof resolveSecond === 'function')
+    expect(store.loading).toBe(true)
+
+    resolveFirst([{ id: 'old', name: 'Old', path: 'D:/old', createdAt: 1, lastOpenedAt: 1 }])
+    await first
+    expect(store.loading).toBe(true)
+
+    resolveSecond([{ id: 'new', name: 'New', path: 'D:/new', createdAt: 2, lastOpenedAt: 2 }])
+    await second
+
+    expect(store.projects.map((project) => project.id)).toEqual(['new'])
+    expect(store.loading).toBe(false)
+  })
+
 })

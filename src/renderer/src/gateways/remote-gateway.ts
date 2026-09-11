@@ -1,4 +1,4 @@
-import { io, type Socket } from 'socket.io-client'
+﻿import { io, type Socket } from 'socket.io-client'
 import type { OutputLine, SessionFilter } from '../api/local-session'
 import type { Project, ProjectPromptCliType, ProjectPromptFile } from '../api/local-project'
 import { ipc } from '../api/ipc'
@@ -94,6 +94,7 @@ type RemoteGatewayInvokeMethod =
   | 'pauseSession'
   | 'restartSession'
   | 'destroySession'
+  | 'setSessionArchived'
   | 'listSessions'
   | 'getSession'
   | 'getOutputHistory'
@@ -366,9 +367,24 @@ export class RemoteGateway implements Gateway {
         }
       case 'destroySession':
         try {
-          return await this.requestJsonDirect<T>(`/api/sessions/${args[0]}`, { method: 'DELETE' })
+          const result = await this.requestJsonDirect<{ deleted: boolean }>(
+            `/api/sessions/${args[0]}`,
+            { method: 'DELETE' }
+          )
+          return result.deleted as T
         } catch (error) {
           if (this.isHttpStatus(error, 404)) return false as T
+          throw error
+        }
+      case 'setSessionArchived':
+        try {
+          return await this.requestJsonDirect<T>(`/api/sessions/${args[0]}/archive`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ archived: args[1] })
+          })
+        } catch (error) {
+          if (this.isHttpStatus(error, 404)) return null as T
           throw error
         }
       case 'listSessions':
@@ -578,6 +594,12 @@ export class RemoteGateway implements Gateway {
   async destroySession(instanceId: string, sessionId: string): Promise<boolean> {
     this.assertInstance(instanceId)
     return this.invoke<boolean>('destroySession', sessionId)
+  }
+
+  async setSessionArchived(instanceId: string, sessionId: string, archived: boolean): Promise<UnifiedSession | null> {
+    this.assertInstance(instanceId)
+    const session = await this.invoke<RemoteSessionDto | null>('setSessionArchived', sessionId, archived)
+    return session ? toUnifiedSession(session, { instanceId, source: 'remote' }) : null
   }
 
   async getCapabilities(instanceId: string): Promise<GatewayCapabilitySnapshot> {

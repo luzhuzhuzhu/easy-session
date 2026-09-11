@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div v-if="node.type === 'split'" class="workspace-split" :class="[node.direction, { resizing: isResizingSplit }]">
     <div class="split-child first" :style="firstChildStyle">
       <WorkspacePaneTree
@@ -31,6 +31,7 @@
         @start-session="emit('start-session', $event)"
         @pause-session="emit('pause-session', $event)"
         @restart-session="emit('restart-session', $event)"
+        @archive-session="emit('archive-session', $event)"
         @destroy-session="emit('destroy-session', $event)"
         @clear-output="emit('clear-output', $event)"
         @set-pane-zoom="emit('set-pane-zoom', $event)"
@@ -70,6 +71,7 @@
         @start-session="emit('start-session', $event)"
         @pause-session="emit('pause-session', $event)"
         @restart-session="emit('restart-session', $event)"
+        @archive-session="emit('archive-session', $event)"
         @destroy-session="emit('destroy-session', $event)"
         @clear-output="emit('clear-output', $event)"
         @set-pane-zoom="emit('set-pane-zoom', $event)"
@@ -236,6 +238,13 @@
               <UiIcon name="refresh" />
             </IconButton>
             <IconButton
+              v-if="canArchiveSession && activeSession.status !== 'running' && activeSessionRef"
+              :label="$t('session.archive')"
+              @click="emit('archive-session', activeSessionRef)"
+            >
+              <UiIcon name="history" />
+            </IconButton>
+            <IconButton
               v-if="canDestroySession && activeSessionRef"
               tone="danger"
               :label="$t('session.destroy')"
@@ -374,6 +383,7 @@ const emit = defineEmits<{
   'start-session': [sessionRef: SessionRef]
   'pause-session': [sessionRef: SessionRef]
   'restart-session': [sessionRef: SessionRef]
+  'archive-session': [sessionRef: SessionRef]
   'destroy-session': [sessionRef: SessionRef]
   'clear-output': [sessionRef: SessionRef]
   'set-pane-zoom': [payload: { paneId: string; percent: number }]
@@ -527,6 +537,7 @@ const canStartSession = computed(() => !activeTabOffline.value && !!activeInstan
 const canPauseSession = computed(() => !activeTabOffline.value && !!activeInstanceCapabilities.value?.sessionPause)
 const canRestartSession = computed(() => !activeTabOffline.value && !!activeInstanceCapabilities.value?.sessionRestart)
 const canDestroySession = computed(() => !activeTabOffline.value && !!activeInstanceCapabilities.value?.sessionDestroy)
+const canArchiveSession = computed(() => !activeTabOffline.value && !!activeInstanceCapabilities.value?.sessionArchive)
 const emptyPaneText = computed(() => {
   if (activeResolvedTab.value?.availability === 'offline') {
     return t('session.remoteOfflinePane')

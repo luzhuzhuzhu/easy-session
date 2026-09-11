@@ -104,6 +104,8 @@ export const useInstancesStore = defineStore('instances', () => {
   const settingsStore = useSettingsStore()
   const remoteInstances = ref<RemoteInstance[]>([])
   const loading = ref(false)
+  let fetchGeneration = 0
+  let pendingFetchCount = 0
   const testingIds = ref<string[]>([])
   const remoteStateVersion = ref(0)
 
@@ -170,17 +172,22 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   async function fetchInstances(): Promise<Instance[]> {
+    const generation = ++fetchGeneration
+    pendingFetchCount += 1
     loading.value = true
     try {
       if (!remoteMountEnabled.value) {
-        clearRemoteState()
+        if (generation === fetchGeneration) clearRemoteState()
         return instances.value
       }
-      remoteInstances.value = (await apiListRemoteInstances()).map((instance) => cloneRemoteInstance(instance))
+      const fetched = await apiListRemoteInstances()
+      if (generation !== fetchGeneration || !remoteMountEnabled.value) return instances.value
+      remoteInstances.value = fetched.map((instance) => cloneRemoteInstance(instance))
       remoteStateVersion.value += 1
       return instances.value
     } finally {
-      loading.value = false
+      pendingFetchCount = Math.max(0, pendingFetchCount - 1)
+      loading.value = pendingFetchCount > 0
     }
   }
 

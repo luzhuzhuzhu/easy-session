@@ -25,6 +25,7 @@ export interface Session {
   processId: string | null
   options: Record<string, unknown>
   parentId: string | null
+  archivedAt?: number
   claudeSessionId?: string | null
   codexSessionId?: string | null
   opencodeSessionId?: string | null
@@ -139,6 +140,10 @@ export function getOutputHistory(id: string, lines?: number): Promise<OutputLine
 
 export function clearOutput(id: string): Promise<void> {
   return ipc.invoke<void>('session:output:clear', id)
+}
+
+export function setSessionArchived(id: string, archived: boolean): Promise<Session | null> {
+  return ipc.invoke<Session | null>('session:setArchived', id, archived)
 }
 
 export function renameSession(id: string, name: string): Promise<boolean> {

@@ -1,4 +1,4 @@
-import type { SessionManager } from '../services/session-manager'
+﻿import type { SessionManager } from '../services/session-manager'
 import type { ProjectManager } from '../services/project-manager'
 import type { Project } from '../services/project-types'
 import type { OutputLine, SessionOutputManager } from '../services/session-output'
@@ -77,6 +77,7 @@ export interface RemoteCapabilityMap {
   sessionPause: boolean
   sessionRestart: boolean
   sessionDestroy: boolean
+  sessionArchive: boolean
   projectPromptRead: boolean
   projectPromptWrite: boolean
   localPathOpen: boolean

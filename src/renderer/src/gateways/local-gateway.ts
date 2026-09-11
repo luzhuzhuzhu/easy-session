@@ -1,7 +1,8 @@
-import {
+﻿import {
   clearOutput,
   createSession,
   destroySession,
+  setSessionArchived,
   getOutputHistory,
   getSession,
   listSessions,
@@ -103,6 +104,12 @@ export class LocalGateway implements Gateway {
   async destroySession(instanceId: string, sessionId: string): Promise<boolean> {
     assertLocalInstance(instanceId)
     return destroySession(sessionId)
+  }
+
+  async setSessionArchived(instanceId: string, sessionId: string, archived: boolean): Promise<UnifiedSession | null> {
+    assertLocalInstance(instanceId)
+    const session = await setSessionArchived(sessionId, archived)
+    return session ? toUnifiedSession(session) : null
   }
 
   async listProjects(instanceId: string): Promise<UnifiedProject[]> {

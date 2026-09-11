@@ -22,6 +22,7 @@ describe('session-handlers', () => {
     sessionManager = {
       createSession: vi.fn(),
       destroySession: vi.fn(),
+      setSessionArchived: vi.fn(),
       startSession: vi.fn(),
       pauseSession: vi.fn(),
       listSessions: vi.fn(),
@@ -46,6 +47,7 @@ describe('session-handlers', () => {
     const expected = [
       'session:create',
       'session:destroy',
+      'session:setArchived',
       'session:start',
       'session:pause',
       'session:list',
@@ -131,4 +133,12 @@ describe('session-handlers', () => {
     expect(result).toEqual({ id: 's1' })
     expect(sessionManager.pauseSession).toHaveBeenCalledWith('s1')
   })
+
+  it('session:setArchived forwards the non-destructive archive state', async () => {
+    sessionManager.setSessionArchived.mockReturnValue({ id: 'session-1', archivedAt: 123 })
+    const result = await handlers.get('session:setArchived')!({}, 'session-1', true)
+    expect(result).toEqual({ id: 'session-1', archivedAt: 123 })
+    expect(sessionManager.setSessionArchived).toHaveBeenCalledWith('session-1', true)
+  })
+
 })

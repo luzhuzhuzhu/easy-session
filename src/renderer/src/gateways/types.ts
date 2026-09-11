@@ -1,4 +1,4 @@
-import type { OutputEvent, OutputLine, SessionFilter, SessionStatus } from '../api/session'
+﻿import type { OutputEvent, OutputLine, SessionFilter, SessionStatus } from '../api/session'
 import type { ProjectPromptCliType, ProjectPromptFile } from '../api/project'
 import type { CliType } from '@shared/cli-types'
 import type { NativeSessionDiscoveryResult } from '@shared/native-session-candidates'
@@ -57,6 +57,7 @@ export interface SessionGateway {
   pauseSession(instanceId: string, sessionId: string): Promise<UnifiedSession | null>
   restartSession(instanceId: string, sessionId: string): Promise<UnifiedSession | null>
   destroySession(instanceId: string, sessionId: string): Promise<boolean>
+  setSessionArchived(instanceId: string, sessionId: string, archived: boolean): Promise<UnifiedSession | null>
   listSessions(instanceId: string, filter?: SessionFilter): Promise<UnifiedSession[]>
   getSession(instanceId: string, sessionId: string): Promise<UnifiedSession | null>
   getOutputHistory(instanceId: string, sessionId: string, lines?: number): Promise<OutputLine[]>

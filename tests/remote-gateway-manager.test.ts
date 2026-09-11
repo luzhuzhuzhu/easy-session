@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   webContents: {
@@ -80,6 +80,34 @@ describe('RemoteGatewayManager', () => {
       projectPath: expect.any(String),
       titleSource: expect.stringMatching(/^(session-title|summary)$/)
     })
+  })
+
+  it('forwards remote archive mutations through the main-process bridge', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => new Response(JSON.stringify({
+      data: {
+        id: 's1', name: 'Remote', icon: null, type: 'codex', projectPath: 'D:/repo', status: 'stopped',
+        createdAt: 1, lastActiveAt: 2, processId: null, options: {}, parentId: null, archivedAt: 10
+      },
+      requestId: 'archive-request'
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const manager = new RemoteGatewayManager({
+      getInstance: vi.fn(() => createRemoteInstance('https://remote.example.com')),
+      getToken: vi.fn(() => 't'.repeat(64))
+    } as any)
+
+    const result = await manager.invoke({
+      instanceId: 'remote-1',
+      method: 'setSessionArchived',
+      args: ['s1', true]
+    } as any)
+
+    expect(result).toMatchObject({ id: 's1', archivedAt: 10 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://remote.example.com/api/sessions/s1/archive',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ archived: true }) })
+    )
   })
 
   it('maps a missing candidate endpoint to unsupported', async () => {

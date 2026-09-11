@@ -130,5 +130,13 @@ describe('SessionManager legacy persistence compatibility', () => {
       status: 'stopped',
       processId: null
     })
+
+    const archived = sessionManager.setSessionArchived('legacy-claude', true)
+    expect(archived?.archivedAt).toEqual(expect.any(Number))
+    expect(sessionManager.listSessions()).toHaveLength(2)
+    await sessionManager.flush()
+    const persistedAfterArchive = JSON.parse(await readFile(storePath, 'utf-8')) as Session[]
+    expect(persistedAfterArchive.find((session) => session.id === 'legacy-claude')?.archivedAt)
+      .toEqual(expect.any(Number))
   })
 })
