@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+﻿import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 
 export interface ElectronAPI {
@@ -26,7 +26,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   // session
   'session:create', 'session:destroy', 'session:list', 'session:get',
   'session:input', 'session:write', 'session:output:history', 'session:output:clear', 'session:output:journalTail', 'session:output:search',
-  'session:resize', 'session:rename', 'session:updateIcon',
+  'session:resize', 'session:rename', 'session:updateIcon', 'session:setArchived',
   'session:restart', 'session:start', 'session:pause',
   'session:updateOptions', 'session:sendTo', 'session:setNativeId', 'session:nativeIdCandidates',
   'bus:snapshot', 'bus:sendMessage', 'bus:createTask', 'bus:taskTransition', 'bus:getCollabSkill', 'bus:setTaskStatus',
