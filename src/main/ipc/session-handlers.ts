@@ -107,7 +107,7 @@ export function registerSessionHandlers(
 
   ipcMain.handle('session:output:clear', (_event, id: string) => {
     assertString(id, 'id')
-    sessionManager.outputManager.clearHistory(id)
+    return sessionManager.outputManager.clearHistory(id)
   })
 
   // UX-1：已退出会话的桌面 UI 日志出口——读 output journal 尾部。

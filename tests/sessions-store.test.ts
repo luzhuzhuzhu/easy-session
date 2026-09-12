@@ -74,7 +74,10 @@ import { useInstancesStore } from '../src/renderer/src/stores/instances'
 import { useSessionsStore } from '../src/renderer/src/stores/sessions'
 import { useSettingsStore } from '../src/renderer/src/stores/settings'
 import { useWorkspaceStore } from '../src/renderer/src/stores/workspace'
-import { resetSharedGatewayResolver } from '../src/renderer/src/gateways'
+import { resetSharedGatewayResolver, getSharedGatewayResolver } from '../src/renderer/src/gateways'
+import { createFullCapabilities, toUnifiedSession } from '../src/renderer/src/models/unified-resource'
+import type { Session, UnifiedSession } from '../src/renderer/src/stores/sessions'
+import type { Gateway } from '../src/renderer/src/gateways/types'
 
 describe('sessions store', () => {
   beforeEach(() => {
@@ -678,6 +681,137 @@ describe('sessions store', () => {
 
     expect(store.remoteSessionsByInstance['remote-1'][0].archivedAt).toBe(456)
     expect(Object.keys(workspaceStore.layout.tabs)).toHaveLength(0)
+  })
+  it('an older refresh cannot undo a successfully completed archive', async () => {
+    const oldSession = {
+      id: 'session-local', name: 'Local', icon: null, type: 'codex' as const, projectPath: 'D:/repo',
+      status: 'stopped' as const, createdAt: 1, lastActiveAt: 2, processId: null, options: {}, parentId: null
+    }
+    let finishRead!: (sessions: typeof oldSession[]) => void
+    sessionApi.listSessions.mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve }))
+    sessionApi.setSessionArchived.mockResolvedValue({ ...oldSession, archivedAt: 123 })
+    const store = useSessionsStore()
+    store.sessions = [{ ...oldSession }]
+    const read = store.fetchSessions()
+    await vi.waitUntil(() => typeof finishRead === 'function')
+    await store.setSessionArchivedRef({
+      instanceId: 'local', sessionId: 'session-local', globalSessionKey: 'local:session-local'
+    }, true)
+    expect(store.sessions[0].archivedAt).toBe(123)
+    finishRead([{ ...oldSession }])
+    await read
+    expect(store.sessions[0].archivedAt).toBe(123)
+  })
+
+
+  function stoppedSession(id: string): Session {
+    return { id, name: id, icon: null, type: 'codex', projectPath: 'D:/repo',
+      status: 'stopped', createdAt: 1, lastActiveAt: 2, processId: null, options: {}, parentId: null }
+  }
+
+  it.each(['archive', 'destroy', 'create', 'rename', 'start', 'pause'] as const)(
+    'preserves completed %s while still accepting unrelated refresh updates', async (action) => {
+      const a = stoppedSession('a')
+      const b = stoppedSession('b')
+      const store = useSessionsStore()
+      store.sessions = [a, b]
+      let finish!: (items: Session[]) => void
+      sessionApi.listSessions.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+      const read = store.fetchSessions()
+      await vi.waitUntil(() => typeof finish === 'function')
+      if (action === 'archive') {
+        sessionApi.setSessionArchived.mockResolvedValueOnce({ ...a, archivedAt: 123 })
+        await store.setSessionArchivedRef({ instanceId: 'local', sessionId: 'a', globalSessionKey: 'local:a' }, true)
+      } else if (action === 'destroy') {
+        sessionApi.destroySession.mockResolvedValueOnce(true)
+        await store.destroySession('a')
+      } else if (action === 'create') {
+        sessionApi.createSession.mockResolvedValueOnce(stoppedSession('new'))
+        await store.createSession({ type: 'codex', projectPath: 'D:/repo' }, { activate: false })
+      } else if (action === 'rename') {
+        sessionApi.renameSession.mockResolvedValueOnce(true)
+        await store.renameSession('a', 'Renamed')
+      } else if (action === 'start') {
+        sessionApi.startSession.mockResolvedValueOnce({ ...a, status: 'running', processId: 'process-new' })
+        await store.startSession('a')
+      } else {
+        sessionApi.pauseSession.mockResolvedValueOnce({ ...a, lastActiveAt: 77 })
+        await store.pauseSession('a')
+      }
+      finish([stoppedSession('a'), { ...b, name: 'Fresh B' }])
+      await read
+      expect(store.sessions.find(session => session.id === 'b')?.name).toBe('Fresh B')
+      const updatedA = store.sessions.find(session => session.id === 'a')
+      if (action === 'archive') expect(updatedA?.archivedAt).toBe(123)
+      if (action === 'destroy') expect(updatedA).toBeUndefined()
+      if (action === 'create') expect(store.sessions.filter(session => session.id === 'new')).toHaveLength(1)
+      if (action === 'rename') expect(updatedA?.name).toBe('Renamed')
+      if (action === 'start') expect(updatedA?.status).toBe('running')
+      if (action === 'pause') expect(updatedA?.lastActiveAt).toBe(77)
+    }
+  )
+
+  it('preserves pushed status changes during refresh and allows a subsequent fresh snapshot', async () => {
+    const store = useSessionsStore()
+    const a = stoppedSession('a')
+    store.sessions = [a]
+    let finish!: (items: Session[]) => void
+    sessionApi.listSessions.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const read = store.fetchSessions()
+    await vi.waitUntil(() => typeof finish === 'function')
+    const calls = sessionApi.onSessionStatusChange.mock.calls as unknown as Array<[(event: {
+      sessionId: string; status: string; lastActiveAt: number
+    }) => void]>
+    calls.at(-1)![0]({ sessionId: 'a', status: 'running', lastActiveAt: 99 })
+    finish([stoppedSession('a')])
+    await read
+    expect(store.sessions[0]).toMatchObject({ status: 'running', lastActiveAt: 99 })
+    sessionApi.listSessions.mockResolvedValueOnce([{ ...a, status: 'error', lastActiveAt: 100 }])
+    await store.fetchSessions()
+    expect(store.sessions[0]).toMatchObject({ status: 'error', lastActiveAt: 100 })
+  })
+
+  it('does not resurrect sessions after disposal with an in-flight refresh', async () => {
+    const store = useSessionsStore()
+    let finish!: (items: Session[]) => void
+    sessionApi.listSessions.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const read = store.fetchSessions()
+    await vi.waitUntil(() => typeof finish === 'function')
+    store.dispose()
+    finish([stoppedSession('old')])
+    await read
+    expect(store.sessions).toEqual([])
+  })
+
+  it('protects remote archive mutations without blocking changes to another remote session', async () => {
+    const instanceId = 'remote-1'
+    const capabilities = createFullCapabilities()
+    useInstancesStore().remoteInstances = [{
+      id: instanceId, type: 'remote', name: 'Remote', baseUrl: 'https://remote.example.com',
+      enabled: true, authRef: instanceId, status: 'online', lastCheckedAt: null,
+      passthroughOnly: false, capabilities, lastError: null, latencyMs: 1
+    }]
+    const a = toUnifiedSession(stoppedSession('a'), { instanceId, source: 'remote' })
+    const b = toUnifiedSession(stoppedSession('b'), { instanceId, source: 'remote' })
+    let finish!: (items: UnifiedSession[]) => void
+    const gateway = {
+      listSessions: vi.fn(() => new Promise<UnifiedSession[]>(resolve => { finish = resolve })),
+      subscribeStatus: vi.fn(() => () => {}),
+      getCapabilities: vi.fn(async () => ({ passthroughOnly: false, capabilities })),
+      setSessionArchived: vi.fn(async () => ({ ...a, archivedAt: 123 }))
+    }
+    const resolver = getSharedGatewayResolver()
+    vi.spyOn(resolver, 'resolve').mockResolvedValue(gateway as unknown as Gateway)
+    const store = useSessionsStore()
+    store.remoteSessionsByInstance = { [instanceId]: [a, b] }
+    const read = store.fetchSessionsForInstance(instanceId)
+    await vi.waitUntil(() => typeof finish === 'function')
+    await store.setSessionArchivedRef(a, true)
+    finish([a, { ...b, name: 'Fresh B' }])
+    await read
+    expect(store.remoteSessionsByInstance[instanceId]).toEqual([
+      { ...a, archivedAt: 123 }, { ...b, name: 'Fresh B' }
+    ])
   })
 
 })

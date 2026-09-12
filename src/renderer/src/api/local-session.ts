@@ -1,5 +1,6 @@
 import type { IpcRendererEvent } from 'electron'
 import { ipc } from './ipc'
+import { splitOutputBatch, type SequencedOutputBatch } from '@shared/session-output-batch'
 
 import type { CliType } from '@shared/cli-types'
 import type {
@@ -54,7 +55,7 @@ export interface SessionFilter {
   parentId?: string
 }
 
-export interface OutputEvent {
+export interface OutputEvent extends SequencedOutputBatch {
   sessionId: string
   data: string
   stream: 'stdout' | 'stderr'
@@ -93,7 +94,7 @@ function withReadDedupe<T>(channel: string, args: unknown[], fn: () => Promise<T
   if (existing) return existing
 
   const request = fn().finally(() => {
-    inflightReadRequests.delete(key)
+    if (inflightReadRequests.get(key) === request) inflightReadRequests.delete(key)
   })
   inflightReadRequests.set(key, request as Promise<unknown>)
   return request
@@ -138,8 +139,19 @@ export function getOutputHistory(id: string, lines?: number): Promise<OutputLine
   )
 }
 
-export function clearOutput(id: string): Promise<void> {
-  return ipc.invoke<void>('session:output:clear', id)
+export async function clearOutput(id: string): Promise<number> {
+  const prefix = `session:output:history:${stableStringify(id)}|`
+  const invalidate = () => {
+    for (const key of inflightReadRequests.keys()) {
+      if (key.startsWith(prefix)) inflightReadRequests.delete(key)
+    }
+  }
+  invalidate()
+  try {
+    return await ipc.invoke<number>('session:output:clear', id)
+  } finally {
+    invalidate()
+  }
 }
 
 export function setSessionArchived(id: string, archived: boolean): Promise<Session | null> {
@@ -154,16 +166,16 @@ export function updateSessionIcon(id: string, icon: string | null): Promise<bool
   return ipc.invoke<boolean>('session:updateIcon', id, icon)
 }
 
-export function restartSession(id: string): Promise<Session> {
-  return ipc.invoke<Session>('session:restart', id)
+export function restartSession(id: string): Promise<Session | null> {
+  return ipc.invoke<Session | null>('session:restart', id)
 }
 
-export function startSession(id: string): Promise<Session> {
-  return ipc.invoke<Session>('session:start', id)
+export function startSession(id: string): Promise<Session | null> {
+  return ipc.invoke<Session | null>('session:start', id)
 }
 
-export function pauseSession(id: string): Promise<Session> {
-  return ipc.invoke<Session>('session:pause', id)
+export function pauseSession(id: string): Promise<Session | null> {
+  return ipc.invoke<Session | null>('session:pause', id)
 }
 
 export function updateSessionOptions(id: string, options: Record<string, unknown>): Promise<Session | null> {
@@ -192,7 +204,9 @@ export function detectShells(): Promise<DetectedShell[]> {
 }
 
 export function onSessionOutput(callback: (event: OutputEvent) => void): () => void {
-  const handler = (_e: IpcRendererEvent, data: OutputEvent) => callback(data)
+  const handler = (_e: IpcRendererEvent, data: OutputEvent) => {
+    for (const event of splitOutputBatch(data)) callback(event)
+  }
   ipc.on('session:output', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
   return () => ipc.removeListener('session:output', handler as (event: IpcRendererEvent, ...args: unknown[]) => void)
 }

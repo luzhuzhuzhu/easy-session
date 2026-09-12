@@ -179,7 +179,6 @@
           @restart-session="handleRestart"
           @archive-session="handleArchive"
           @destroy-session="handleDestroy"
-          @clear-output="sessionsStore.clearSessionOutputRef($event)"
           @set-pane-zoom="handleSetPaneZoom"
           @reset-pane-zoom="handleResetPaneZoom"
           @swap-pane-tabs="handleSwapPaneTabs"
@@ -894,8 +893,8 @@ async function restartSessionByRef(sessionRef: SessionRef, showSuccess = true) {
   }
 
   try {
-    await sessionsStore.restartSessionRef(sessionRef)
-    if (showSuccess) toast.success(t('toast.sessionRestarted'))
+    const updated = await sessionsStore.restartSessionRef(sessionRef)
+    if (updated && showSuccess) toast.success(t('toast.sessionRestarted'))
   } catch (e: unknown) {
     toast.error(formatRemoteOperationError({
       t,
@@ -911,8 +910,8 @@ async function restartSessionByRef(sessionRef: SessionRef, showSuccess = true) {
 async function startSessionByRef(sessionRef: SessionRef, showSuccess = true) {
   const session = sessionsStore.getUnifiedSession(sessionRef.globalSessionKey)
   try {
-    await sessionsStore.startSessionRef(sessionRef)
-    if (showSuccess) toast.success(t('toast.sessionStarted'))
+    const updated = await sessionsStore.startSessionRef(sessionRef)
+    if (updated && showSuccess) toast.success(t('toast.sessionStarted'))
   } catch (e: unknown) {
     toast.error(formatRemoteOperationError({
       t,
@@ -928,8 +927,8 @@ async function startSessionByRef(sessionRef: SessionRef, showSuccess = true) {
 async function pauseSessionByRef(sessionRef: SessionRef, showSuccess = true) {
   const session = sessionsStore.getUnifiedSession(sessionRef.globalSessionKey)
   try {
-    await sessionsStore.pauseSessionRef(sessionRef)
-    if (showSuccess) toast.success(t('toast.sessionPaused'))
+    const updated = await sessionsStore.pauseSessionRef(sessionRef)
+    if (updated && showSuccess) toast.success(t('toast.sessionPaused'))
   } catch (e: unknown) {
     toast.error(formatRemoteOperationError({
       t,

@@ -8,7 +8,7 @@ export interface ISessionLifecycle {
   // 创建新会话并启动进程
   create(id: string, name: string, params: CreateSessionParams): Session
   // 恢复/重启已有会话的进程
-  startProcess(session: Session, startAt: number): void | Promise<void>
+  startProcess(session: Session, startAt: number, signal?: AbortSignal): void | Promise<void>
   // 处理进程输出（Codex 用于 ID 发现）
   handleOutput(session: Session, data: string): void
   // 会话销毁/暂停时的清理

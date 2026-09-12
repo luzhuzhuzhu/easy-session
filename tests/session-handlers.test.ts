@@ -141,4 +141,10 @@ describe('session-handlers', () => {
     expect(sessionManager.setSessionArchived).toHaveBeenCalledWith('session-1', true)
   })
 
+  it('returns the clear cutoff to the renderer', () => {
+    sessionManager.outputManager.clearHistory.mockReturnValue(42)
+    expect(handlers.get('session:output:clear')!({}, 'session-1')).toBe(42)
+    expect(sessionManager.outputManager.clearHistory).toHaveBeenCalledWith('session-1')
+  })
+
 })

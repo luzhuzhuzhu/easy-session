@@ -59,6 +59,7 @@ type UseSessionsPageCoordinationOptions = {
 }
 
 export function useSessionsPageCoordination(options: UseSessionsPageCoordinationOptions) {
+  let initialLoadComplete = false
   const expandedProjectMap = ref<Record<string, boolean>>({})
   const expandedInstanceMap = ref<Record<string, boolean>>({})
 
@@ -144,7 +145,9 @@ export function useSessionsPageCoordination(options: UseSessionsPageCoordination
       options.instancesStore.remoteStateVersion
     ],
     () => {
-      options.reconcileWorkspaceSessions()
+      // Restored tabs must not be validated against the still-empty initial
+      // session collection when the instance request finishes first.
+      if (initialLoadComplete) options.reconcileWorkspaceSessions()
     }
   )
 
@@ -161,6 +164,7 @@ export function useSessionsPageCoordination(options: UseSessionsPageCoordination
     if (!options.settingsStore.loaded) await options.settingsStore.load()
     await options.workspaceStore.load()
     await options.reloadSessionTree()
+    initialLoadComplete = true
   })
 
   return {

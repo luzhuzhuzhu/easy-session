@@ -33,7 +33,6 @@
         @restart-session="emit('restart-session', $event)"
         @archive-session="emit('archive-session', $event)"
         @destroy-session="emit('destroy-session', $event)"
-        @clear-output="emit('clear-output', $event)"
         @set-pane-zoom="emit('set-pane-zoom', $event)"
         @reset-pane-zoom="emit('reset-pane-zoom', $event)"
         @swap-pane-tabs="emit('swap-pane-tabs', $event)"
@@ -73,7 +72,6 @@
         @restart-session="emit('restart-session', $event)"
         @archive-session="emit('archive-session', $event)"
         @destroy-session="emit('destroy-session', $event)"
-        @clear-output="emit('clear-output', $event)"
         @set-pane-zoom="emit('set-pane-zoom', $event)"
         @reset-pane-zoom="emit('reset-pane-zoom', $event)"
         @swap-pane-tabs="emit('swap-pane-tabs', $event)"
@@ -273,7 +271,6 @@
           :session-ref="activeSessionRef"
           :process-key="activeSession.processId"
           :pane-id="node.paneId"
-          @clear="activeSessionRef && emit('clear-output', activeSessionRef)"
         />
       </template>
       <div v-else-if="activeResolvedTab?.availability === 'offline'" class="pane-unavailable offline">
@@ -385,7 +382,6 @@ const emit = defineEmits<{
   'restart-session': [sessionRef: SessionRef]
   'archive-session': [sessionRef: SessionRef]
   'destroy-session': [sessionRef: SessionRef]
-  'clear-output': [sessionRef: SessionRef]
   'set-pane-zoom': [payload: { paneId: string; percent: number }]
   'reset-pane-zoom': [paneId: string]
   'swap-pane-tabs': [payload: { fromPaneId: string; toPaneId: string }]
@@ -479,9 +475,12 @@ const tabStripEl = ref<HTMLElement | null>(null)
 watch(
   () => paneTabs.value.find((t) => t.active)?.tabId,
   async (activeTabId) => {
-    if (!activeTabId || !tabStripEl.value) return
+    if (!activeTabId) return
     await nextTick()
-    const el = tabStripEl.value.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(activeTabId)}"]`)
+    // Closing down to one tab removes the strip during this tick. A newer
+    // selection may also have superseded this callback while it was waiting.
+    if (paneTabs.value.find((tab) => tab.active)?.tabId !== activeTabId) return
+    const el = tabStripEl.value?.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(activeTabId)}"]`)
     el?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }
 )

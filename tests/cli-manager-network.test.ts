@@ -70,6 +70,7 @@ describe('CliManager remote network diagnostics', () => {
 
     const cliManager = new CliManager()
     cliManager.setRemoteNetworkSettingsManager(remoteNetworkSettingsManager)
+    const recordFailure = vi.spyOn(remoteNetworkSettingsManager, 'recordCliFailure')
 
     cliManager.spawn('codex-1', 'codex', [], { cwd: tempDir })
     expect(lastPty).not.toBeNull()
@@ -78,7 +79,10 @@ describe('CliManager remote network diagnostics', () => {
       'Stream disconnected before completion: 由于连接方在一段时间后没有正确答复或连接的主机没有反应，连接尝试失败。 (os error 10060)'
     )
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(recordFailure).toHaveBeenCalledTimes(1)
+    // Await persistence, not a fixed delay. Otherwise teardown can remove the
+    // temp directory while the diagnostic write is still renaming its file.
+    await recordFailure.mock.results[0].value
 
     const state = await remoteNetworkSettingsManager.getState()
     expect(state.runtime.cli.lastFailureCli).toBe('codex')

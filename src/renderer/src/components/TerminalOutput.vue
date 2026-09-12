@@ -31,7 +31,7 @@
       >
         <UiIcon name="file-text" />
       </ToolbarButton>
-      <ToolbarButton :label="$t('terminal.clearOutput')" tone="danger" @click="handleClear">
+      <ToolbarButton v-if="sessionRef?.instanceId === 'local'" :disabled="clearingOutput" :label="$t('terminal.clearOutput')" tone="danger" @click="handleClear">
         <UiIcon name="eraser" />
       </ToolbarButton>
     </div>
@@ -104,7 +104,6 @@ import {
 } from '@/models/terminal-appearance'
 
 const props = defineProps<{ sessionRef?: SessionRef | null; processKey?: string | null; paneId?: string | null }>()
-const emit = defineEmits<{ clear: [] }>()
 const { t } = useI18n()
 const confirmDialog = useConfirmDialog()
 const toast = useToast()
@@ -145,11 +144,10 @@ function runSearch(direction: 1 | -1 = 1): void {
     searchAddon.clearDecorations()
     return
   }
-  const options = { caseSensitive: searchMatchCase.value, decorations: { matchOverviewRuler: '#f0ad4e', activeMatchColorOverviewRuler: '#ff8c00' } as never }
+  const options = { caseSensitive: searchMatchCase.value, decorations: { matchOverviewRuler: '#f0ad4e', activeMatchColorOverviewRuler: '#ff8c00' } }
   const fn = direction === 1 ? searchAddon.findNext : searchAddon.findPrevious
   try {
     fn.call(searchAddon, query, options)
-    searchResultText.value = ''
     searchDecorationsCleanup?.()
     searchDecorationsCleanup = null
   } catch {
@@ -167,9 +165,8 @@ function onSearchInput(): void {
   try {
     searchAddon.findNext(searchQuery.value, {
       caseSensitive: searchMatchCase.value,
-      decorations: { matchOverviewRuler: '#f0ad4e', activeMatchColorOverviewRuler: '#ff8c00' } as never
+      decorations: { matchOverviewRuler: '#f0ad4e', activeMatchColorOverviewRuler: '#ff8c00' }
     })
-    searchResultText.value = ''
   } catch {
     searchResultText.value = t('terminal.searchNoResult')
   }
@@ -182,12 +179,18 @@ async function openSearch(): Promise<void> {
   searchInputRef.value?.focus()
   searchInputRef.value?.select()
 }
+const clearingOutput = ref(false)
+let clearedThroughSeq = 0
+let firstRenderedSeq = 0
 let lastRenderedSeq = 0
+let historyReplayToken: number | null = null
+let liveOutputWriteCompletion: Promise<void> | null = null
+const terminalWriteCompletions = new Set<() => void>()
 let loadToken = 0
 let subscribeToken = 0
 let unlistenOutput: (() => void) | null = null
 let subscribedGlobalSessionKey: string | null = null
-let loadingHistory = false
+const loadingHistory = ref(false)
 const pendingEvents: GatewayOutputEvent[] = []
 const liveOutputQueue: GatewayOutputEvent[] = []
 let liveOutputFlushRaf: number | null = null
@@ -387,6 +390,7 @@ if (typeof window !== 'undefined') {
 function clearLiveOutputQueue(): void {
   liveOutputQueue.length = 0
   liveOutputWritePending = false
+  liveOutputWriteCompletion = null
   liveOutputWriteToken += 1
   if (liveOutputFlushRaf !== null) {
     cancelAnimationFrame(liveOutputFlushRaf)
@@ -668,7 +672,7 @@ async function bindOutput(): Promise<void> {
 
 function reloadSessionView(): void {
   initTerminal()
-  loadingHistory = true
+  loadingHistory.value = true
   void bindOutput()
   void loadHistory().then(focusTerminalForIME)
 }
@@ -713,6 +717,14 @@ function destroyTerminal(): void {
     resizeTimer = null
   }
 
+  ++loadToken
+  clearingOutput.value = false
+  clearedThroughSeq = 0
+  historyReplayToken = null
+  loadingHistory.value = false
+  foregroundSyncing.value = false
+  pendingEvents.length = 0
+  for (const finish of terminalWriteCompletions) finish()
   if (term) {
     term.dispose()
     term = null
@@ -721,7 +733,7 @@ function destroyTerminal(): void {
 
   if (containerRef.value) containerRef.value.innerHTML = ''
   clearLiveOutputQueue()
-  lastRenderedSeq = 0
+  resetLocalBuffer()
   lastSyncedCols = -1
   lastSyncedRows = -1
 }
@@ -764,6 +776,8 @@ function initTerminal(): void {
   autoScroll.value = true
 
   term = new Terminal({
+    // Search decorations require xterm marker/decoration APIs.
+    allowProposedApi: true,
     cursorBlink: true,
     disableStdin: !isSessionWritable(),
     convertEol: false,
@@ -799,6 +813,7 @@ function initTerminal(): void {
 
   term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
     if (ev.type !== 'keydown') return true
+    if (ev.shiftKey && ev.code === 'PageUp') autoScroll.value = false
 
     const isCtrlShiftC = ev.ctrlKey && ev.shiftKey && !ev.altKey && ev.code === 'KeyC'
     const isCtrlC = ev.ctrlKey && !ev.shiftKey && !ev.altKey && ev.code === 'KeyC'
@@ -864,13 +879,14 @@ function initTerminal(): void {
   })
 
   term.onScroll(() => {
-    if (!term) return
+    if (!term || historyReplayToken !== null) return
     autoScroll.value = isViewportAtBottom()
   })
 }
 
 function resetLocalBuffer(): void {
-  lastRenderedSeq = 0
+  firstRenderedSeq = 0
+  lastRenderedSeq = clearedThroughSeq
 }
 
 function isViewportAtBottom(): boolean {
@@ -898,13 +914,18 @@ function waitForNextHistoryBatch(): Promise<void> {
   })
 }
 
-function writeTerminalChunk(text: string): Promise<void> {
+function writeTerminalChunk(text: string, target = term): Promise<void> {
   return new Promise((resolve) => {
-    if (!term || !text) {
+    if (!target) {
       resolve()
       return
     }
-    term.write(text, resolve)
+    const finish = () => {
+      terminalWriteCompletions.delete(finish)
+      resolve()
+    }
+    terminalWriteCompletions.add(finish)
+    target.write(text, finish)
   })
 }
 
@@ -924,6 +945,7 @@ async function replayHistoryInBatches(
       const seq = resolveSeq(raw, lastRenderedSeq + 1)
       if (seq <= lastRenderedSeq) continue
       chunk += raw.text
+      if (firstRenderedSeq === 0) firstRenderedSeq = seq
       lastRenderedSeq = seq
     }
 
@@ -936,149 +958,131 @@ async function replayHistoryInBatches(
     }
   }
 
-  return true
+  return token === loadToken && !!term && props.sessionRef?.globalSessionKey === sessionKey
 }
 
 async function renderHistorySnapshot(
   history: OutputLine[],
   token: number,
-  sessionKey: string,
-  forceScroll = false
+  sessionKey: string
 ): Promise<boolean> {
-  if (!term || token !== loadToken || props.sessionRef?.globalSessionKey !== sessionKey) {
-    return false
+  // Do not reset xterm while the preceding live frame is still being parsed.
+  if (liveOutputWriteCompletion) await liveOutputWriteCompletion
+  if (!term || token !== loadToken || props.sessionRef?.globalSessionKey !== sessionKey) return false
+
+  // A delayed refresh usually only extends an already rendered prefix. Append
+  // that suffix instead of resetting the terminal and losing the reading anchor.
+  const renderedTailIndex = history.findIndex((line) => line.seq === lastRenderedSeq)
+  const canAppend = firstRenderedSeq > 0 &&
+    typeof history[0]?.seq === 'number' && history[0].seq >= firstRenderedSeq && renderedTailIndex !== -1
+  if (canAppend) {
+    const replayed = await replayHistoryInBatches(history.slice(renderedTailIndex + 1), token, sessionKey)
+    if (replayed) scrollToBottom()
+    return replayed
   }
 
-  const previousViewportOffsetFromBottom = !autoScroll.value
+  const offsetFromBottom = !autoScroll.value
     ? Math.max(0, term.buffer.active.baseY - term.buffer.active.viewportY)
     : 0
-
-  term.reset()
-  lastSyncedCols = -1
-  lastSyncedRows = -1
-  fitAndSync(true)
-  resetLocalBuffer()
-
-  const replayed = await replayHistoryInBatches(history, token, sessionKey)
-  if (!replayed) {
-    return false
-  }
-
-  if (!forceScroll && !autoScroll.value) {
-    const nextViewportY = Math.max(0, term.buffer.active.baseY - previousViewportOffsetFromBottom)
-    term.scrollToLine(nextViewportY)
+  historyReplayToken = token
+  try {
+    term.reset()
+    lastSyncedCols = -1
+    lastSyncedRows = -1
+    fitAndSync(true)
+    resetLocalBuffer()
+    // Restore the reading anchor at the OLD tail first. Restoring an offset
+    // from the NEW tail would shift the viewport by every newly received row.
+    const prefix = renderedTailIndex >= 0 ? history.slice(0, renderedTailIndex + 1) : history
+    if (!await replayHistoryInBatches(prefix, token, sessionKey)) return false
+    if (!autoScroll.value) {
+      term.scrollToLine(Math.max(0, term.buffer.active.baseY - offsetFromBottom))
+    }
+    if (renderedTailIndex >= 0 &&
+      !await replayHistoryInBatches(history.slice(renderedTailIndex + 1), token, sessionKey)) return false
+    scrollToBottom()
     return true
+  } finally {
+    if (historyReplayToken === token) historyReplayToken = null
   }
-
-  scrollToBottom(forceScroll)
-  return true
 }
 
 async function syncForegroundFromWarmHistory(): Promise<void> {
   const sessionKey = props.sessionRef?.globalSessionKey
-  if (!term || !sessionKey || loadingHistory || !isPaneVisible()) return
-
+  if (!term || !sessionKey || loadingHistory.value || !isPaneVisible()) return
   const cachedHistory = readWarmHistorySnapshot(sessionKey)
-  if (!cachedHistory?.length) return
-
-  const cachedSeq = getWarmHistorySnapshotLastSeq(sessionKey)
-  if (cachedSeq <= lastRenderedSeq) return
+  if (!cachedHistory?.length || getWarmHistorySnapshotLastSeq(sessionKey) <= lastRenderedSeq) return
 
   const token = ++loadToken
-  loadingHistory = true
+  loadingHistory.value = true
   foregroundSyncing.value = true
   try {
-    const replayed = await renderHistorySnapshot(cachedHistory, token, sessionKey, false)
-    if (replayed) {
-      scheduleResize()
-    }
+    if (await renderHistorySnapshot(cachedHistory, token, sessionKey)) scheduleResize()
   } finally {
-    loadingHistory = false
-    foregroundSyncing.value = false
+    finishHistoryLoad(token, sessionKey)
   }
 }
 
 function finishHistoryLoad(token: number, sessionKey: string): void {
-  if (token === loadToken && props.sessionRef?.globalSessionKey === sessionKey) {
-    loadingHistory = false
-  }
+  if (token !== loadToken || props.sessionRef?.globalSessionKey !== sessionKey) return
+  loadingHistory.value = false
+  foregroundSyncing.value = false
+  // Success, failure and foreground catch-up must all release buffered events.
+  // Re-enter the normal path so invisible panes update their cache, not xterm.
+  for (const event of pendingEvents.splice(0)) applyLiveOutput(event)
 }
 
 async function loadHistory(): Promise<void> {
+  if (clearingOutput.value) return
   const sessionRef = props.sessionRef ?? null
   if (!term || !sessionRef) {
-    resetLocalBuffer()
+    loadingHistory.value = false
     return
   }
-
   const token = ++loadToken
-  loadingHistory = true
-  pendingEvents.length = 0
-  let history: OutputLine[]
-  const cachedHistory = readWarmHistorySnapshot(sessionRef.globalSessionKey)
-
-  if (cachedHistory?.length) {
-    const renderedFromCache = await renderHistorySnapshot(cachedHistory, token, sessionRef.globalSessionKey, true)
-    if (!renderedFromCache) {
-      finishHistoryLoad(token, sessionRef.globalSessionKey)
-      return
-    }
-  }
+  loadingHistory.value = true
+  // Avoid an argument-count limit during a large burst of queued output.
+  for (const event of liveOutputQueue.splice(0)) pendingEvents.push(event)
+  const sessionKey = sessionRef.globalSessionKey
+  const cachedHistory = readWarmHistorySnapshot(sessionKey)
 
   try {
-    const context = await resolveGatewayContext()
-    if (!context) {
-      finishHistoryLoad(token, sessionRef.globalSessionKey)
-      return
+    if (cachedHistory?.length && lastRenderedSeq === 0) {
+      if (!await renderHistorySnapshot(cachedHistory, token, sessionKey)) return
     }
-    history = await context.gateway.getOutputHistory(
+    const context = await resolveGatewayContext()
+    if (!context || token !== loadToken || context.sessionRef.globalSessionKey !== sessionKey) return
+    const history = await context.gateway.getOutputHistory(
       context.sessionRef.instanceId,
       context.sessionRef.sessionId,
       currentHistoryLoadLines.value
     )
-  } catch {
-    finishHistoryLoad(token, sessionRef.globalSessionKey)
-    return
-  }
+    if (token !== loadToken || !term || props.sessionRef?.globalSessionKey !== sessionKey) return
 
-  if (token !== loadToken || !term || props.sessionRef?.globalSessionKey !== sessionRef.globalSessionKey) {
-    finishHistoryLoad(token, sessionRef.globalSessionKey)
-    return
-  }
-
-  const latestSeq = getLastSeq(history)
-  const cachedSeq = cachedHistory ? getLastSeq(cachedHistory) : 0
-  if (!cachedHistory || shouldReplaceCachedHistory({
-    cachedLength: cachedHistory.length,
-    cachedLastSeq: cachedSeq,
-    fetchedLength: history.length,
-    fetchedLastSeq: latestSeq
-  })) {
-    const replayed = await renderHistorySnapshot(history, token, sessionRef.globalSessionKey, true)
-    if (!replayed) {
-      finishHistoryLoad(token, sessionRef.globalSessionKey)
-      return
+    const latestSeq = getLastSeq(history)
+    const cachedSeq = cachedHistory ? getLastSeq(cachedHistory) : 0
+    if (!cachedHistory || shouldReplaceCachedHistory({
+      cachedLength: cachedHistory.length,
+      cachedLastSeq: cachedSeq,
+      fetchedLength: history.length,
+      fetchedLastSeq: latestSeq
+    })) {
+      if (!await renderHistorySnapshot(history, token, sessionKey)) return
     }
-  }
 
-  hasMoreHistory.value = history.length >= currentHistoryLoadLines.value
-  if (!cachedHistory || latestSeq > cachedSeq || (latestSeq === cachedSeq && history.length >= cachedHistory.length)) {
-    writeWarmHistorySnapshot(sessionRef.globalSessionKey, history, currentHistoryLoadLines.value)
-  }
-  finishHistoryLoad(token, sessionRef.globalSessionKey)
-
-  if (pendingEvents.length === 0) {
-    return
-  }
-
-  const queued = pendingEvents.splice(0, pendingEvents.length)
-  for (const event of queued) {
-    applyLiveOutputNow(event)
+    hasMoreHistory.value = history.length >= currentHistoryLoadLines.value
+    if (!cachedHistory || latestSeq > cachedSeq || (latestSeq === cachedSeq && history.length >= cachedHistory.length)) {
+      writeWarmHistorySnapshot(sessionKey, history, currentHistoryLoadLines.value)
+    }
+  } catch {
+    // A history read failure must not interrupt the still-healthy live stream.
+  } finally {
+    finishHistoryLoad(token, sessionKey)
   }
 }
 
 async function loadMoreHistory(): Promise<void> {
-  if (loadingHistory || loadingMoreHistory.value || !hasMoreHistory.value) return
+  if (loadingHistory.value || loadingMoreHistory.value || !hasMoreHistory.value) return
   const nextLimit = Math.min(HISTORY_MAX_LOAD_LINES, currentHistoryLoadLines.value + HISTORY_LOAD_STEP)
   if (nextLimit === currentHistoryLoadLines.value) {
     hasMoreHistory.value = false
@@ -1087,10 +1091,12 @@ async function loadMoreHistory(): Promise<void> {
 
   loadingMoreHistory.value = true
   currentHistoryLoadLines.value = nextLimit
+  const request = loadHistory()
+  const token = loadToken
   try {
-    await loadHistory()
+    await request
   } finally {
-    loadingMoreHistory.value = false
+    if (token === loadToken) loadingMoreHistory.value = false
   }
 }
 
@@ -1109,7 +1115,7 @@ function scheduleLiveOutputFlush(): void {
 }
 
 function flushLiveOutputQueue(): void {
-  if (!term || !props.sessionRef || liveOutputQueue.length === 0 || liveOutputWritePending) return
+  if (!term || !props.sessionRef || loadingHistory.value || liveOutputQueue.length === 0 || liveOutputWritePending) return
 
   const currentTerm = term
   const sessionKey = props.sessionRef.globalSessionKey
@@ -1134,6 +1140,7 @@ function flushLiveOutputQueue(): void {
       seq
     }
     nextLines.push(line)
+    if (firstRenderedSeq === 0) firstRenderedSeq = seq
     chunk += line.text
     lastRenderedSeq = seq
   }
@@ -1143,9 +1150,10 @@ function flushLiveOutputQueue(): void {
   appendWarmHistorySnapshotBatch(sessionKey, nextLines)
   liveOutputWritePending = true
   const writeToken = ++liveOutputWriteToken
-  currentTerm.write(chunk, () => {
+  liveOutputWriteCompletion = writeTerminalChunk(chunk, currentTerm).then(() => {
     if (writeToken !== liveOutputWriteToken) return
     liveOutputWritePending = false
+    liveOutputWriteCompletion = null
     if (
       shouldStickToBottom &&
       autoScroll.value &&
@@ -1162,7 +1170,8 @@ function flushLiveOutputQueue(): void {
 
 function applyLiveOutput(event: GatewayOutputEvent): void {
   if (!props.sessionRef || event.globalSessionKey !== props.sessionRef.globalSessionKey) return
-  if (loadingHistory) {
+  if (typeof event.seq === 'number' && event.seq <= clearedThroughSeq) return
+  if (loadingHistory.value) {
     pendingEvents.push(event)
     return
   }
@@ -1285,28 +1294,54 @@ async function viewJournalTail(): Promise<void> {
 }
 
 async function handleClear(): Promise<void> {
-  const confirmed = await confirmDialog.confirm({
-    title: t('terminal.confirmClearTitle'),
-    message: t('terminal.confirmClearMessage'),
-    details: t('terminal.confirmClearDetails'),
-    confirmText: t('confirm.clear'),
-    cancelText: t('confirm.cancel'),
-    tone: 'danger'
-  })
-  if (!confirmed) return
+  if (clearingOutput.value || !term || !props.sessionRef || props.sessionRef.instanceId !== 'local') return
+  const sessionRef = { ...props.sessionRef }
+  const target = term
+  clearingOutput.value = true
+  let token: number | null = null
+  const ownsView = () => term === target && props.sessionRef?.globalSessionKey === sessionRef.globalSessionKey
+  try {
+    const confirmed = await confirmDialog.confirm({
+      title: t('terminal.confirmClearTitle'),
+      message: t('terminal.confirmClearMessage'),
+      details: t('terminal.confirmClearDetails'),
+      confirmText: t('confirm.clear'),
+      cancelText: t('confirm.cancel'),
+      tone: 'danger'
+    })
+    if (!confirmed || !ownsView()) return
 
-  term?.reset()
-  emit('clear')
-  resetLocalBuffer()
-  clearLiveOutputQueue()
-  clearWarmHistorySnapshot(props.sessionRef?.globalSessionKey)
-  // Clearing wipes the current view but must not permanently disable history
-  // loading. Reset to the initial loadable state so the user can re-pull
-  // history; loadMoreHistory() will settle hasMoreHistory=false on its own if
-  // nothing remains to load.
-  currentHistoryLoadLines.value = HISTORY_LOAD_LINES
-  hasMoreHistory.value = true
-  loadingMoreHistory.value = false
+    token = ++loadToken
+    loadingHistory.value = true
+    foregroundSyncing.value = false
+    historyReplayToken = null
+    for (const event of liveOutputQueue.splice(0)) pendingEvents.push(event)
+    clearLiveOutputQueue()
+    const cutoff = await sessionsStore.clearSessionOutputRef(sessionRef)
+    // Invalidate the original session's cache even if the user switched tabs.
+    clearWarmHistorySnapshot(sessionRef.globalSessionKey)
+    if (!ownsView() || token !== loadToken) return
+
+    // A zero-length write is a parser barrier: queued writes must finish BEFORE
+    // reset, not repaint the view after it has been cleared.
+    await writeTerminalChunk('', target)
+    if (!ownsView() || token !== loadToken) return
+    if (typeof cutoff === 'number' && Number.isSafeInteger(cutoff)) {
+      clearedThroughSeq = Math.max(clearedThroughSeq, cutoff)
+    } else {
+      clearedThroughSeq = Math.max(clearedThroughSeq, lastRenderedSeq)
+    }
+    target.reset()
+    resetLocalBuffer()
+    currentHistoryLoadLines.value = HISTORY_LOAD_LINES
+    hasMoreHistory.value = true
+    loadingMoreHistory.value = false
+  } catch (error) {
+    toast.error(t('toast.operationFailed') + ': ' + (error instanceof Error ? error.message : String(error)))
+  } finally {
+    if (ownsView()) clearingOutput.value = false
+    if (token !== null) finishHistoryLoad(token, sessionRef.globalSessionKey)
+  }
 }
 
 watch(
@@ -1407,7 +1442,7 @@ onBeforeUnmount(() => {
   unlistenOutput?.()
   unlistenOutput = null
   subscribedGlobalSessionKey = null
-  loadingHistory = false
+  loadingHistory.value = false
   foregroundSyncing.value = false
   pendingEvents.length = 0
   resizeObserver?.disconnect()

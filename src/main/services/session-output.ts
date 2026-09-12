@@ -313,7 +313,7 @@ export class SessionOutputManager {
       if (parsed) protocolMessage = parsed
     }
 
-    // 同窗口合帧：FLUSH_INTERVAL_MS 内的 chunk 拼成一次 IPC，seq 取末值（渲染端按 seq 去重已兼容）。
+    // Coalesce one IPC frame while retaining chunk boundaries for history/live deduplication.
     let pending = this.pendingWindows.get(sessionId)
     if (!pending || pending.stream !== stream) {
       if (pending) this.flushPendingWindow(sessionId)
@@ -378,7 +378,10 @@ export class SessionOutputManager {
       data: mergedData,
       stream: pending.stream,
       timestamp: pending.timestamp,
-      seq: pending.seq
+      seq: pending.seq,
+      // String lengths (UTF-16 code units), not byte counts. Keep the payload text
+      // once while letting the renderer deduplicate individual source chunks.
+      chunkLengths: pending.chunks.map((chunk) => chunk.length)
     }
 
     windows.forEach((win) => {
@@ -429,7 +432,7 @@ export class SessionOutputManager {
     return this.toArray(state, lines)
   }
 
-  clearHistory(sessionId: string): void {
+  clearHistory(sessionId: string): number {
     // 不重置 nextSeq：渲染端用 seq 做去重/丢弃，重置会让清空瞬间已应用的大 seq
     // 把之后的新输出全部当成"过期"丢掉（表现为清空后没有输出）。保持 seq 单调即可。
     const timer = this.pendingTimers.get(sessionId)
@@ -444,6 +447,7 @@ export class SessionOutputManager {
       state.start = 0
       state.size = 0
     }
+    return state?.nextSeq ?? 0
   }
 
   subscribe(listener: (event: SessionOutputEvent) => void): () => void {

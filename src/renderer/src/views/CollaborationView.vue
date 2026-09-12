@@ -209,7 +209,6 @@
               :session-ref="targetSessionRef"
               :process-key="targetProcessKey"
               pane-id="collaboration"
-              @clear="clearTargetSessionOutput"
             />
           </CollabPreviewPanel>
 
@@ -933,11 +932,6 @@ function openTargetSession(): void {
   void router.push({ path: '/sessions', query: { globalSessionKey: sessionRef.globalSessionKey } })
 }
 
-async function clearTargetSessionOutput(): Promise<void> {
-  const sessionRef = targetSessionRef.value
-  if (!sessionRef) return
-  await sessionsStore.clearSessionOutputRef(sessionRef)
-}
 
 async function changeMode(sessionId: string, rawMode: string): Promise<void> {
   const mode = rawMode as AgentCollabMode

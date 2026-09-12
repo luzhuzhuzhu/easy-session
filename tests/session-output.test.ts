@@ -102,4 +102,29 @@ describe('SessionOutputManager', () => {
     const protocolCall = calls.find((c: any[]) => c[0] === 'protocol:message')
     expect(protocolCall).toBeUndefined()
   })
+  it('preserves chunk boundaries when a coalesced frame overlaps a history snapshot', () => {
+    const mockWin = { webContents: { send: vi.fn() } }
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([mockWin as any])
+    manager.appendOutput('s1', 'first\r\n', 'stdout')
+    const snapshot = manager.getHistory('s1')
+    manager.appendOutput('s1', 'second\r\n', 'stdout')
+    vi.advanceTimersByTime(16)
+    const event = mockWin.webContents.send.mock.calls.find(call => call[0] === 'session:output')![1]
+    expect(snapshot.map(line => line.seq)).toEqual([1])
+    expect(event).toMatchObject({ seq: 2, data: 'first\r\nsecond\r\n', chunkLengths: [7, 8] })
+  })
+
+  it('returns an atomic clear sequence and drops the pending pre-clear frame', () => {
+    const mockWin = { webContents: { send: vi.fn() } }
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([mockWin as any])
+    manager.appendOutput('s1', 'old', 'stdout')
+    manager.appendOutput('s1', 'also-old', 'stdout')
+    expect(manager.clearHistory('s1')).toBe(2)
+    manager.appendOutput('s1', 'new', 'stdout')
+    vi.advanceTimersByTime(20)
+    expect(manager.getHistory('s1')).toEqual([expect.objectContaining({ text: 'new', seq: 3 })])
+    expect(mockWin.webContents.send).toHaveBeenCalledTimes(1)
+    expect(mockWin.webContents.send).toHaveBeenCalledWith('session:output', expect.objectContaining({ data: 'new', seq: 3 }))
+  })
+
 })

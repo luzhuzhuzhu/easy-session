@@ -465,8 +465,9 @@ async function runSessionAction(
       globalSessionKey: target.globalSessionKey
     }
     if (options?.beforeRun && !(await options.beforeRun(target))) return
-    await storeActions[action](sessionRef)
+    const result = await storeActions[action](sessionRef)
     await reloadProjectSessions()
+    if (action !== 'destroy' && !result) return
     toast.success(t(toastKeys[action]))
   } catch (e: unknown) {
     toast.error(formatRemoteOperationError({

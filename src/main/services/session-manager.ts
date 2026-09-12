@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { isDeepStrictEqual } from 'node:util'
 import { BrowserWindow } from 'electron'
 import { createLogger } from './logger'
 import { CLI_TYPE_DISPLAY_NAMES, CLI_TYPE_NAME_PATTERN } from '../../shared/cli-types'
@@ -48,12 +49,22 @@ export interface SessionStatusChangeEvent {
   lastActiveAt?: number
 }
 
+interface SessionLaunch {
+  controller: AbortController
+  promise: Promise<Session | null>
+  resolve: (session: Session | null) => void
+  reject: (error: unknown) => void
+  draft?: Session
+}
+
 export class SessionManager {
   private static readonly PERSIST_DEBOUNCE_MS = 200
   private static readonly ACTIVITY_PERSIST_THROTTLE_MS = 5_000
   private static readonly OPENCODE_EXIT_GRACE_MS = 180
 
   private sessions = new Map<string, Session>()
+  private launches = new Map<string, SessionLaunch>()
+  private shuttingDown = false
   private sessionCounter = new Map<string, number>()
   private processIndex = new Map<string, string>()
   private activityPersistAt = new Map<string, number>()
@@ -268,6 +279,7 @@ export class SessionManager {
   }
 
   createSession(params: CreateSessionParams): Session {
+    if (this.shuttingDown) throw new Error('Session manager is shutting down')
     if (!params.projectPath) throw new Error('projectPath cannot be empty')
 
     const id = randomUUID()
@@ -315,47 +327,122 @@ export class SessionManager {
     return session
   }
 
-  async startSession(id: string): Promise<Session | null> {
+  startSession(id: string): Promise<Session | null> {
+    return this.launchSession(id, false)
+  }
+
+  restartSession(id: string): Promise<Session | null> {
+    return this.launchSession(id, true)
+  }
+
+  private launchSession(id: string, restart: boolean): Promise<Session | null> {
     const session = this.sessions.get(id)
-    if (!session) return null
-    if (session.status === 'running' && session.processId) return session
-    delete session.archivedAt
+    if (!session || this.shuttingDown) return Promise.resolve(null)
+    const pending = this.launches.get(id)
+    // A restart arriving during startup has no running process to replace yet.
+    if (pending) return pending.promise
+    if (!restart && session.status === 'running' && session.processId) return Promise.resolve(session)
 
-    const startAt = Date.now()
-    const oldProcessId = session.processId
-    this.unindexProcess(oldProcessId)
-    session.processId = null
-    if (oldProcessId) this.cliManager.kill(oldProcessId)
+    let resolve!: SessionLaunch['resolve']
+    let reject!: SessionLaunch['reject']
+    const promise = new Promise<Session | null>((done, fail) => { resolve = done; reject = fail })
+    const launch: SessionLaunch = { controller: new AbortController(), promise, resolve, reject }
+    this.launches.set(id, launch)
+    void this.performLaunch(session, launch).then(resolve, reject)
+    return promise
+  }
 
+  private cancelLaunch(id: string): boolean {
+    const launch = this.launches.get(id)
+    if (!launch) return false
+    this.launches.delete(id)
+    launch.controller.abort()
+    // A synchronous lifecycle may have spawned before its promise continuation.
+    this.discardLaunchProcess(launch)
+    launch.resolve(null)
+    return true
+  }
+
+  private discardLaunchProcess(launch: SessionLaunch): void {
+    const draft = launch.draft
+    if (!draft?.processId) return
+    const processId = draft.processId
+    draft.processId = null
+    this.unindexProcess(processId)
+    this.cliManager.kill(processId)
+  }
+
+  private async performLaunch(session: Session, launch: SessionLaunch): Promise<Session | null> {
+    const id = session.id
+    const isCurrent = () => !launch.controller.signal.aborted &&
+      this.launches.get(id) === launch && this.sessions.get(id) === session && !this.shuttingDown
     try {
-      await this.lifecycles[session.type].startProcess(session, startAt)
+      const startAt = Date.now()
+      const oldProcessId = session.processId
+      if (oldProcessId && session.status === 'running') this.closeCurrentRun(session, startAt)
+      this.unindexProcess(oldProcessId)
+      session.processId = null
+      // The old run has ended. Discovery time is not runtime, and cancellation
+      // must not account for that same run a second time.
+      if (session.status === 'running') session.status = 'stopped'
+      if (oldProcessId) this.cliManager.kill(oldProcessId)
+      this.lifecycles[session.type].cleanup(session)
+
+      // Startup works on isolated state: a cancelled continuation cannot mutate
+      // a stopped/destroyed session or overwrite a subsequent launch's process.
+      const baseline = this.cloneSessionValue(session)
+      const draft = this.cloneSessionValue(session)
+      launch.draft = draft
+      await this.lifecycles[session.type].startProcess(draft, startAt, launch.controller.signal)
+      if (!isCurrent()) {
+        this.discardLaunchProcess(launch)
+        return null
+      }
+
+      // Apply lifecycle changes without rolling back edits made while discovery
+      // was pending (name, icon, options, etc.).
+      const currentFields = session as unknown as Record<string, unknown>
+      const baseFields = baseline as unknown as Record<string, unknown>
+      const nextFields = draft as unknown as Record<string, unknown>
+      for (const key of new Set([...Object.keys(baseFields), ...Object.keys(nextFields)])) {
+        if (!isDeepStrictEqual(currentFields[key], baseFields[key])) continue
+        if (key in nextFields) currentFields[key] = nextFields[key]
+        else delete currentFields[key]
+      }
+      delete session.archivedAt
       this.indexProcess(session)
       this.scheduleSessionIdDiscovery(session, startAt)
-      // 成功启动后解除 resume 失效自动重启的一次性守卫（load 时持久化字段一并清掉）
       if (session.type === 'codex') delete (session as CodexSession).noAutoRestart
       if (session.type === 'opencode') delete (session as OpenCodeSession).noAutoRestart
-    } catch (err) {
+      this.persist()
+      this.pushStatusChange(id, session.status)
+      return session
+    } catch (error) {
+      this.discardLaunchProcess(launch)
+      if (!isCurrent()) return null
       session.processId = null
       session.status = 'error'
-      const errMsg = err instanceof Error ? err.message : String(err)
-      this.outputManager.appendOutput(id, `Error: ${errMsg}\n`, 'stderr')
+      const message = error instanceof Error ? error.message : String(error)
+      this.outputManager.appendOutput(id, `Error: ${message}\n`, 'stderr')
+      this.persist()
+      this.pushStatusChange(id, session.status)
+      return session
+    } finally {
+      if (this.launches.get(id) === launch) this.launches.delete(id)
     }
-
-    this.persist()
-    this.pushStatusChange(id, session.status)
-    return session
   }
 
   pauseSession(id: string): Session | null {
     const session = this.sessions.get(id)
     if (!session) return null
+    const cancelled = this.cancelLaunch(id)
     const oldProcessId = session.processId
-    if (!oldProcessId || session.status !== 'running') return session
+    if ((!oldProcessId || session.status !== 'running') && !cancelled) return session
 
     this.closeCurrentRun(session)
     this.unindexProcess(oldProcessId)
     session.processId = null
-    this.cliManager.kill(oldProcessId)
+    if (oldProcessId) this.cliManager.kill(oldProcessId)
     session.status = 'stopped'
     session.lastActiveAt = Date.now()
     this.lifecycles[session.type].cleanup(session)
@@ -365,43 +452,11 @@ export class SessionManager {
     return session
   }
 
-  async restartSession(id: string): Promise<Session | null> {
-    const session = this.sessions.get(id)
-    if (!session) return null
-
-    const restartAt = Date.now()
-    const oldProcessId = session.processId
-
-    if (oldProcessId && session.status === 'running') {
-      this.closeCurrentRun(session, restartAt)
-    }
-
-    this.unindexProcess(oldProcessId)
-    session.processId = null
-    if (oldProcessId) this.cliManager.kill(oldProcessId)
-    this.lifecycles[session.type].cleanup(session)
-
-    try {
-      await this.lifecycles[session.type].startProcess(session, restartAt)
-      this.indexProcess(session)
-      this.scheduleSessionIdDiscovery(session, restartAt)
-      if (session.type === 'codex') delete (session as CodexSession).noAutoRestart
-      if (session.type === 'opencode') delete (session as OpenCodeSession).noAutoRestart
-    } catch (err) {
-      session.processId = null
-      session.status = 'error'
-      const errMsg = err instanceof Error ? err.message : String(err)
-      this.outputManager.appendOutput(id, `Error: ${errMsg}\n`, 'stderr')
-    }
-
-    this.persist()
-    this.pushStatusChange(id, session.status)
-    return session
-  }
 
   destroySession(id: string): boolean {
     const session = this.sessions.get(id)
     if (!session) return false
+    this.cancelLaunch(id)
 
     this.closeCurrentRun(session)
     if (session.processId) {
@@ -463,7 +518,7 @@ export class SessionManager {
 
   setSessionArchived(id: string, archived: boolean): Session | null {
     const session = this.sessions.get(id)
-    if (!session || (archived && session.status === 'running')) return null
+    if (!session || (archived && (session.status === 'running' || this.launches.has(id)))) return null
     if (archived) session.archivedAt = Date.now()
     else delete session.archivedAt
     this.persist()
@@ -555,6 +610,7 @@ export class SessionManager {
   }
 
   destroyAll(): void {
+    for (const id of this.launches.keys()) this.cancelLaunch(id)
     const ids = Array.from(this.sessions.keys())
     for (const id of ids) {
       const session = this.sessions.get(id)
@@ -580,6 +636,8 @@ export class SessionManager {
   }
 
   shutdownAll(): void {
+    this.shuttingDown = true
+    for (const id of [...this.launches.keys()]) this.pauseSession(id)
     let changed = false
 
     for (const session of this.sessions.values()) {

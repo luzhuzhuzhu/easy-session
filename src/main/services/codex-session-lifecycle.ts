@@ -60,7 +60,8 @@ export class CodexSessionLifecycle implements ISessionLifecycle {
     }
   }
 
-  async startProcess(session: Session, startAt: number): Promise<void> {
+  async startProcess(session: Session, startAt: number, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
     if (session.type !== 'codex') throw new Error(`CodexSessionLifecycle 收到非 codex 会话: ${session.type}`)
     const s = session
 
@@ -73,6 +74,7 @@ export class CodexSessionLifecycle implements ISessionLifecycle {
         CODEX_DISCOVERY_MAX_SKEW_MS
       )
 
+    signal?.throwIfAborted()
     if (resolvedId) {
       s.codexSessionId = resolvedId
       s.processId = this.codexAdapter.resumeSession(s.projectPath, s.options, resolvedId)

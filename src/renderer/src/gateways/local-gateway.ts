@@ -267,7 +267,7 @@ export class LocalGateway implements Gateway {
     return normalizeNativeSessionDiscoveryPayload(payload)
   }
 
-  async clearOutput(instanceId: string, sessionId: string): Promise<void> {
+  async clearOutput(instanceId: string, sessionId: string): Promise<number> {
     assertLocalInstance(instanceId)
     return clearOutput(sessionId)
   }

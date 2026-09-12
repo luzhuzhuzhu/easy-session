@@ -91,10 +91,43 @@ export const useSessionsStore = defineStore('sessions', () => {
   const remoteStatusListenerGeneration = new Map<string, number>()
   let disposed = false
   const fetchGenerationByInstance = new Map<string, number>()
+  // Only retained while the newest read is in flight. A successful mutation
+  // wins for its session, without discarding fresh data for other sessions.
+  const mutationsDuringFetch = new Map<string, Set<string>>()
+
+  function markSessionMutation(instanceId: string, sessionId: string): void {
+    mutationsDuringFetch.get(instanceId)?.add(sessionId)
+  }
+
+  function reconcileFetchedSessions(instanceId: string, incoming: UnifiedSession[]): UnifiedSession[] {
+    const changed = mutationsDuringFetch.get(instanceId)
+    mutationsDuringFetch.delete(instanceId)
+    if (!changed?.size) return incoming
+    const current = new Map(unifiedSessions.value
+      .filter((session) => session.instanceId === instanceId)
+      .map((session) => [session.sessionId, session]))
+    const merged = new Map(incoming.map((session) => [session.sessionId, session]))
+    for (const sessionId of changed) {
+      const session = current.get(sessionId)
+      if (session) merged.set(sessionId, session)
+      else merged.delete(sessionId)
+    }
+    return [...merged.values()]
+  }
+
+  function applyLocalSessionUpdate(session: Session, allowInsert = false): void {
+    const index = sessions.value.findIndex((item) => item.id === session.id)
+    if (index === -1 && !allowInsert) return
+    markSessionMutation(LOCAL_INSTANCE_ID, session.id)
+    if (index === -1) sessions.value.push(session)
+    else sessions.value[index] = session
+    bumpSessionCollectionVersion()
+  }
 
   function beginSessionFetch(instanceId: string): number {
     const generation = (fetchGenerationByInstance.get(instanceId) ?? 0) + 1
     fetchGenerationByInstance.set(instanceId, generation)
+    mutationsDuringFetch.set(instanceId, new Set())
     return generation
   }
 
@@ -199,6 +232,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     cleanupStatus = onSessionStatusChange(({ sessionId, status, lastActiveAt }) => {
       const session = sessions.value.find((s) => s.id === sessionId)
       if (!session) return
+      markSessionMutation(LOCAL_INSTANCE_ID, sessionId)
       session.status = status
       // 状态事件顺带回写活动时间：否则列表里的"智能排序"在两次手动刷新之间
       // 一直用陈旧的 lastActiveAt，刚用过的会话不会浮上来。
@@ -207,13 +241,16 @@ export const useSessionsStore = defineStore('sessions', () => {
       }
     })
     cleanupChanged = onSessionChanged((changedSession) => {
-      const index = sessions.value.findIndex((session) => session.id === changedSession.id)
-      if (index !== -1) sessions.value[index] = changedSession
+      applyLocalSessionUpdate(changedSession, true)
     })
   }
 
   function dispose() {
     disposed = true
+    for (const [instanceId, generation] of fetchGenerationByInstance) {
+      fetchGenerationByInstance.set(instanceId, generation + 1)
+    }
+    mutationsDuringFetch.clear()
     for (const instanceId of remoteStatusListenerGeneration.keys()) {
       remoteStatusListenerGeneration.set(instanceId, (remoteStatusListenerGeneration.get(instanceId) ?? 0) + 1)
     }
@@ -237,10 +274,11 @@ export const useSessionsStore = defineStore('sessions', () => {
       fetched = await gateway.listSessions(LOCAL_INSTANCE_ID, filter)
     } catch (error) {
       if (!isCurrentSessionFetch(LOCAL_INSTANCE_ID, generation)) return
+      mutationsDuringFetch.delete(LOCAL_INSTANCE_ID)
       throw error
     }
     if (!isCurrentSessionFetch(LOCAL_INSTANCE_ID, generation)) return
-    sessions.value = fetched.map((session) => toLocalSession(session))
+    sessions.value = reconcileFetchedSessions(LOCAL_INSTANCE_ID, fetched).map(toLocalSession)
     bumpSessionCollectionVersion()
   }
 
@@ -255,6 +293,9 @@ export const useSessionsStore = defineStore('sessions', () => {
       const gateway = await resolver.resolve(instanceId)
       const cleanup = gateway.subscribeStatus(instanceId, (event) => {
         const current = remoteSessionsByInstance.value[event.instanceId] || []
+        if (current.some((session) => session.sessionId === event.sessionId)) {
+          markSessionMutation(event.instanceId, event.sessionId)
+        }
         remoteSessionsByInstance.value = {
           ...remoteSessionsByInstance.value,
           [event.instanceId]: current.map((session) =>
@@ -299,11 +340,13 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (!isCurrentSessionFetch(instanceId, generation)) {
         return remoteSessionsByInstance.value[instanceId] ?? []
       }
+      mutationsDuringFetch.delete(instanceId)
       throw error
     }
     if (!isCurrentSessionFetch(instanceId, generation)) {
       return remoteSessionsByInstance.value[instanceId] ?? []
     }
+    remoteSessions = reconcileFetchedSessions(instanceId, remoteSessions)
     const instancesStore = useInstancesStore()
     instancesStore.markRemoteFetchSuccess(instanceId)
     remoteSessionsByInstance.value = {
@@ -313,7 +356,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     bumpSessionCollectionVersion()
     try {
       const capabilitySnapshot = await gateway.getCapabilities(instanceId)
-      instancesStore.syncRemoteCapabilities(instanceId, capabilitySnapshot)
+      if (isCurrentSessionFetch(instanceId, generation)) {
+        instancesStore.syncRemoteCapabilities(instanceId, capabilitySnapshot)
+      }
     } catch {
       // 不让 capability 同步失败影响远程会话主链
     }
@@ -347,6 +392,10 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   function clearRemoteSessions(instanceId?: string): void {
+    if (instanceId) mutationsDuringFetch.delete(instanceId)
+    else for (const id of mutationsDuringFetch.keys()) {
+      if (id !== LOCAL_INSTANCE_ID) mutationsDuringFetch.delete(id)
+    }
     if (!instanceId) {
       for (const remoteInstanceId of new Set([
         ...Object.keys(remoteSessionsByInstance.value),
@@ -385,6 +434,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   function upsertRemoteSession(instanceId: string, session: UnifiedSession): void {
+    markSessionMutation(instanceId, session.sessionId)
     const current = remoteSessionsByInstance.value[instanceId] || []
     const next = [...current]
     const index = next.findIndex((item) => item.globalSessionKey === session.globalSessionKey)
@@ -401,6 +451,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   function removeSessionRefFromState(sessionRef: SessionRef): void {
+    markSessionMutation(sessionRef.instanceId, sessionRef.sessionId)
     if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
       sessions.value = sessions.value.filter((session) => session.id !== sessionRef.sessionId)
       bumpSessionCollectionVersion()
@@ -425,8 +476,7 @@ export const useSessionsStore = defineStore('sessions', () => {
 
     if (instanceId === LOCAL_INSTANCE_ID) {
       const session = await apiCreateSession(toCreateSessionParams(params))
-      sessions.value.push(session)
-      bumpSessionCollectionVersion()
+      applyLocalSessionUpdate(session, true)
       if (shouldActivate) {
         activeGlobalSessionKeyState.value = buildGlobalSessionKey(LOCAL_INSTANCE_ID, session.id)
       }
@@ -470,6 +520,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       throw new Error('Failed to destroy session')
     }
 
+    markSessionMutation(LOCAL_INSTANCE_ID, id)
     sessions.value = sessions.value.filter((s) => s.id !== id)
     bumpSessionCollectionVersion()
     if (activeGlobalSessionKeyState.value === buildGlobalSessionKey(LOCAL_INSTANCE_ID, id)) {
@@ -519,19 +570,22 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   async function clearSessionOutput(id: string) {
-    await clearOutput(id)
+    return clearOutput(id)
   }
 
-  async function clearSessionOutputRef(sessionRef: SessionRef): Promise<void> {
+  async function clearSessionOutputRef(sessionRef: SessionRef): Promise<number> {
     assertLocalSessionRef(sessionRef, '清空输出')
-    await clearSessionOutput(sessionRef.sessionId)
+    return clearSessionOutput(sessionRef.sessionId)
   }
 
   async function renameSession(id: string, name: string) {
     const ok = await apiRenameSession(id, name)
     if (ok) {
       const session = sessions.value.find((s) => s.id === id)
-      if (session) session.name = name
+      if (session) {
+        markSessionMutation(LOCAL_INSTANCE_ID, id)
+        session.name = name
+      }
     }
     return ok
   }
@@ -540,7 +594,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     const ok = await apiUpdateSessionIcon(id, icon)
     if (ok) {
       const session = sessions.value.find((s) => s.id === id)
-      if (session) session.icon = icon
+      if (session) {
+        markSessionMutation(LOCAL_INSTANCE_ID, id)
+        session.icon = icon
+      }
     }
     return ok
   }
@@ -548,14 +605,14 @@ export const useSessionsStore = defineStore('sessions', () => {
   async function restartSession(id: string) {
     ensureListeners()
     const updated = await apiRestartSession(id)
-    const idx = sessions.value.findIndex((s) => s.id === id)
-    if (idx !== -1 && updated) sessions.value[idx] = updated
+    if (updated) applyLocalSessionUpdate(updated)
     return updated
   }
 
   async function restartSessionRef(sessionRef: SessionRef) {
     if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
       const updated = await restartSession(sessionRef.sessionId)
+      if (!updated) return null
       await syncWorkspaceAfterSessionMutation(sessionRef)
       return updated
     }
@@ -567,21 +624,21 @@ export const useSessionsStore = defineStore('sessions', () => {
     } else {
       await fetchSessionsForInstance(sessionRef.instanceId)
     }
-    await syncWorkspaceAfterSessionMutation(sessionRef)
+    await syncWorkspaceAfterSessionMutation(updated ? sessionRef : activeSessionRef.value)
     return updated ? toLocalSession(updated) : null
   }
 
   async function startSession(id: string) {
     ensureListeners()
     const updated = await apiStartSession(id)
-    const idx = sessions.value.findIndex((s) => s.id === id)
-    if (idx !== -1 && updated) sessions.value[idx] = updated
+    if (updated) applyLocalSessionUpdate(updated)
     return updated
   }
 
   async function startSessionRef(sessionRef: SessionRef) {
     if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
       const updated = await startSession(sessionRef.sessionId)
+      if (!updated) return null
       await syncWorkspaceAfterSessionMutation(sessionRef)
       return updated
     }
@@ -593,21 +650,21 @@ export const useSessionsStore = defineStore('sessions', () => {
     } else {
       await fetchSessionsForInstance(sessionRef.instanceId)
     }
-    await syncWorkspaceAfterSessionMutation(sessionRef)
+    await syncWorkspaceAfterSessionMutation(updated ? sessionRef : activeSessionRef.value)
     return updated ? toLocalSession(updated) : null
   }
 
   async function pauseSession(id: string) {
     ensureListeners()
     const updated = await apiPauseSession(id)
-    const idx = sessions.value.findIndex((s) => s.id === id)
-    if (idx !== -1 && updated) sessions.value[idx] = updated
+    if (updated) applyLocalSessionUpdate(updated)
     return updated
   }
 
   async function pauseSessionRef(sessionRef: SessionRef) {
     if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
       const updated = await pauseSession(sessionRef.sessionId)
+      if (!updated) return null
       await syncWorkspaceAfterSessionMutation(sessionRef)
       return updated
     }
@@ -619,7 +676,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     } else {
       await fetchSessionsForInstance(sessionRef.instanceId)
     }
-    await syncWorkspaceAfterSessionMutation(sessionRef)
+    await syncWorkspaceAfterSessionMutation(updated ? sessionRef : activeSessionRef.value)
     return updated ? toLocalSession(updated) : null
   }
 
@@ -629,9 +686,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       const localSession = await apiSetSessionArchived(sessionRef.sessionId, archived)
       updated = localSession ? toUnifiedSession(localSession) : null
       if (localSession) {
-        const index = sessions.value.findIndex((session) => session.id === localSession.id)
-        if (index !== -1) sessions.value[index] = localSession
-        bumpSessionCollectionVersion()
+        applyLocalSessionUpdate(localSession)
       }
     } else {
       const gateway = await resolver.resolve(sessionRef.instanceId)
@@ -694,8 +749,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   async function updateSessionOptions(id: string, options: Record<string, unknown>) {
     const updated = await apiUpdateSessionOptions(id, options)
     if (updated) {
-      const idx = sessions.value.findIndex((s) => s.id === id)
-      if (idx !== -1) sessions.value[idx] = updated
+      applyLocalSessionUpdate(updated)
     }
     return updated
   }
@@ -721,8 +775,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (sessionRef.instanceId === LOCAL_INSTANCE_ID) {
       const updated = await apiSetSessionNativeId(sessionRef.sessionId, cliType, value)
       if (!updated) return null
-      const index = sessions.value.findIndex((session) => session.id === sessionRef.sessionId)
-      if (index !== -1) sessions.value[index] = updated
+      applyLocalSessionUpdate(updated)
       return toUnifiedSession(updated)
     }
 
