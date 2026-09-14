@@ -1,6 +1,7 @@
-import { execFile } from 'child_process'
+import type { NativeSessionPathOptions } from '../../shared/native-session-path-options'
+import { executeCli } from './cli-runtime'
 import { open, readFile, readdir, stat } from 'fs/promises'
-import { homedir } from 'os'
+import { expandCliPath, resolveCliRoot, resolveCliSessionsRoot } from './cli-paths'
 import { basename, join, resolve } from 'path'
 import type { CliType } from '../../shared/cli-types'
 import type { NativeSessionCandidate } from '../../shared/native-session-candidates'
@@ -110,7 +111,7 @@ function parseUpdated(value: unknown): number {
 }
 
 function geminiRoot(): string {
-  return process.env.GEMINI_CLI_HOME?.trim() || join(homedir(), '.gemini')
+  return resolveCliRoot('gemini')
 }
 
 function firstGeminiUserPrompt(messages: unknown): string {
@@ -239,7 +240,7 @@ export interface ClaudeSessionCandidatePaths {
 }
 
 function claudeConfigRoot(): string {
-  return process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
+  return resolveCliRoot('claude')
 }
 
 export function collectClaudeSessionCandidates(
@@ -347,31 +348,16 @@ export async function collectClaudeSessionCandidates(
   return candidates.sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0) || a.id.localeCompare(b.id))
 }
 
-function piRoot(): string {
-  return process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent')
-}
-
-function ompRoots(): string[] {
-  const roots = new Set<string>()
-  const explicit = process.env.PI_CODING_AGENT_DIR?.trim()
-  if (explicit) roots.add(explicit)
-  const profile = process.env.OMP_PROFILE?.trim() || process.env.PI_PROFILE?.trim()
-  if (profile) roots.add(join(homedir(), '.omp', 'profiles', profile, 'agent'))
-  roots.add(join(homedir(), '.omp', 'agent'))
-  return [...roots]
-}
-
 async function collectPiFamily(
   cliType: 'pi' | 'omp',
   projectPath: string,
-  roots: string[]
+  sessionRoots: string[]
 ): Promise<NativeSessionCandidate[]> {
   const target = normalizePath(projectPath)
   const candidates: NativeSessionCandidate[] = []
   const seen = new Set<string>()
 
-  for (const root of roots) {
-    const sessionRoot = join(root, 'sessions')
+  for (const sessionRoot of sessionRoots) {
     const files = await listJsonlFiles(sessionRoot, false)
     // listJsonlFiles(false) only sees files directly under sessions; Pi/OMP store one bucket per directory.
     let bucketDirs: string[]
@@ -429,12 +415,12 @@ async function collectPiFamily(
   return candidates.sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0))
 }
 
-export async function collectPiSessionCandidates(projectPath: string, roots: string[] = [piRoot()]): Promise<NativeSessionCandidate[]> {
-  return collectPiFamily('pi', projectPath, roots)
+export async function collectPiSessionCandidates(projectPath: string, roots?: string[], options?: NativeSessionPathOptions): Promise<NativeSessionCandidate[]> {
+  return collectPiFamily('pi', projectPath, roots ? roots.map((root) => join(root, 'sessions')) : [options?.sessionDir ? expandCliPath(options.sessionDir, {cwd:projectPath}) : resolveCliSessionsRoot('pi')])
 }
 
-export async function collectOmpSessionCandidates(projectPath: string, roots: string[] = ompRoots()): Promise<NativeSessionCandidate[]> {
-  return collectPiFamily('omp', projectPath, roots)
+export async function collectOmpSessionCandidates(projectPath: string, roots?: string[], options?: NativeSessionPathOptions): Promise<NativeSessionCandidate[]> {
+  return collectPiFamily('omp', projectPath, roots ? roots.map((root) => join(root, 'sessions')) : [options?.sessionDir ? expandCliPath(options.sessionDir, {cwd:projectPath}) : resolveCliSessionsRoot('omp', {env:options?.profile !== undefined ? {...process.env, OMP_PROFILE: options.profile} : process.env})])
 }
 
 interface SqliteStatement {
@@ -516,7 +502,7 @@ function hermesTimestampMs(value: unknown): number {
 
 export async function collectHermesSessionCandidates(
   projectPath: string,
-  stateDbPath = join(homedir(), '.hermes', 'state.db'),
+  stateDbPath = join(resolveCliRoot('hermes'), 'state.db'),
   maxCount = 40,
   opener: ReadonlySqliteOpener = openReadonlySqlite
 ): Promise<NativeSessionCandidate[]> {
@@ -606,15 +592,7 @@ function runGrokSessionList(
   args: string[],
   options: { cwd: string; timeout: number; maxBuffer: number; windowsHide: boolean }
 ): Promise<{ stdout: string; stderr: string }> {
-  return new Promise((resolveResult, reject) => {
-    execFile(executable, args, options, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(error.killed ? 'Grok session listing timed out' : 'Failed to list Grok sessions'))
-        return
-      }
-      resolveResult({ stdout: String(stdout), stderr: String(stderr) })
-    })
-  })
+  return executeCli(executable, args, options)
 }
 
 function parseGrokTimestamp(value: string): number {
@@ -677,11 +655,11 @@ export async function collectGrokSessionCandidates(
   return parseGrokSessionListOutput(stdout, cwd).slice(0, limit)
 }
 
-export type CandidateCollector = (projectPath: string, preferredPath?: string, maxCount?: number) => Promise<NativeSessionCandidate[]>
+export type CandidateCollector = (projectPath: string, preferredPath?: string, maxCount?: number, pathOptions?: NativeSessionPathOptions) => Promise<NativeSessionCandidate[]>
 
 export function limitCandidates(collector: CandidateCollector, maxCount = 40): CandidateCollector {
-  return async (projectPath, preferredPath, requested = maxCount) => {
-    const result = await collector(projectPath, preferredPath, requested)
+  return async (projectPath, preferredPath, requested = maxCount, pathOptions) => {
+    const result = await collector(projectPath, preferredPath, requested, pathOptions)
     return result.slice(0, Math.max(1, requested))
   }
 }
@@ -689,10 +667,10 @@ export function limitCandidates(collector: CandidateCollector, maxCount = 40): C
 export function candidateCollectorFor(cliType: CliType): CandidateCollector | null {
   if (cliType === 'claude') return (projectPath, _preferredPath, maxCount = 40) => collectClaudeSessionCandidates(projectPath).then((items) => items.slice(0, maxCount))
   if (cliType === 'gemini') return (projectPath, _preferredPath, maxCount = 40) => collectGeminiSessionCandidates(projectPath).then((items) => items.slice(0, maxCount))
-  if (cliType === 'pi') return (projectPath, _preferredPath, maxCount = 40) => collectPiSessionCandidates(projectPath).then((items) => items.slice(0, maxCount))
-  if (cliType === 'omp') return (projectPath, _preferredPath, maxCount = 40) => collectOmpSessionCandidates(projectPath).then((items) => items.slice(0, maxCount))
-  if (cliType === 'grok') return collectGrokSessionCandidates
-  if (cliType === 'hermes') return (projectPath, _preferredPath, maxCount = 40) => collectHermesSessionCandidates(projectPath, undefined, maxCount)
+  if (cliType === 'pi') return (projectPath, _preferredPath, maxCount = 40, options) => collectPiSessionCandidates(projectPath, undefined, options).then((items) => items.slice(0, maxCount))
+  if (cliType === 'omp') return (projectPath, _preferredPath, maxCount = 40, options) => collectOmpSessionCandidates(projectPath, undefined, options).then((items) => items.slice(0, maxCount))
+  if (cliType === 'grok') return (projectPath, preferredPath, maxCount) => collectGrokSessionCandidates(projectPath, preferredPath, maxCount)
+  if (cliType === 'hermes') return (projectPath, _preferredPath, maxCount = 40, options) => collectHermesSessionCandidates(projectPath, options?.profile !== undefined ? join(resolveCliRoot('hermes', {profile:options.profile}), 'state.db') : undefined, maxCount)
   return null
 }
 

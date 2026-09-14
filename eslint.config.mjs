@@ -20,6 +20,7 @@ export default tseslint.config(
       'test-results/**',
       // 本地遗留的 CLI 参考仓库（.gitignore 已排除），各自带独立 ESLint 配置
       '.tmp_remote_cli_repos/**',
+      '.tmp*/**',
       '**/*.d.ts',
     ],
   },
@@ -67,13 +68,15 @@ export default tseslint.config(
 
   // Node 脚本（scripts/*.mjs）：console/process 等 Node 全局。
   {
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.{mjs,cjs}'],
     languageOptions: {
       globals: {
         ...globals.node,
       },
     },
   },
+
+  { files: ['scripts/**/*.cjs'], rules: { '@typescript-eslint/no-require-imports': 'off' } },
 
   // 务实规则收敛：针对存量项目的现实降噪。
   {

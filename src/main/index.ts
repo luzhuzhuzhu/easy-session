@@ -1,7 +1,7 @@
+import { checkCli, initializeCliEnvironment } from './services/cli-runtime'
 import { app, BrowserWindow, shell, ipcMain, dialog, Notification } from 'electron'
 import { existsSync, appendFileSync, statSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { exec, execFile } from 'child_process'
 import dotenv from 'dotenv'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { CliManager } from './services/cli-manager'
@@ -51,6 +51,7 @@ import { HeadlessControlServer } from './lifecycle/headless-control'
 const log = createLogger('main')
 
 function loadEnvironmentFiles(): void {
+  if (process.env.NODE_ENV === 'test') return
   const candidates = [join(process.cwd(), '.env.local'), join(process.cwd(), '.env')]
   for (const filePath of candidates) {
     if (!existsSync(filePath)) continue
@@ -73,7 +74,10 @@ const isHeadless =
 // 否则二者共享同一 single instance lock —— 安装版在运行时，dev 实例（同名 easysession）
 // 会 requestSingleInstanceLock() 失败而立即 app.quit() 退出，表现为 npm run dev 起不来。
 // 独立 userData 同时避免 dev 调试读写污染安装版的真实数据。
-if (is.dev) {
+if (process.env.NODE_ENV === 'test' && process.env.EASYSESSION_TEST_USER_DATA) {
+  app.setName('easysession-test')
+  app.setPath('userData', process.env.EASYSESSION_TEST_USER_DATA)
+} else if (is.dev) {
   app.setName('easysession-dev')
   app.setPath('userData', join(app.getPath('appData'), 'easysession-dev'))
 }
@@ -670,47 +674,7 @@ ipcMain.handle('cli:check', (_event, cliName: string, preferredPath?: string) =>
   const allowedClis = getProbeableCliIds()
   if (!allowedClis.includes(cliName)) return Promise.resolve({ available: false })
 
-  const normalizedPreferredPath =
-    typeof preferredPath === 'string' && preferredPath.trim().length > 0
-      ? preferredPath.trim()
-      : null
-
-  if (normalizedPreferredPath) {
-    return new Promise((resolve) => {
-      // 坏 shim/挂起的可执行文件不能让可用性检测永久 pending，统一 5s 超时。
-      // execFile + shell:false（SEC-2）：preferredPath 来自 renderer，绝不能经 shell 拼接，
-      // 否则路径内含引号即可在 cmd.exe 逃逸成任意命令注入。
-      execFile(normalizedPreferredPath, ['--version'], { shell: false, timeout: 5000 }, (error, stdout) => {
-        if (error) {
-          resolve({ available: false, path: normalizedPreferredPath })
-          return
-        }
-        resolve({
-          available: true,
-          path: normalizedPreferredPath,
-          version: String(stdout).trim() || undefined
-        })
-      })
-    })
-  }
-
-  const cmd = process.platform === 'win32' ? `where ${cliName}` : `which ${cliName}`
-  return new Promise((resolve) => {
-    exec(cmd, { timeout: 5000 }, (error, stdout) => {
-      if (error) {
-        resolve({ available: false })
-        return
-      }
-      const cliPath = stdout.trim().split('\n')[0]
-      exec(`${cliName} --version`, { timeout: 5000 }, (verErr, verOut) => {
-        resolve({
-          available: true,
-          path: cliPath,
-          version: verErr ? undefined : verOut.trim()
-        })
-      })
-    })
-  })
+  return checkCli(cliName, typeof preferredPath === 'string' ? preferredPath : undefined)
 })
 
 // Expose for e2e tests
@@ -721,6 +685,7 @@ if (process.env.NODE_ENV === 'test') {
 if (hasSingleInstanceLock) {
 app.whenReady().then(async () => {
   try {
+    await initializeCliEnvironment()
     const userData = app.getPath('userData')
     sessionManager.setStore(new DataStore(join(userData, 'sessions.json')))
     // 启用输出日志（output journal）：会话退出/应用关停时落最近 2000 条输出，重启后回灌。
@@ -737,13 +702,13 @@ app.whenReady().then(async () => {
         openCodeAdapter,
         // RemoteDependencies still accepts the legacy candidate-array provider type while
         // the route forwards provider results opaquely; keep runtime on the shared envelope.
-        nativeSessionCandidates: (cliType, projectPath, preferredPath, maxCount) =>
+        nativeSessionCandidates: (cliType, projectPath, preferredPath, maxCount, pathOptions) =>
           discoverNativeSessions(
             cliType,
             projectPath,
             preferredPath,
             { openCodeAdapter, codexAdapter },
-            maxCount
+            maxCount, pathOptions
           ) as Promise<never>
       },
       userData
@@ -805,11 +770,9 @@ app.whenReady().then(async () => {
         cliManager.setAgentBusEnvProvider((pid) => agentBus.getEnvBundle(pid))
         if (agentBus.isReady()) {
           claudeAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
-          geminiAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
           piAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
           ompAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
           grokAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
-          hermesAdapter.setAppendSystemPrompt(ES_SYSTEM_PROMPT_HINT)
         } else {
           // 未就绪时不挂 es 系统提示（避免 claude 误以为有 es 可用）；协作面板会显示不可用横幅。
           log.error({ err: agentBus.getStartError() }, '[init] agent bus 未就绪，终端间协作不可用')

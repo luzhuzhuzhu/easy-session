@@ -1,4 +1,5 @@
-﻿import type { SessionManager } from '../services/session-manager'
+﻿import type { NativeSessionPathOptions } from '../../shared/native-session-path-options'
+import type { SessionManager } from '../services/session-manager'
 import type { ProjectManager } from '../services/project-manager'
 import type { Project } from '../services/project-types'
 import type { OutputLine, SessionOutputManager } from '../services/session-output'
@@ -40,7 +41,8 @@ export interface RemoteDependencies {
     cliType: CliType,
     projectPath: string,
     preferredPath?: string,
-    maxCount?: number
+    maxCount?: number,
+    pathOptions?: NativeSessionPathOptions
   ) => Promise<NativeSessionCandidatePayload[] | NativeSessionDiscoveryResult>
   openCodeAdapter?: {
     collectSessionCandidatesByPath(

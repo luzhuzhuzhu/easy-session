@@ -110,7 +110,8 @@ export function getBuiltinArgDescriptors(cliType: string): BuiltinArgDescriptor[
   if (cliType === 'claude') return CLAUDE_BUILTIN_ARGS
   if (cliType === 'codex') return CODEX_BUILTIN_ARGS
   if (cliType === 'gemini') return GEMINI_BUILTIN_ARGS
-  if (cliType === 'pi' || cliType === 'omp') return PI_BUILTIN_ARGS
+  if (cliType === 'pi') return PI_BUILTIN_ARGS.filter(arg => arg.flag !== '--approval-mode')
+  if (cliType === 'omp') return PI_BUILTIN_ARGS
   if (cliType === 'grok') return GROK_BUILTIN_ARGS
   if (cliType === 'hermes') return HERMES_BUILTIN_ARGS
   return []

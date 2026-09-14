@@ -1,7 +1,8 @@
-import { exec } from 'child_process'
+import { cliVersion, findCliExecutable } from './cli-runtime'
+import { resolveCliRoot } from './cli-paths'
+import { resolveCliConfigPath } from './config-paths'
 import { existsSync } from 'fs'
 import { readdir, stat } from 'fs/promises'
-import { homedir } from 'os'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import { CliManager } from './cli-manager'
@@ -30,23 +31,14 @@ export class CodexAdapter {
     this.cliManager = cliManager
   }
 
-  getCliPath(): Promise<string> {
-    const cmd = process.platform === 'win32' ? 'where codex' : 'which codex'
-    return new Promise((resolve, reject) => {
-      exec(cmd, { timeout: 5000 }, (error, stdout) => {
-        if (error) return reject(new Error('Codex CLI not found in PATH'))
-        resolve(stdout.trim().split('\n')[0])
-      })
-    })
+  async getCliPath(): Promise<string> {
+    const path = findCliExecutable('codex')
+    if (!path) throw new Error('CLI_NOT_FOUND: codex')
+    return path
   }
 
-  getVersion(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      exec('codex --version', { timeout: 5000 }, (error, stdout) => {
-        if (error) return reject(new Error('Failed to get Codex version'))
-        resolve(stdout.trim())
-      })
-    })
+  getVersion(preferredPath?: string): Promise<string> {
+    return cliVersion('codex', preferredPath)
   }
 
   startSession(projectPath: string, options?: CodexSessionOptions): string {
@@ -81,12 +73,12 @@ export class CodexAdapter {
 
   getConfigPaths(): { global: string } {
     return {
-      global: join(this.codexRoot(), 'config.json')
+      global: resolveCliConfigPath('codex')
     }
   }
 
   private codexRoot(): string {
-    return process.env.CODEX_HOME?.trim() || join(homedir(), '.codex')
+    return resolveCliRoot('codex')
   }
 
   async collectSessionCandidatesByPath(

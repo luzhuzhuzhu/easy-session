@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'fs/promises'
+import { mkdtemp, rm, mkdir, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -45,6 +45,7 @@ vi.mock('node-pty', () => ({
   })
 }))
 
+import * as pty from 'node-pty'
 import { CliManager } from '../src/main/services/cli-manager'
 import { RemoteNetworkSettingsManager } from '../src/main/services/remote-network-settings-manager'
 
@@ -61,7 +62,22 @@ describe('CliManager remote network diagnostics', () => {
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
     await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('resolves a relative CLI using the same working directory as its PTY', async () => {
+    const name = process.platform === 'win32' ? 'fixture.exe' : 'fixture'
+    const executable = join(tempDir, name)
+    await writeFile(executable, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+    const launcherDir = join(tempDir, 'desktop-launcher')
+    await mkdir(launcherDir)
+    await writeFile(join(launcherDir, name), '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+    vi.spyOn(process, 'cwd').mockReturnValue(launcherDir)
+    const manager = new CliManager()
+    manager.spawn('codex-relative', `./${name}`, [], { cwd: tempDir })
+    expect(pty.spawn).toHaveBeenLastCalledWith(executable, [], expect.objectContaining({ cwd: tempDir }))
+    lastPty!.emitExit(0)
   })
 
   it('records CLI timeout-style network failures from process output', async () => {

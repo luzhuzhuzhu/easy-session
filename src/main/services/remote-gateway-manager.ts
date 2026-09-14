@@ -1,4 +1,5 @@
-﻿import { type WebContents, webContents } from 'electron'
+﻿import { discoveryForPathOptions, type NativeSessionPathOptions } from '../../shared/native-session-path-options'
+import { type WebContents, webContents } from 'electron'
 import { io, type Socket } from 'socket.io-client'
 import type { Project } from './project-types'
 import type { SessionFilter, SessionStatus } from './session-types'
@@ -8,7 +9,6 @@ import type { RemoteCapabilitiesResponse } from '../remote/types'
 import type { RemoteInstanceRecord } from './remote-instance-types'
 import type { CliType } from '../../shared/cli-types'
 import {
-  normalizeNativeSessionDiscoveryPayload,
   type NativeSessionDiscoveryResult
 } from '../../shared/native-session-candidates'
 type RemoteProjectPromptCliType = 'claude' | 'codex'
@@ -101,6 +101,7 @@ export type RemoteGatewayInvokeMethod =
   | 'getOutputHistory'
   | 'updateSessionOptions'
   | 'setNativeSessionId'
+  | 'getShells'
   | 'getNativeIdCandidates'
   | 'writeRaw'
   | 'resize'
@@ -598,15 +599,26 @@ class RemoteGatewayClient {
     }
   }
 
-  async getNativeIdCandidates(cliType: CliType, projectPath?: string, preferredPath?: string): Promise<NativeSessionDiscoveryResult> {
+  async getShells(): Promise<Array<{ id: string; label: string; path: string }>> {
+    try {
+      return await this.requestJson('/api/terminal/shells')
+    } catch (error) {
+      if (this.isHttpStatus(error, 404)) return []
+      throw error
+    }
+  }
+
+  async getNativeIdCandidates(cliType: CliType, projectPath?: string, preferredPath?: string, pathOptions?: NativeSessionPathOptions): Promise<NativeSessionDiscoveryResult> {
     const query = new URLSearchParams({ cliType })
     if (projectPath) query.set('projectPath', projectPath)
     if (preferredPath) query.set('preferredPath', preferredPath)
+    if (pathOptions?.profile !== undefined) query.set('profile', pathOptions.profile)
+    if (pathOptions?.sessionDir !== undefined) query.set('sessionDir', pathOptions.sessionDir)
     try {
       const payload = await this.requestJson<unknown>(
         `/api/sessions/native-id-candidates?${query.toString()}`
       )
-      return normalizeNativeSessionDiscoveryPayload(payload)
+      return discoveryForPathOptions(payload, pathOptions)
     } catch (error) {
       if (this.isHttpStatus(error, 404)) {
         return {
@@ -808,8 +820,10 @@ export class RemoteGatewayManager {
         return client.updateSessionOptions(args[0] as string, args[1] as Record<string, unknown>)
       case 'setNativeSessionId':
         return client.setNativeSessionId(args[0] as string, args[1] as CliType, args[2] as string | null)
+      case 'getShells':
+        return client.getShells()
       case 'getNativeIdCandidates':
-        return client.getNativeIdCandidates(args[0] as CliType, args[1] as string | undefined, args[2] as string | undefined)
+        return client.getNativeIdCandidates(args[0] as CliType, args[1] as string | undefined, args[2] as string | undefined, args[3] as NativeSessionPathOptions | undefined)
       case 'writeRaw':
         return client.writeRaw(args[0] as string, args[1] as string)
       case 'resize':

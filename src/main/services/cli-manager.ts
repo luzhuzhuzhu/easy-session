@@ -1,3 +1,4 @@
+import { prepareCliCommand } from './cli-runtime'
 import * as pty from 'node-pty'
 import { BrowserWindow } from 'electron'
 import { execFile } from 'child_process'
@@ -5,7 +6,7 @@ import { homedir } from 'os'
 import { delimiter as pathDelimiter } from 'path'
 import { TextDecoder } from 'util'
 import iconv from 'iconv-lite'
-import { findExecutableInPath, findGitBashPath, getExtraExecutablePathDirs } from './shell-detector'
+import { findGitBashPath, getExtraExecutablePathDirs } from './shell-detector'
 import type { CliType, ProcessInfo } from './types'
 import type { RemoteNetworkSettingsManager } from './remote-network-settings-manager'
 import { createLogger } from './logger'
@@ -144,19 +145,6 @@ export class CliManager {
     }
   }
 
-  private resolveWindowsCommand(command: string): string {
-    if (command.includes('\\') || command.includes('/') || command.includes(':')) {
-      return command
-    }
-
-    const lower = command.toLowerCase()
-    if (lower.endsWith('.exe') || lower.endsWith('.cmd') || lower.endsWith('.bat') || lower.endsWith('.com')) {
-      return command
-    }
-
-    return findExecutableInPath(command) ?? command
-  }
-
   // 把 es shim 目录前置进 PATH（Windows 下 PATH 键大小写不定，需大小写不敏感查找）。
   private prependPath(env: Record<string, string>, shimDir: string): void {
     const key = Object.keys(env).find((k) => k.toLowerCase() === 'path') ?? 'PATH'
@@ -239,16 +227,19 @@ export class CliManager {
       throw new Error(`Process with id "${id}" already exists`)
     }
 
-    const isWin = process.platform === 'win32'
-    const executable = isWin ? this.resolveWindowsCommand(command) : command
-    const executableArgs = args
+    const cwd = options?.cwd || process.env.HOME || process.env.USERPROFILE || homedir()
+    // Lookup and execution must share a base, especially for project-local CLIs
+    // and Windows shims which must be resolved before node-pty is invoked.
+    const launch = prepareCliCommand(command, args, { cwd, env: this.buildSpawnEnv(command, id) })
+    const executable = launch.file
+    const executableArgs = launch.args
 
     const child = pty.spawn(executable, executableArgs, {
       name: 'xterm-256color',
       cols: 120,
       rows: 30,
-      cwd: options?.cwd || process.env.HOME || process.env.USERPROFILE || homedir(),
-      env: this.buildSpawnEnv(command, id),
+      cwd,
+      env: launch.env as Record<string, string>,
       encoding: null
     })
 

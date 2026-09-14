@@ -159,3 +159,23 @@ describe('RemoteGatewayManager', () => {
     ).rejects.toThrow(/Quick Tunnel 地址无法解析/)
   })
 })
+
+
+describe('Remote platform services', () => {
+  it('requests shells on the target and tolerates an older server', async () => {
+    const fetchMock=vi.fn(async()=>new Response(JSON.stringify({data:[{id:'bash',label:'Bash',path:'/bin/bash'}]}),{status:200}))
+    vi.stubGlobal('fetch',fetchMock)
+    const manager=new RemoteGatewayManager({getInstance:()=>createRemoteInstance('https://remote.example.com'),getToken:()=> 't'.repeat(64)} as any)
+    await expect(manager.invoke({instanceId:'remote-1',method:'getShells'})).resolves.toEqual([{id:'bash',label:'Bash',path:'/bin/bash'}])
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/terminal/shells')
+    fetchMock.mockImplementationOnce(async()=>new Response('{}',{status:404}))
+    await expect(manager.invoke({instanceId:'remote-1',method:'getShells'})).resolves.toEqual([])
+  })
+  it('sends profile selectors without trusting unscoped candidates', async () => {
+    const fetchMock=vi.fn(async()=>new Response(JSON.stringify({data:{status:'ready',candidates:[{id:'old',title:'old'}]}}),{status:200}))
+    vi.stubGlobal('fetch',fetchMock)
+    const manager=new RemoteGatewayManager({getInstance:()=>createRemoteInstance('https://remote.example.com'),getToken:()=> 't'.repeat(64)} as any)
+    await expect(manager.invoke({instanceId:'remote-1',method:'getNativeIdCandidates',args:['omp','/project',undefined,{profile:'work'}]})).resolves.toMatchObject({status:'unsupported',candidates:[]})
+    expect(String(fetchMock.mock.calls[0][0])).toContain('profile=work')
+  })
+})

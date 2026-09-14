@@ -183,6 +183,7 @@
         <span class="opts-section-title">{{ $t('session.dialog.terminalShell') }}</span>
       </div>
       <select v-model="shellChoice" class="form-input">
+        <option value="">{{ $t('session.dialog.terminalShellDefault') }}</option>
         <option v-for="shell in detectedShells" :key="shell.id" :value="shell.id">
           {{ shell.label }} ({{ shell.path }})
         </option>
@@ -635,6 +636,7 @@
 </template>
 
 <script setup lang="ts">
+import { nativeSessionPathOptions } from '@shared/native-session-path-options'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
@@ -857,7 +859,8 @@ function normalizeDiscoveryResult(value: unknown): NativeSessionDiscoveryResult 
 
 async function loadCandidates(): Promise<void> {
   if (!canShowCandidatePicker.value) return
-  const requestKey = `${props.instanceId}:${props.cliType}:${props.projectPath}`
+  const pathOptions = nativeSessionPathOptions(props.cliType, collectAllArgs())
+  const requestKey = `${props.instanceId}:${props.cliType}:${props.projectPath}:${JSON.stringify(pathOptions)}`
   if (candidatesLoading.value && requestKey === candidateRequestKey) return
   const requestSeq = ++candidateRequestSeq
   candidateRequestKey = requestKey
@@ -875,7 +878,7 @@ async function loadCandidates(): Promise<void> {
       props.instanceId,
       props.cliType,
       props.projectPath,
-      configuredPath
+      configuredPath, pathOptions
     )
     if (requestSeq !== candidateRequestSeq || requestKey !== candidateRequestKey) return
     const discovery = normalizeDiscoveryResult(result)
@@ -899,6 +902,17 @@ async function loadCandidates(): Promise<void> {
     candidatesLoaded.value = true
   }
 }
+
+watch(() => JSON.stringify(nativeSessionPathOptions(props.cliType, collectAllArgs())), () => {
+  candidateRequestSeq++
+  candidatesLoaded.value = false
+  candidateStatus.value = 'empty'
+  candidates.value = []
+  if (autoSelectedCandidateId.value && !resumeIdEdited.value) {
+    idResumeOptions.resumeId = ''
+    autoSelectedCandidateId.value = ''
+  }
+})
 
 function stableSerialize(value: unknown): string {
   if (value === undefined) return 'undefined'
@@ -1148,7 +1162,7 @@ function resetFromOptions(): void {
 
 function syncShellChoice(savedShell: string): void {
   if (!savedShell) {
-    shellChoice.value = detectedShells.value[0]?.id || '__custom__'
+    shellChoice.value = ''
     customShellPath.value = ''
     return
   }
@@ -1162,15 +1176,29 @@ function syncShellChoice(savedShell: string): void {
   }
 }
 
+let shellRequestSequence = 0
+let shellsLoadedFor = ''
 async function ensureShellsLoaded(): Promise<void> {
-  if (props.cliType !== 'terminal' || detectedShells.value.length > 0) return
+  if (props.cliType !== 'terminal' || shellsLoadedFor === props.instanceId) return
+  const instanceId = props.instanceId
+  const request = ++shellRequestSequence
+  const choiceBeforeLoad = shellChoice.value
+  let shells: DetectedShell[] = []
   try {
-    detectedShells.value = await detectShells()
-  } catch {
-    detectedShells.value = []
+    if (instanceId === LOCAL_INSTANCE_ID) {
+      shells = await detectShells()
+    } else {
+      const gateway = await getSharedGatewayResolver().resolve(instanceId)
+      shells = await gateway.getShells(instanceId)
+    }
+  } catch { /* older/offline targets retain a safe target-default option */ }
+  if (request !== shellRequestSequence || props.instanceId !== instanceId || props.cliType !== 'terminal') return
+  detectedShells.value = shells
+  shellsLoadedFor = instanceId
+  if (shellChoice.value === choiceBeforeLoad) {
+    const options = props.initialOptions || {}
+    syncShellChoice(typeof options.shell === 'string' ? options.shell : '')
   }
-  const options = props.initialOptions || {}
-  syncShellChoice(typeof options.shell === 'string' ? options.shell : '')
 }
 
 // 同一次打开内按类型缓存表单状态，切换类型选项卡不丢已填内容

@@ -4,10 +4,9 @@ import { basename, dirname } from 'path'
 import { watch, FSWatcher } from 'fs'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import { parseAllDocuments } from 'yaml'
+import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import {
-  CLAUDE_GLOBAL_CONFIG,
-  CODEX_CONFIG,
-  OPENCODE_GLOBAL_CONFIG,
+  resolveCliConfigPath,
   claudeProjectConfig,
   getCliConfigDescriptor,
   isEditableCliType,
@@ -54,7 +53,9 @@ export class ConfigService {
   async readJsonFile(filePath: string): Promise<object> {
     try {
       const content = await readFile(filePath, 'utf-8')
-      const parsed: unknown = JSON.parse(content)
+      const errors: ParseError[] = []
+      const parsed: unknown = filePath.toLowerCase().endsWith('.jsonc') ? parseJsonc(content, errors, { allowTrailingComma: true }) : JSON.parse(content)
+      if (errors.length) throw new Error('Invalid JSONC')
       return this.requireObject(parsed, 'JSON')
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
@@ -76,17 +77,17 @@ export class ConfigService {
       return {
         cliType: descriptor.cliType,
         path: filePath,
-        format: descriptor.format,
+        format: filePath.toLowerCase().endsWith('.jsonc') ? 'jsonc' : descriptor.format,
         exists: true,
         content,
-        revision: this.createRevision(content)
+        revision: this.createRevision(content, filePath)
       }
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       return {
         cliType: descriptor.cliType,
         path: filePath,
-        format: descriptor.format,
+        format: filePath.toLowerCase().endsWith('.jsonc') ? 'jsonc' : descriptor.format,
         exists: false,
         content: '',
         revision: null
@@ -100,9 +101,8 @@ export class ConfigService {
     expectedRevision?: string | null
   ): Promise<ConfigDocument> {
     const descriptor = this.resolveDescriptor(cliType)
-    this.validateContent(content, descriptor.format)
-
     const current = await this.readConfig(descriptor.cliType)
+    this.validateContent(content, current.format)
     if (expectedRevision !== undefined && expectedRevision !== current.revision) {
       throw new ConfigServiceError(
         'CONFIG_CONFLICT',
@@ -119,16 +119,16 @@ export class ConfigService {
       ...current,
       exists: true,
       content,
-      revision: this.createRevision(content)
+      revision: this.createRevision(content, current.path)
     }
   }
 
   getClaudeGlobalConfig(): Promise<object> {
-    return this.readJsonFile(CLAUDE_GLOBAL_CONFIG)
+    return this.readJsonFile(resolveCliConfigPath('claude', this.pathContext))
   }
 
   setClaudeGlobalConfig(config: object): Promise<void> {
-    return this.writeJsonFile(CLAUDE_GLOBAL_CONFIG, config)
+    return this.writeJsonFile(resolveCliConfigPath('claude', this.pathContext), config)
   }
 
   getClaudeProjectConfig(projectPath: string): Promise<object> {
@@ -141,7 +141,7 @@ export class ConfigService {
 
   async getCodexConfig(): Promise<object> {
     try {
-      const content = await readFile(CODEX_CONFIG, 'utf-8')
+      const content = await readFile(resolveCliConfigPath('codex', this.pathContext), 'utf-8')
       return parseToml(content)
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
@@ -150,15 +150,15 @@ export class ConfigService {
   }
 
   async setCodexConfig(config: object): Promise<void> {
-    await writeFileAtomic(CODEX_CONFIG, stringifyToml(config))
+    await writeFileAtomic(resolveCliConfigPath('codex', this.pathContext), stringifyToml(config))
   }
 
   getOpenCodeConfig(): Promise<object> {
-    return this.readJsonFile(OPENCODE_GLOBAL_CONFIG)
+    return this.readJsonFile(resolveCliConfigPath('opencode', this.pathContext))
   }
 
   setOpenCodeConfig(config: object): Promise<void> {
-    return this.writeJsonFile(OPENCODE_GLOBAL_CONFIG, config)
+    return this.writeJsonFile(resolveCliConfigPath('opencode', this.pathContext), config)
   }
 
   private resolveDescriptor(cliType: EditableCliType) {
@@ -168,8 +168,8 @@ export class ConfigService {
     return getCliConfigDescriptor(cliType)
   }
 
-  private createRevision(content: string): string {
-    return `sha256:${createHash('sha256').update(content, 'utf8').digest('hex')}`
+  private createRevision(content: string, filePath: string): string {
+    return `sha256:${createHash('sha256').update(filePath).update('\0').update(content, 'utf8').digest('hex')}`
   }
 
   private requireObject(value: unknown, format: string): object {
@@ -194,6 +194,13 @@ export class ConfigService {
     }
 
     try {
+      if (format === 'jsonc') {
+        const errors: ParseError[] = []
+        const value: unknown = parseJsonc(content, errors, { allowTrailingComma: true })
+        if (errors.length) throw new Error('Invalid JSONC')
+        this.requireObject(value, 'JSONC')
+        return
+      }
       if (format === 'json') {
         this.requireObject(JSON.parse(content), 'JSON')
         return

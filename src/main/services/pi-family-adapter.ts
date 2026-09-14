@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { exec } from 'child_process'
+import { cliVersion } from './cli-runtime'
 import { CliManager } from './cli-manager'
 import { normalizeCustomCliArgs } from './cli-args'
 import type { CliType } from '../../shared/cli-types'
@@ -13,7 +13,6 @@ export class PiFamilyAdapter {
   private readonly idPrefix: string
   private readonly cliType: CliType
   private readonly command: string
-  private readonly versionLabel: string
 
   constructor(
     cliManager: CliManager,
@@ -23,7 +22,6 @@ export class PiFamilyAdapter {
     this.idPrefix = opts.idPrefix
     this.cliType = opts.idPrefix
     this.command = opts.command
-    this.versionLabel = opts.versionLabel
   }
 
   // 由 AgentBus 装配时注入：让 pi 系会话启动即知道可用 es 与其他会话协作。
@@ -38,13 +36,7 @@ export class PiFamilyAdapter {
   }
 
   getVersionWithPath(preferredPath?: string): Promise<string> {
-    const target = preferredPath && preferredPath.trim() ? preferredPath.trim() : this.command
-    return new Promise((resolve, reject) => {
-      exec(`"${target}" --version`, { timeout: 5000 }, (error, stdout) => {
-        if (error) return reject(new Error(`Failed to get ${this.versionLabel} version`))
-        resolve(String(stdout).trim())
-      })
-    })
+    return cliVersion(this.command, preferredPath)
   }
 
   startSession(projectPath: string, options?: PiSessionOptions, resumeId?: string): string {
@@ -71,7 +63,7 @@ export class PiFamilyAdapter {
     }
     if (options?.model) args.push('--model', options.model)
     if (options?.thinking) args.push('--thinking', options.thinking)
-    if (options?.approvalMode) args.push('--approval-mode', options.approvalMode)
+    if (this.cliType === 'omp' && options?.approvalMode) args.push('--approval-mode', options.approvalMode)
     args.push(...this.busArgs(custom))
     args.push(...custom)
     return args

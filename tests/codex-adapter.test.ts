@@ -160,7 +160,7 @@ describe('CodexAdapter.findSessionIdByProjectPath', () => {
       session_id: id, ts: 1_771_502_600, text: 'Custom root prompt'
     }))
 
-    expect(adapter.getConfigPaths()).toEqual({ global: join(codexRoot, 'config.json') })
+    expect(adapter.getConfigPaths()).toEqual({ global: join(codexRoot, 'config.toml') })
     expect(await adapter.findSessionIdByProjectPath('D:/repo/project-a', target, 10_000)).toBe(id)
     expect(await adapter.collectSessionCandidatesByPath('D:/repo/project-a')).toEqual([
       expect.objectContaining({ id, title: 'Custom root title', content: 'Custom root prompt' })

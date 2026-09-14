@@ -1,4 +1,5 @@
-﻿import type { OutputEvent, OutputLine, SessionFilter, SessionStatus } from '../api/session'
+﻿import type { NativeSessionPathOptions } from '@shared/native-session-path-options'
+import type { OutputEvent, OutputLine, SessionFilter, SessionStatus } from '../api/session'
 import type { ProjectPromptCliType, ProjectPromptFile } from '../api/project'
 import type { CliType } from '@shared/cli-types'
 import type { NativeSessionDiscoveryResult } from '@shared/native-session-candidates'
@@ -72,7 +73,8 @@ export interface SessionGateway {
   getCapabilities(instanceId: string): Promise<GatewayCapabilitySnapshot>
   updateSessionOptions(instanceId: string, sessionId: string, options: Record<string, unknown>): Promise<UnifiedSession | null>
   setNativeSessionId(instanceId: string, sessionId: string, cliType: CliType, value: string | null): Promise<UnifiedSession | null>
-  getNativeIdCandidates(instanceId: string, cliType: CliType, projectPath?: string, preferredPath?: string): Promise<NativeSessionDiscoveryResult>
+  getShells(instanceId: string): Promise<Array<{ id: string; label: string; path: string }>>
+  getNativeIdCandidates(instanceId: string, cliType: CliType, projectPath?: string, preferredPath?: string, pathOptions?: NativeSessionPathOptions): Promise<NativeSessionDiscoveryResult>
 }
 
 export interface ProjectGateway {

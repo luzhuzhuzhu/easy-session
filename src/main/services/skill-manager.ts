@@ -1,4 +1,5 @@
-﻿import { mkdir, readFile, readdir, rm, writeFile } from 'fs/promises'
+﻿import { expandCliPath, resolveCliRoot } from './cli-paths'
+import { mkdir, readFile, readdir, rm, writeFile } from 'fs/promises'
 import { dirname, join, relative, resolve } from 'path'
 import { homedir } from 'os'
 import type { SessionManager } from './session-manager'
@@ -21,27 +22,27 @@ export class SkillManager {
     if (source === 'claude') {
       return projectPath
         ? join(projectPath, '.claude', 'skills')
-        : join(homedir(), '.claude', 'skills')
+        : join(resolveCliRoot('claude'), 'skills')
     }
     if (source === 'codex') {
       return projectPath
         ? join(projectPath, '.codex', 'skills')
-        : join(homedir(), '.codex', 'skills')
+        : join(resolveCliRoot('codex'), 'skills')
     }
     return projectPath
       ? join(projectPath, '.opencode', 'skills')
-      : join(homedir(), '.config', 'opencode', 'skills')
+      : join(process.env.OPENCODE_CONFIG_DIR?.trim() ? expandCliPath(process.env.OPENCODE_CONFIG_DIR) : resolveCliRoot('opencode'), 'skills')
   }
 
   private getSkillRoots(source: CliType, projectPath?: string): string[] {
     const primary = this.getPrimarySkillRoot(source, projectPath)
-    if (source !== 'opencode') return [primary]
+    if (source !== 'opencode' && source !== 'codex') return [primary]
 
     const legacyAgents = projectPath
       ? join(projectPath, '.agents', 'skills')
       : join(homedir(), '.agents', 'skills')
 
-    return [primary, legacyAgents]
+    return [...new Set([primary, ...(source === 'opencode' && !projectPath ? [join(resolveCliRoot('opencode'), 'skills')] : []), legacyAgents])]
   }
 
   private normalizePath(pathValue: string): string {

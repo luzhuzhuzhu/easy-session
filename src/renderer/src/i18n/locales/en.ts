@@ -437,6 +437,7 @@ session: {
     collabModeNudge: 'Full inject (other agents can send messages directly)',
     collabModeInject: 'Full inject (same as above, plus command-level injection; higher risk)',
     collabModeHint: "Adjustable anytime on the collaboration page. Full inject writes other sessions' output straight into this terminal.",
+      terminalShellDefault: 'Use target default shell',
       terminalShellCustom: 'Custom…',
       terminalShellCustomPath: 'Executable path',
       terminalShellCustomPlaceholder: 'e.g. C:\\Windows\\System32\\cmd.exe',

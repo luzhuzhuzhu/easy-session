@@ -1,3 +1,4 @@
+import { expandCliPath } from './cli-paths'
 import { existsSync } from 'fs'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
@@ -144,15 +145,9 @@ function detectUnixShells(): DetectedShell[] {
   return shells
 }
 
-// 已安装的 shell 在进程生命周期内不会变化，缓存避免每次 spawn/开对话框
-// 都在主进程做同步 PATH 扫描
-let cachedShells: DetectedShell[] | null = null
-
+// Recheck on demand: users can install or switch shells while the app is open.
 export function detectShells(): DetectedShell[] {
-  if (!cachedShells) {
-    cachedShells = process.platform === 'win32' ? detectWindowsShells() : detectUnixShells()
-  }
-  return cachedShells
+  return process.platform === 'win32' ? detectWindowsShells() : detectUnixShells()
 }
 
 // 将用户选择（检测到的 id 或任意路径）解析为可执行文件路径
@@ -161,7 +156,7 @@ export function resolveShellPath(shell: string | undefined): string {
 
   // 自定义路径直接放行，不触发检测扫描
   if (trimmed && (trimmed.includes('\\') || trimmed.includes('/') || existsSync(trimmed))) {
-    return trimmed
+    return expandCliPath(trimmed)
   }
 
   const detected = detectShells()

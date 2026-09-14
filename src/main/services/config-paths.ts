@@ -1,17 +1,14 @@
 import { homedir } from 'os'
 import { join } from 'path'
+import { pathContext, resolveCliRoot, resolveOpenCodeConfig, type CliPathContext } from './cli-paths'
 import type { CliType } from '../../shared/cli-types'
 
 const HOME = homedir()
 
 export type EditableCliType = Exclude<CliType, 'terminal'>
-export type ConfigFormat = 'json' | 'toml' | 'yaml'
+export type ConfigFormat = 'json' | 'jsonc' | 'toml' | 'yaml'
 
-export interface CliConfigPathContext {
-  homeDir?: string
-  env?: NodeJS.ProcessEnv
-  platform?: NodeJS.Platform
-}
+export type CliConfigPathContext = CliPathContext
 
 export interface CliConfigDescriptor {
   cliType: EditableCliType
@@ -21,48 +18,8 @@ export interface CliConfigDescriptor {
   resolvePath: (context?: CliConfigPathContext) => string
 }
 
-function contextValues(context: CliConfigPathContext = {}): {
-  homeDir: string
-  env: NodeJS.ProcessEnv
-  platform: NodeJS.Platform
-} {
-  return {
-    homeDir: context.homeDir ?? homedir(),
-    env: context.env ?? process.env,
-    platform: context.platform ?? process.platform
-  }
-}
-
-function resolvePiPath(context?: CliConfigPathContext): string {
-  const { homeDir, env } = contextValues(context)
-  const root = env.PI_CODING_AGENT_DIR?.trim() || join(homeDir, '.pi', 'agent')
-  return join(root, 'settings.json')
-}
-
-function resolveOmpPath(context?: CliConfigPathContext): string {
-  const { homeDir, env } = contextValues(context)
-  const explicitRoot = env.PI_CODING_AGENT_DIR?.trim()
-  if (explicitRoot) return join(explicitRoot, 'config.yml')
-
-  const profile = env.OMP_PROFILE?.trim() || env.PI_PROFILE?.trim()
-  if (profile) return join(homeDir, '.omp', 'profiles', profile, 'agent', 'config.yml')
-  return join(homeDir, '.omp', 'agent', 'config.yml')
-}
-
-function resolveGrokPath(context?: CliConfigPathContext): string {
-  const { homeDir, env } = contextValues(context)
-  return join(env.GROK_HOME?.trim() || join(homeDir, '.grok'), 'config.toml')
-}
-
-function resolveHermesPath(context?: CliConfigPathContext): string {
-  const { homeDir, env, platform } = contextValues(context)
-  const explicitRoot = env.HERMES_HOME?.trim()
-  if (explicitRoot) return join(explicitRoot, 'config.yaml')
-  if (platform === 'win32') {
-    const localAppData = env.LOCALAPPDATA?.trim()
-    if (localAppData) return join(localAppData, 'hermes', 'config.yaml')
-  }
-  return join(homeDir, '.hermes', 'config.yaml')
+function configFile(cli: EditableCliType, file: string, context?: CliConfigPathContext): string {
+  return pathContext(context).path.join(resolveCliRoot(cli, context), file)
 }
 
 export const CLI_CONFIG_DESCRIPTORS: Readonly<Record<EditableCliType, CliConfigDescriptor>> = {
@@ -71,56 +28,56 @@ export const CLI_CONFIG_DESCRIPTORS: Readonly<Record<EditableCliType, CliConfigD
     format: 'json',
     displayPath: '~/.claude/settings.json',
     allowCreate: true,
-    resolvePath: (context) => join(contextValues(context).homeDir, '.claude', 'settings.json')
+    resolvePath: (context) => configFile('claude', 'settings.json', context)
   },
   codex: {
     cliType: 'codex',
     format: 'toml',
     displayPath: '~/.codex/config.toml',
     allowCreate: true,
-    resolvePath: (context) => join(contextValues(context).homeDir, '.codex', 'config.toml')
+    resolvePath: (context) => configFile('codex', 'config.toml', context)
   },
   opencode: {
     cliType: 'opencode',
     format: 'json',
     displayPath: '~/.config/opencode/opencode.json',
     allowCreate: true,
-    resolvePath: (context) => join(contextValues(context).homeDir, '.config', 'opencode', 'opencode.json')
+    resolvePath: resolveOpenCodeConfig
   },
   gemini: {
     cliType: 'gemini',
     format: 'json',
     displayPath: '~/.gemini/settings.json',
     allowCreate: true,
-    resolvePath: (context) => join(contextValues(context).homeDir, '.gemini', 'settings.json')
+    resolvePath: (context) => configFile('gemini', 'settings.json', context)
   },
   pi: {
     cliType: 'pi',
     format: 'json',
     displayPath: '${PI_CODING_AGENT_DIR:-~/.pi/agent}/settings.json',
     allowCreate: true,
-    resolvePath: resolvePiPath
+    resolvePath: (context) => configFile('pi', 'settings.json', context)
   },
   omp: {
     cliType: 'omp',
     format: 'yaml',
     displayPath: '${PI_CODING_AGENT_DIR:-~/.omp/agent}/config.yml',
     allowCreate: true,
-    resolvePath: resolveOmpPath
+    resolvePath: (context) => configFile('omp', 'config.yml', context)
   },
   grok: {
     cliType: 'grok',
     format: 'toml',
     displayPath: '${GROK_HOME:-~/.grok}/config.toml',
     allowCreate: true,
-    resolvePath: resolveGrokPath
+    resolvePath: (context) => configFile('grok', 'config.toml', context)
   },
   hermes: {
     cliType: 'hermes',
     format: 'yaml',
     displayPath: '${HERMES_HOME}/config.yaml',
     allowCreate: true,
-    resolvePath: resolveHermesPath
+    resolvePath: (context) => configFile('hermes', 'config.yaml', context)
   }
 }
 

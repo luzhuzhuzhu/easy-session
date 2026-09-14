@@ -437,6 +437,7 @@ session: {
     collabModeNudge: '完整注入（其他 Agent 可直接向本会话发送消息）',
     collabModeInject: '完整注入（同上，且允许命令级注入，风险更高）',
     collabModeHint: '可随时在协作页调整。完整注入意味着其他会话的输出会直接写入本会话终端。',
+      terminalShellDefault: '使用目标实例的默认 Shell',
       terminalShellCustom: '自定义…',
       terminalShellCustomPath: '可执行文件路径',
       terminalShellCustomPlaceholder: '例如：C:\\Windows\\System32\\cmd.exe',

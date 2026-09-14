@@ -49,13 +49,15 @@ describe('native session candidates', () => {
   })
 
   it('collects Gemini JSON and JSONL sessions only with persisted UUID and matching project root', async () => {
+    const projectPath = join(root, 'EasySession')
+    const otherPath = join(root, 'Other')
     const geminiRoot = join(root, 'gemini')
     const matchingBucket = join(geminiRoot, 'tmp', 'easy-session')
     const otherBucket = join(geminiRoot, 'tmp', 'other')
     mkdirSync(join(matchingBucket, 'chats'), { recursive: true })
     mkdirSync(join(otherBucket, 'chats'), { recursive: true })
     writeFileSync(join(geminiRoot, 'projects.json'), JSON.stringify({
-      projects: { 'D:/EasySession': 'easy-session', 'D:/Other': 'other' }
+      projects: { [projectPath]: 'easy-session', [otherPath]: 'other' }
     }))
     writeFileSync(join(matchingBucket, 'chats', 'session-old.json'), JSON.stringify({
       sessionId: '11111111-1111-4111-8111-111111111111',
@@ -75,7 +77,7 @@ describe('native session candidates', () => {
       sessionId: '33333333-3333-4333-8333-333333333333'
     }))
 
-    const result = await collectGeminiSessionCandidates('d:/easysession', geminiRoot)
+    const result = await collectGeminiSessionCandidates(process.platform === 'win32' ? projectPath.toLowerCase() : projectPath, geminiRoot)
     expect(result).toHaveLength(2)
     expect(result.map((candidate) => candidate.id)).toEqual([
       '22222222-2222-4222-8222-222222222222',
@@ -83,7 +85,7 @@ describe('native session candidates', () => {
     ])
     expect(result[1]).toMatchObject({
       title: 'Implement Gemini candidates',
-      projectPath: 'D:/EasySession'
+      projectPath
     })
   })
 
@@ -248,6 +250,7 @@ describe('native session candidates', () => {
   })
 
   it('collects Hermes SQLite sessions with exact cwd and confirmed title/content/activity fields', async () => {
+    const projectPath = join(root, 'EasySession')
     const { DatabaseSync } = await import('node:sqlite')
     const stateDbPath = join(root, 'hermes', 'state.db')
     mkdirSync(join(root, 'hermes'), { recursive: true })
@@ -262,17 +265,17 @@ describe('native session candidates', () => {
       );
     `)
     const insertSession = database.prepare('INSERT INTO sessions VALUES (?, ?, ?, ?, ?)')
-    insertSession.run('matching', 'Release review', 'D:/EasySession', 100, 200)
-    insertSession.run('nested', 'Nested checkout', 'D:/EasySession/packages/app', 300, 400)
-    insertSession.run('other', 'Other project', 'D:/Other', 500, 600)
-    insertSession.run('prompt-title', null, 'D:/EasySession/', 700, null)
+    insertSession.run('matching', 'Release review', projectPath, 100, 200)
+    insertSession.run('nested', 'Nested checkout', join(projectPath, 'packages', 'app'), 300, 400)
+    insertSession.run('other', 'Other project', join(root, 'Other'), 500, 600)
+    insertSession.run('prompt-title', null, projectPath + '/', 700, null)
     const insertMessage = database.prepare('INSERT INTO messages (session_id, role, content, timestamp, active) VALUES (?, ?, ?, ?, ?)')
     insertMessage.run('matching', 'user', 'Implement Hermes candidates', 250, 1)
     insertMessage.run('matching', 'user', 'Inactive newer prompt', 999, 0)
     insertMessage.run('prompt-title', 'user', '\0json:[{"type":"text","text":"Structured prompt"}]', 800, 1)
     database.close()
 
-    const result = await collectHermesSessionCandidates('D:/EasySession', stateDbPath)
+    const result = await collectHermesSessionCandidates(projectPath, stateDbPath)
     expect(result).toEqual([
       {
         id: 'prompt-title',
@@ -280,7 +283,7 @@ describe('native session candidates', () => {
         content: 'Structured prompt',
         titleSource: 'first-user-message',
         updated: 800_000,
-        projectPath: 'D:/EasySession/'
+        projectPath: projectPath + '/'
       },
       {
         id: 'matching',
@@ -288,7 +291,7 @@ describe('native session candidates', () => {
         content: 'Implement Hermes candidates',
         titleSource: 'session-title',
         updated: 250_000,
-        projectPath: 'D:/EasySession'
+        projectPath: projectPath
       }
     ])
   })

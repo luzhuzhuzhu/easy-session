@@ -1,4 +1,6 @@
-﻿import {
+﻿import { discoveryForPathOptions, type NativeSessionPathOptions } from '@shared/native-session-path-options'
+import {
+  detectShells,
   clearOutput,
   createSession,
   destroySession,
@@ -31,7 +33,6 @@ import {
   updateProject,
   writeProjectPrompt
 } from '../api/local-project'
-import { normalizeNativeSessionDiscoveryPayload } from '@shared/native-session-candidates'
 import { subscribeSessionOutput } from '../services/session-output-stream'
 import {
   buildGlobalSessionKey,
@@ -261,10 +262,15 @@ export class LocalGateway implements Gateway {
     return session ? toUnifiedSession(session) : null
   }
 
-  async getNativeIdCandidates(instanceId: string, cliType: Session['type'], projectPath?: string, preferredPath?: string) {
+  async getShells(instanceId: string) {
     assertLocalInstance(instanceId)
-    const payload = await getNativeIdCandidates(cliType, projectPath, preferredPath)
-    return normalizeNativeSessionDiscoveryPayload(payload)
+    return detectShells()
+  }
+
+  async getNativeIdCandidates(instanceId: string, cliType: Session['type'], projectPath?: string, preferredPath?: string, pathOptions?: NativeSessionPathOptions) {
+    assertLocalInstance(instanceId)
+    const payload = await getNativeIdCandidates(cliType, projectPath, preferredPath, pathOptions)
+    return discoveryForPathOptions(payload, pathOptions)
   }
 
   async clearOutput(instanceId: string, sessionId: string): Promise<number> {

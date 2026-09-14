@@ -1,4 +1,6 @@
-﻿import type { Express, Request, Response } from 'express'
+﻿import { normalizeNativeSessionPathOptions } from '../../shared/native-session-path-options'
+import { detectShells } from '../services/shell-detector'
+import type { Express, Request, Response } from 'express'
 import { existsSync } from 'fs'
 import { access } from 'fs/promises'
 import { createRequire } from 'module'
@@ -715,6 +717,10 @@ export function registerRemoteRoutes(
     })
   )
 
+  app.get('/api/terminal/shells', withHandler(async (req, res) => {
+    sendSuccess(res, getRequestId(req), detectShells())
+  }))
+
   app.get(
     '/api/sessions/native-id-candidates',
     withHandler(async (req, res) => {
@@ -730,8 +736,9 @@ export function registerRemoteRoutes(
       }
       const preferredPathRaw = req.query.preferredPath
       const preferredPath = typeof preferredPathRaw === 'string' ? preferredPathRaw.trim() : undefined
+      const pathOptions = normalizeNativeSessionPathOptions({ profile: req.query.profile, sessionDir: req.query.sessionDir })
       if (deps.nativeSessionCandidates) {
-        const candidates = await deps.nativeSessionCandidates(cliTypeRaw, projectPath, preferredPath, 40)
+        const candidates = pathOptions ? await deps.nativeSessionCandidates(cliTypeRaw, projectPath, preferredPath, 40, pathOptions) : await deps.nativeSessionCandidates(cliTypeRaw, projectPath, preferredPath, 40)
         sendSuccess(res, getRequestId(req), normalizeNativeSessionDiscoveryPayload(candidates))
         return
       }

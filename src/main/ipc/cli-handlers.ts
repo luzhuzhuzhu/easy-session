@@ -37,12 +37,12 @@ export function registerCliHandlers(
     return cliManager.listProcesses()
   })
 
-  ipcMain.handle('cli:claude:version', () => {
-    return claudeAdapter.getVersion()
+  ipcMain.handle('cli:claude:version', (_event, preferredPath?: string) => {
+    return claudeAdapter.getVersion(typeof preferredPath === 'string' ? preferredPath : undefined)
   })
 
-  ipcMain.handle('cli:codex:version', () => {
-    return codexAdapter.getVersion()
+  ipcMain.handle('cli:codex:version', (_event, preferredPath?: string) => {
+    return codexAdapter.getVersion(typeof preferredPath === 'string' ? preferredPath : undefined)
   })
 
   ipcMain.handle('cli:opencode:version', (_event, preferredPath?: string) => {

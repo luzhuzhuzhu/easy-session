@@ -1,4 +1,5 @@
-﻿import { io, type Socket } from 'socket.io-client'
+﻿import { discoveryForPathOptions, type NativeSessionPathOptions } from '@shared/native-session-path-options'
+import { io, type Socket } from 'socket.io-client'
 import type { OutputLine, SessionFilter } from '../api/local-session'
 import type { Project, ProjectPromptCliType, ProjectPromptFile } from '../api/local-project'
 import { ipc } from '../api/ipc'
@@ -22,7 +23,6 @@ import type {
 } from './types'
 import type { CliType } from '@shared/cli-types'
 import {
-  normalizeNativeSessionDiscoveryPayload,
   type NativeSessionDiscoveryResult
 } from '@shared/native-session-candidates'
 
@@ -100,6 +100,7 @@ type RemoteGatewayInvokeMethod =
   | 'getOutputHistory'
   | 'updateSessionOptions'
   | 'setNativeSessionId'
+  | 'getShells'
   | 'getNativeIdCandidates'
   | 'writeRaw'
   | 'resize'
@@ -415,10 +416,17 @@ export class RemoteGateway implements Gateway {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cliType: args[1], value: args[2] ?? null })
         })
+      case 'getShells':
+        try {
+          return await this.requestJsonDirect<T>('/api/terminal/shells')
+        } catch (error) {
+          if (this.isHttpStatus(error, 404)) return [] as T
+          throw error
+        }
       case 'getNativeIdCandidates':
         try {
           return await this.requestJsonDirect<T>(
-            `/api/sessions/native-id-candidates?cliType=${encodeURIComponent(String(args[0]))}${args[1] ? `&projectPath=${encodeURIComponent(String(args[1]))}` : ''}${args[2] ? `&preferredPath=${encodeURIComponent(String(args[2]))}` : ''}`
+            `/api/sessions/native-id-candidates?cliType=${encodeURIComponent(String(args[0]))}${args[1] ? `&projectPath=${encodeURIComponent(String(args[1]))}` : ''}${args[2] ? `&preferredPath=${encodeURIComponent(String(args[2]))}` : ''}${args[3] ? `&${new URLSearchParams(args[3] as Record<string,string>).toString()}` : ''}`
           )
         } catch (error) {
           if (this.isHttpStatus(error, 404)) {
@@ -623,10 +631,15 @@ export class RemoteGateway implements Gateway {
     return session ? toUnifiedSession(session, { instanceId, source: 'remote' }) : null
   }
 
-  async getNativeIdCandidates(instanceId: string, cliType: CliType, projectPath?: string, preferredPath?: string): Promise<NativeSessionDiscoveryResult> {
+  async getShells(instanceId: string): Promise<Array<{ id: string; label: string; path: string }>> {
     this.assertInstance(instanceId)
-    const payload = await this.invoke<unknown>('getNativeIdCandidates', cliType, projectPath, preferredPath)
-    return normalizeNativeSessionDiscoveryPayload(payload)
+    return this.invoke('getShells')
+  }
+
+  async getNativeIdCandidates(instanceId: string, cliType: CliType, projectPath?: string, preferredPath?: string, pathOptions?: NativeSessionPathOptions): Promise<NativeSessionDiscoveryResult> {
+    this.assertInstance(instanceId)
+    const payload = await this.invoke<unknown>('getNativeIdCandidates', cliType, projectPath, preferredPath, ...(pathOptions ? [pathOptions] : []))
+    return discoveryForPathOptions(payload, pathOptions)
   }
 
   async listProjects(instanceId: string): Promise<UnifiedProject[]> {

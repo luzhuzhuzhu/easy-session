@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { homedir, tmpdir } from 'os'
-import { join } from 'path'
+import { join, posix, win32 } from 'path'
 import {
   CLAUDE_GLOBAL_CONFIG,
   CLAUDE_COMMANDS_DIR,
@@ -50,16 +50,16 @@ describe('config-paths', () => {
 
   it('解析标准主目录路径', () => {
     const context = { homeDir: '/home/tester', env: {}, platform: 'linux' as const }
-    expect(resolveCliConfigPath('claude', context)).toBe(join('/home/tester', '.claude', 'settings.json'))
-    expect(resolveCliConfigPath('codex', context)).toBe(join('/home/tester', '.codex', 'config.toml'))
+    expect(resolveCliConfigPath('claude', context)).toBe(posix.join('/home/tester', '.claude', 'settings.json'))
+    expect(resolveCliConfigPath('codex', context)).toBe(posix.join('/home/tester', '.codex', 'config.toml'))
     expect(resolveCliConfigPath('opencode', context)).toBe(
-      join('/home/tester', '.config', 'opencode', 'opencode.json')
+      posix.join('/home/tester', '.config', 'opencode', 'opencode.json')
     )
-    expect(resolveCliConfigPath('gemini', context)).toBe(join('/home/tester', '.gemini', 'settings.json'))
-    expect(resolveCliConfigPath('pi', context)).toBe(join('/home/tester', '.pi', 'agent', 'settings.json'))
-    expect(resolveCliConfigPath('omp', context)).toBe(join('/home/tester', '.omp', 'agent', 'config.yml'))
-    expect(resolveCliConfigPath('grok', context)).toBe(join('/home/tester', '.grok', 'config.toml'))
-    expect(resolveCliConfigPath('hermes', context)).toBe(join('/home/tester', '.hermes', 'config.yaml'))
+    expect(resolveCliConfigPath('gemini', context)).toBe(posix.join('/home/tester', '.gemini', 'settings.json'))
+    expect(resolveCliConfigPath('pi', context)).toBe(posix.join('/home/tester', '.pi', 'agent', 'settings.json'))
+    expect(resolveCliConfigPath('omp', context)).toBe(posix.join('/home/tester', '.omp', 'agent', 'config.yml'))
+    expect(resolveCliConfigPath('grok', context)).toBe(posix.join('/home/tester', '.grok', 'config.toml'))
+    expect(resolveCliConfigPath('hermes', context)).toBe(posix.join('/home/tester', '.hermes', 'config.yaml'))
   })
 
   it('应用 Pi、OMP、Grok 和 Hermes 环境变量覆盖', () => {
@@ -69,42 +69,42 @@ describe('config-paths', () => {
         env: { PI_CODING_AGENT_DIR: '/opt/pi-agent' },
         platform: 'linux'
       })
-    ).toBe(join('/opt/pi-agent', 'settings.json'))
+    ).toBe(posix.join('/opt/pi-agent', 'settings.json'))
     expect(
       resolveCliConfigPath('omp', {
         homeDir: '/home/tester',
         env: { PI_CODING_AGENT_DIR: '/opt/omp-agent' },
         platform: 'linux'
       })
-    ).toBe(join('/opt/omp-agent', 'config.yml'))
+    ).toBe(posix.join('/opt/omp-agent', 'config.yml'))
     expect(
       resolveCliConfigPath('omp', {
         homeDir: '/home/tester',
         env: { OMP_PROFILE: 'work' },
         platform: 'linux'
       })
-    ).toBe(join('/home/tester', '.omp', 'profiles', 'work', 'agent', 'config.yml'))
+    ).toBe(posix.join('/home/tester', '.omp', 'profiles', 'work', 'agent', 'config.yml'))
     expect(
       resolveCliConfigPath('omp', {
         homeDir: '/home/tester',
         env: { PI_PROFILE: 'fallback' },
         platform: 'linux'
       })
-    ).toBe(join('/home/tester', '.omp', 'profiles', 'fallback', 'agent', 'config.yml'))
+    ).toBe(posix.join('/home/tester', '.omp', 'profiles', 'fallback', 'agent', 'config.yml'))
     expect(
       resolveCliConfigPath('grok', {
         homeDir: '/home/tester',
         env: { GROK_HOME: '/opt/grok' },
         platform: 'linux'
       })
-    ).toBe(join('/opt/grok', 'config.toml'))
+    ).toBe(posix.join('/opt/grok', 'config.toml'))
     expect(
       resolveCliConfigPath('hermes', {
         homeDir: '/home/tester',
         env: { HERMES_HOME: '/opt/hermes' },
         platform: 'win32'
       })
-    ).toBe(join('/opt/hermes', 'config.yaml'))
+    ).toBe(win32.join('/opt/hermes', 'config.yaml'))
   })
 
   it('Windows Hermes 使用 LOCALAPPDATA 回退路径', () => {
@@ -114,7 +114,7 @@ describe('config-paths', () => {
         env: { LOCALAPPDATA: 'C:\\Users\\tester\\AppData\\Local' },
         platform: 'win32'
       })
-    ).toBe(join('C:\\Users\\tester\\AppData\\Local', 'hermes', 'config.yaml'))
+    ).toBe(win32.join('C:\\Users\\tester\\AppData\\Local', 'hermes', 'config.yaml'))
   })
 
   describe('claudeProjectConfig', () => {

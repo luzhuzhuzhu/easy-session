@@ -1,0 +1,58 @@
+name: Desktop installers
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows-x64
+            os: windows-latest
+            args: --win --x64
+          - name: Linux-x64
+            os: ubuntu-24.04
+            args: --linux --x64
+          - name: Linux-arm64
+            os: ubuntu-24.04-arm
+            args: --linux --arm64
+          - name: macOS-arm64
+            os: macos-latest
+            args: --mac --arm64
+          - name: macOS-x64
+            os: macos-15-intel
+            args: --mac --x64
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:runtime
+      - name: Build native installer
+        run: npx electron-builder ${{ matrix.args }} --publish never
+      - run: npm run test:runtime:packaged
+      - name: Upload unsigned installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: EasySession-${{ matrix.name }}-unsigned
+          if-no-files-found: error
+          path: |
+            release/*.exe
+            release/*.AppImage
+            release/*.deb
+            release/*.dmg
+            release/*.zip

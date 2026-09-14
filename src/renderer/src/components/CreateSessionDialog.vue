@@ -256,7 +256,8 @@ const selectedCliStatusLabel = computed(() => {
   if (selectedCliStatus.value === 'available') {
     return t('session.dialog.cliAvailable', { cli: selectedCliDisplayName.value })
   }
-  return t('session.dialog.cliUnavailable', { cli: selectedCliDisplayName.value })
+  const reason = appStore.cliInfo[form.value.type]?.reason
+  return t('session.dialog.cliUnavailable', { cli: selectedCliDisplayName.value }) + (reason ? `: ${reason}` : '')
 })
 const statusMessage = computed(() => {
   if (!targetCanCreateSession.value) return t('session.dialog.targetCreateDisabled')

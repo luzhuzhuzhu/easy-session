@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { exec } from 'child_process'
+import { cliVersion } from './cli-runtime'
 import { CliManager } from './cli-manager'
 import { normalizeCustomCliArgs } from './cli-args'
 import type { GrokSessionOptions } from './types'
@@ -28,13 +28,7 @@ export class GrokAdapter {
   }
 
   getVersionWithPath(preferredPath?: string): Promise<string> {
-    const target = preferredPath && preferredPath.trim() ? preferredPath.trim() : 'grok'
-    return new Promise((resolve, reject) => {
-      exec(`"${target}" --version`, { timeout: 5000 }, (error, stdout) => {
-        if (error) return reject(new Error('Failed to get Grok version'))
-        resolve(String(stdout).trim())
-      })
-    })
+    return cliVersion('grok', preferredPath)
   }
 
   startSession(projectPath: string, options?: GrokSessionOptions, resumeId?: string): string {

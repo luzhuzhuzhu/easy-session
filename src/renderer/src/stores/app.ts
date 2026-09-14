@@ -6,6 +6,7 @@ interface CliCheckResult {
   available: boolean
   path?: string
   version?: string
+  reason?: string
 }
 
 interface CliPathSettings {

@@ -1,3 +1,4 @@
+import { normalizeNativeSessionPathOptions, type NativeSessionPathOptions } from '../../shared/native-session-path-options'
 import type { CliType } from '../../shared/cli-types'
 import {
   normalizeNativeSessionDiscoveryPayload,
@@ -43,12 +44,13 @@ function unsupported(message = 'Native session discovery is not supported for th
  * Main-process discovery boundary shared by local IPC and remote service wiring.
  * It owns capability checks, collector dispatch, and the public error envelope.
  */
-export async function discoverNativeSessions(
+async function discoverNativeSessionsCore(
   cliType: string,
   projectPath: string | undefined,
   preferredPath: string | undefined,
   adapters: NativeSessionDiscoveryAdapters = {},
-  maxCount = 40
+  maxCount = 40,
+  pathOptions?: NativeSessionPathOptions
 ): Promise<NativeSessionDiscoveryResult> {
   if (!supportsNativeSessionDiscovery(cliType)) return unsupported()
 
@@ -74,7 +76,7 @@ export async function discoverNativeSessions(
     } else {
       const collector = (adapters.candidateCollectorFor ?? candidateCollectorFor)(cliType as CliType)
       if (!collector) return unsupported()
-      candidates = await collector(normalizedProjectPath, normalizedPreferredPath, limit)
+      candidates = pathOptions ? await collector(normalizedProjectPath, normalizedPreferredPath, limit, pathOptions) : await collector(normalizedProjectPath, normalizedPreferredPath, limit)
     }
 
     const normalized = normalizeNativeSessionDiscoveryPayload(candidates)
@@ -88,5 +90,19 @@ export async function discoverNativeSessions(
       candidates: [],
       message: 'Failed to discover native sessions'
     }
+  }
+}
+
+export async function discoverNativeSessions(
+  cliType: string, projectPath: string | undefined, preferredPath: string | undefined,
+  adapters: NativeSessionDiscoveryAdapters = {}, maxCount = 40, rawPathOptions?: NativeSessionPathOptions
+): Promise<NativeSessionDiscoveryResult> {
+  try {
+    const options = normalizeNativeSessionPathOptions(rawPathOptions)
+    if (options && (!['pi','omp','hermes'].includes(cliType) || options.profile !== undefined && cliType === 'pi' || options.sessionDir !== undefined && cliType === 'hermes')) return unsupported('These path selectors are not supported for this CLI')
+    const result = await discoverNativeSessionsCore(cliType, projectPath, preferredPath, adapters, maxCount, options)
+    return options ? {...result,pathContextApplied:true} : result
+  } catch {
+    return {status:'error',candidates:[],message:'Invalid native session path options'}
   }
 }

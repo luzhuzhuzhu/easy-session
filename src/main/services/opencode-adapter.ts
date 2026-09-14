@@ -1,5 +1,5 @@
-import { exec, execFile } from 'child_process'
-import { homedir } from 'os'
+import { cliVersion, executeCli, findCliExecutable } from './cli-runtime'
+import { resolveCliConfigPath } from './config-paths'
 import { join, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import { CliManager } from './cli-manager'
@@ -44,40 +44,22 @@ export class OpenCodeAdapter {
   ): void {
     const args = ['session', 'list', '--format', 'json', '--max-count', String(Math.max(1, maxCount))]
     // execFile avoids shell parsing, preserving configured executable paths that contain spaces.
-    execFile(executable, args, { cwd: cwd || undefined, maxBuffer: 10 * 1024 * 1024, timeout: 8000 }, (error, stdout) => {
-      callback(error, String(stdout ?? ''))
-    })
+    void executeCli(executable, args, { cwd: cwd || undefined, maxBuffer: 10 * 1024 * 1024, timeout: 8000 })
+      .then(({ stdout }) => callback(null, stdout), (error) => callback(error, ''))
   }
 
   async getCliPath(): Promise<string> {
-    if (this.customPath) return this.customPath
-    const cmd = process.platform === 'win32' ? 'where opencode' : 'which opencode'
-    return new Promise((resolve, reject) => {
-      exec(cmd, { timeout: 5000 }, (error, stdout) => {
-        if (error) return reject(new Error('OpenCode CLI not found in PATH'))
-        resolve(stdout.trim().split('\n')[0])
-      })
-    })
+    const path = findCliExecutable(this.getExecutable())
+    if (!path) throw new Error('CLI_NOT_FOUND: opencode')
+    return path
   }
 
-  async getVersion(): Promise<string> {
-    const executable = this.getExecutable()
-    return new Promise((resolve, reject) => {
-      exec(`"${executable}" --version`, { timeout: 5000 }, (error, stdout) => {
-        if (error) return reject(new Error('Failed to get OpenCode version'))
-        resolve(stdout.trim())
-      })
-    })
+  getVersion(): Promise<string> {
+    return cliVersion(this.getExecutable())
   }
 
-  async getVersionWithPath(preferredPath?: string): Promise<string> {
-    const executable = this.getExecutable(preferredPath)
-    return new Promise((resolve, reject) => {
-      exec(`"${executable}" --version`, { timeout: 5000 }, (error, stdout) => {
-        if (error) return reject(new Error('Failed to get OpenCode version'))
-        resolve(stdout.trim())
-      })
-    })
+  getVersionWithPath(preferredPath?: string): Promise<string> {
+    return cliVersion(this.getExecutable(preferredPath))
   }
 
   startSession(projectPath: string, options?: OpenCodeSessionOptions): string {
@@ -141,9 +123,8 @@ export class OpenCodeAdapter {
   }
 
   getConfigPaths(): { global: string; project: (p: string) => string } {
-    const home = homedir()
     return {
-      global: join(home, '.config', 'opencode', 'opencode.json'),
+      global: resolveCliConfigPath('opencode'),
       project: (p: string) => join(p, 'opencode.json')
     }
   }

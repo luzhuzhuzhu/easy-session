@@ -1,3 +1,4 @@
+import type { NativeSessionPathOptions } from '@shared/native-session-path-options'
 import type { IpcRendererEvent } from 'electron'
 import { ipc } from './ipc'
 import { splitOutputBatch, type SequencedOutputBatch } from '@shared/session-output-batch'
@@ -189,8 +190,8 @@ export function setSessionNativeId(id: string, cliType: Session['type'], value: 
 }
 
 // 会话候选列表（resume ID 选择器数据源）；不具备可靠发现能力的 CLI 返回明确状态或空数组。
-export function getNativeIdCandidates(cliType: Session['type'], projectPath?: string, preferredPath?: string): Promise<unknown> {
-  return ipc.invoke<unknown>('session:nativeIdCandidates', cliType, projectPath, preferredPath)
+export function getNativeIdCandidates(cliType: Session['type'], projectPath?: string, preferredPath?: string, pathOptions?: NativeSessionPathOptions): Promise<unknown> {
+  return ipc.invoke<unknown>('session:nativeIdCandidates', cliType, projectPath, preferredPath, ...(pathOptions ? [pathOptions] : []))
 }
 
 export interface DetectedShell {

@@ -81,20 +81,21 @@ describe('setNativeSessionId (session-manager)', () => {
 
 describe('collectSessionCandidatesByPath (opencode-adapter)', () => {
   it('returns deduped candidates with titles for the matching path', async () => {
+    const projectPath = process.platform === 'win32' ? "D:\\proj" : '/workspace/proj'
     const childExec = vi.mocked(execFile)
     childExec.mockImplementation(
       ((_executable: string, _args: string[], _opts: unknown, cb: (err: Error | null, stdout?: string) => void) =>
         cb(
           null,
           JSON.stringify([
-            { id: 'ses_aaa', title: 'Fix bug', updated: 200, created: 100, directory: 'D:\\proj' },
-            { id: 'ses_aaa', title: 'Fix bug', updated: 200, directory: 'D:\\proj' },
+            { id: 'ses_aaa', title: 'Fix bug', updated: 200, created: 100, directory: projectPath },
+            { id: 'ses_aaa', title: 'Fix bug', updated: 200, directory: projectPath },
             { id: 'ses_bbb', title: 'Other', updated: 300, directory: 'D:\\other' }
           ])
         )) as never
     )
     const adapter = new OpenCodeAdapter({} as never)
-    const result = await adapter.collectSessionCandidatesByPath('d:/proj')
+    const result = await adapter.collectSessionCandidatesByPath(process.platform === 'win32' ? 'd:/proj' : projectPath)
     // 时间戳取候选内最大 updated（created=100 与 updated=200 同 id 时取 directTimestamp 优先顺序：updated=200）
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe('ses_aaa')

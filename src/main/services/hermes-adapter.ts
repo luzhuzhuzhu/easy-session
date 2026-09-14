@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { exec } from 'child_process'
+import { cliVersion } from './cli-runtime'
 import { CliManager } from './cli-manager'
 import { normalizeCustomCliArgs } from './cli-args'
 import type { HermesSessionOptions } from './types'
@@ -9,30 +9,14 @@ import type { HermesSessionOptions } from './types'
 // chat -q 非交互。会话存储 ~/.hermes/state.db（SQLite）。
 export class HermesAdapter {
   private cliManager: CliManager
-  private appendSystemPrompt: string | null = null
 
   constructor(cliManager: CliManager) {
     this.cliManager = cliManager
   }
 
-  setAppendSystemPrompt(text: string | null): void {
-    this.appendSystemPrompt = text && text.trim() ? text : null
-  }
-
-  private busArgs(customArgs: string[]): string[] {
-    if (!this.appendSystemPrompt) return []
-    if (customArgs.includes('--append-system-prompt')) return []
-    return ['--append-system-prompt', this.appendSystemPrompt]
-  }
-
+  // This CLI has no --append-system-prompt flag. AgentBus still supplies the es environment.
   getVersionWithPath(preferredPath?: string): Promise<string> {
-    const target = preferredPath && preferredPath.trim() ? preferredPath.trim() : 'hermes'
-    return new Promise((resolve, reject) => {
-      exec(`"${target}" --version`, { timeout: 8000 }, (error, stdout) => {
-        if (error) return reject(new Error('Failed to get Hermes version'))
-        resolve(String(stdout).trim())
-      })
-    })
+    return cliVersion('hermes', preferredPath)
   }
 
   startSession(projectPath: string, options?: HermesSessionOptions, resumeId?: string): string {
@@ -43,7 +27,6 @@ export class HermesAdapter {
     if (resumeId) args.push('--resume', resumeId)
     else if (options?.continueLast) args.push('--continue')
     if (options?.model) args.push('--model', options.model)
-    args.push(...this.busArgs(custom))
     args.push(...custom)
 
     const executable = this.resolveExecutable(options)

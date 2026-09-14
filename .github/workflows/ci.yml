@@ -1,98 +1,77 @@
 name: CI
-
 on:
   push:
     branches: [main]
   pull_request:
-
+  workflow_dispatch:
 permissions:
   contents: read
-
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   quality:
-    name: Typecheck · Lint · Build
+    name: Typecheck, lint and build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Build
-        run: npm run build
-
-  # 单元测试（ENG-1）：全部用例已隔离到 tmp 目录 / mock electron，
-  # 不再触碰真实应用数据目录，可在两个平台上稳定全量运行。
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
   test:
-    name: Unit Tests (${{ matrix.os }})
+    name: Unit and Electron runtime (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Unit Tests
-        run: npm test
-
-  # FEAT-5：三大平台构建冒烟——只验证 electron-builder 配置在 mac/linux 上可出
-  # --dir 产物（不签名、不发布），证明 node-pty 原生模块与打包配置跨平台可构建。
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:runtime
+      - run: npm run build
+      - name: Streaming and workspace UI (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npx playwright test --config=playwright.config.ts e2e/18-workspace-split-resize.spec.ts e2e/20-workspace-drag.spec.ts e2e/21-terminal-streaming.spec.ts
+      - name: Streaming and workspace UI (Windows/macOS)
+        if: runner.os != 'Linux'
+        run: npx playwright test --config=playwright.config.ts e2e/18-workspace-split-resize.spec.ts e2e/20-workspace-drag.spec.ts e2e/21-terminal-streaming.spec.ts
   package-smoke:
-    name: Package Smoke (${{ matrix.os }})
+    name: Packaged runtime (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-latest
-            args: --mac --dir
-          - os: ubuntu-latest
-            args: --linux --dir
+            args: --mac --arm64 --dir
+          - os: macos-15-intel
+            args: --mac --x64 --dir
+          - os: ubuntu-24.04
+            args: --linux --x64 --dir
+          - os: ubuntu-24.04-arm
+            args: --linux --arm64 --dir
           - os: windows-latest
-            args: --win --dir
+            args: --win --x64 --dir
     runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build bundles
-        run: npm run build
-
-      - name: Package (dir, unsigned)
-        run: npx electron-builder ${{ matrix.args }}
+      - run: npm ci
+      - run: npm run build
+      - run: npx electron-builder ${{ matrix.args }} --publish never
+      - run: npm run test:runtime:packaged

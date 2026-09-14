@@ -25,6 +25,7 @@ export interface NativeSessionCandidate {
 export type NativeSessionDiscoveryStatus = 'ready' | 'empty' | 'unsupported' | 'error'
 
 export interface NativeSessionDiscoveryResult {
+  pathContextApplied?: boolean
   status: NativeSessionDiscoveryStatus
   candidates: NativeSessionCandidate[]
   message?: string
@@ -119,6 +120,7 @@ export function normalizeNativeSessionDiscoveryPayload(
     return {
       status: envelope.status,
       candidates: [],
+      ...(envelope.pathContextApplied === true ? {pathContextApplied:true} : {}),
       ...(message ? { message } : {})
     }
   }
@@ -127,6 +129,7 @@ export function normalizeNativeSessionDiscoveryPayload(
     return {
       status: statusForCandidates(candidates),
       candidates,
+      ...(envelope.pathContextApplied === true ? {pathContextApplied:true} : {}),
       ...(message ? { message } : {})
     }
   }

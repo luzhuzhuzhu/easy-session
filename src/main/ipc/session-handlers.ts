@@ -1,3 +1,4 @@
+import type { NativeSessionPathOptions } from '../../shared/native-session-path-options'
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import { SessionManager } from '../services/session-manager'
@@ -190,11 +191,11 @@ export function registerSessionHandlers(
   })
 
   // 会话候选列表：返回明确的 discovery 状态，避免把“不支持扫描”伪装成空结果。
-  ipcMain.handle('session:nativeIdCandidates', async (_event, cliType: string, projectPath?: string, preferredPath?: string) => {
+  ipcMain.handle('session:nativeIdCandidates', async (_event, cliType: string, projectPath?: string, preferredPath?: string, pathOptions?: NativeSessionPathOptions) => {
     return discoverNativeSessions(cliType, projectPath, preferredPath, {
       openCodeAdapter,
       codexAdapter
-    })
+    }, 40, pathOptions)
   })
 
   ipcMain.handle('terminal:detectShells', () => {

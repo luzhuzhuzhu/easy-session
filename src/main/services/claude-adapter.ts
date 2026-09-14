@@ -1,5 +1,5 @@
-import { exec } from 'child_process'
-import { homedir } from 'os'
+import { cliVersion, findCliExecutable } from './cli-runtime'
+import { resolveCliConfigPath } from './config-paths'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { CliManager } from './cli-manager'
@@ -26,23 +26,14 @@ export class ClaudeAdapter {
     return ['--append-system-prompt', this.appendSystemPrompt]
   }
 
-  getCliPath(): Promise<string> {
-    const cmd = process.platform === 'win32' ? 'where claude' : 'which claude'
-    return new Promise((resolve, reject) => {
-      exec(cmd, { timeout: 5000 }, (error, stdout) => {
-        if (error) return reject(new Error('Claude CLI not found in PATH'))
-        resolve(stdout.trim().split('\n')[0])
-      })
-    })
+  async getCliPath(): Promise<string> {
+    const path = findCliExecutable('claude')
+    if (!path) throw new Error('CLI_NOT_FOUND: claude')
+    return path
   }
 
-  getVersion(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      exec('claude --version', { timeout: 5000 }, (error, stdout) => {
-        if (error) return reject(new Error('Failed to get Claude version'))
-        resolve(stdout.trim())
-      })
-    })
+  getVersion(preferredPath?: string): Promise<string> {
+    return cliVersion('claude', preferredPath)
   }
 
   startSession(projectPath: string, options?: ClaudeSessionOptions, claudeSessionId?: string): string {
@@ -90,9 +81,8 @@ export class ClaudeAdapter {
   }
 
   getConfigPaths(): { global: string; project: (p: string) => string } {
-    const home = homedir()
     return {
-      global: join(home, '.claude', 'settings.json'),
+      global: resolveCliConfigPath('claude'),
       project: (p: string) => join(p, '.claude', 'settings.json')
     }
   }

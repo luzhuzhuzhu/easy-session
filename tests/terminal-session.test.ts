@@ -4,6 +4,9 @@ import { TerminalSessionLifecycle } from '../src/main/services/terminal-session-
 import { resolveShellPath, detectShells } from '../src/main/services/shell-detector'
 import type { SessionOutputManager } from '../src/main/services/session-output'
 
+
+const CUSTOM_SHELL = process.platform === 'win32' ? "D:\\tools\\nu.exe" : '/opt/tools/nu'
+
 describe('shell detector', () => {
   it('detects at least one shell on the current platform', () => {
     const shells = detectShells()
@@ -21,7 +24,7 @@ describe('shell detector', () => {
   })
 
   it('passes through a custom executable path unchanged', () => {
-    expect(resolveShellPath('D:\\tools\\nu.exe')).toBe('D:\\tools\\nu.exe')
+    expect(resolveShellPath(CUSTOM_SHELL)).toBe(CUSTOM_SHELL)
   })
 
   it('falls back to the first detected shell when no shell is given', () => {
@@ -61,14 +64,14 @@ describe('terminal adapter', () => {
     const adapter = new TerminalAdapter(cliManager as any)
 
     const id = adapter.startSession('D:/repo/project-a', {
-      shell: 'D:\\tools\\nu.exe',
+      shell: CUSTOM_SHELL,
       shellArgs: [{ name: ' --login ' }, { name: '' }]
     })
 
     expect(id).toMatch(/^terminal-/)
     expect(cliManager.spawn).toHaveBeenCalledWith(
       expect.stringMatching(/^terminal-/),
-      'D:\\tools\\nu.exe',
+      CUSTOM_SHELL,
       ['--login'],
       { cwd: 'D:/repo/project-a', cliType: 'terminal' }
     )
@@ -79,7 +82,7 @@ describe('terminal adapter', () => {
     const adapter = new TerminalAdapter(cliManager as any)
 
     const id = adapter.startSession('D:/repo/project-a', {
-      shell: 'D:\\tools\\nu.exe',
+      shell: CUSTOM_SHELL,
       startupCommands: ['cd src', '  ', 'npm run dev']
     })
 
@@ -98,7 +101,7 @@ describe('terminal adapter', () => {
     const adapter = new TerminalAdapter(cliManager as any)
 
     const id = adapter.startSession('D:/repo/project-a', {
-      shell: 'D:\\tools\\nu.exe',
+      shell: CUSTOM_SHELL,
       startupCommands: ['echo hi']
     })
 
@@ -112,7 +115,7 @@ describe('terminal adapter', () => {
     const adapter = new TerminalAdapter(cliManager as any)
 
     const id = adapter.startSession('D:/repo/project-a', {
-      shell: 'D:\\tools\\nu.exe',
+      shell: CUSTOM_SHELL,
       startupCommands: ['first', 'second']
     })
 
@@ -129,7 +132,7 @@ describe('terminal adapter', () => {
     const exitListener = cliManager.onExit.mock.calls[0][0] as (id: string) => void
 
     const id = adapter.startSession('D:/repo/project-a', {
-      shell: 'D:\\tools\\nu.exe',
+      shell: CUSTOM_SHELL,
       startupCommands: ['echo hi']
     })
 
